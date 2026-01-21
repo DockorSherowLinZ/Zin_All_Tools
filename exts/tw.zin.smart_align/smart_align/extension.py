@@ -184,6 +184,75 @@ class SmartAlignWidget:
         self._lbl_anchor_info.text = f"Anchor: {target_name}"
         self._lbl_anchor_info.style = {"color": color, "font_size": 16}
 
+    def _get_local_translation(self, prim):
+        """Robustly get local translation using Xformable"""
+        if not prim or not prim.IsValid():
+            return None
+        
+        # Method 1: Try XformCommonAPI first (fast path)
+        xform_api = UsdGeom.XformCommonAPI(prim)
+        # Check if compatible (optional, but XformCommonAPI might issue warning if not)
+        # We'll just try-except or rely on GetXformVectors behavior, 
+        # but to avoid the specific warning in log, we might check Xformable ops.
+        # However, to be robust, we just calculate from Local Transformation.
+        
+        xformable = UsdGeom.Xformable(prim)
+        local_matrix = xformable.GetLocalTransformation(Usd.TimeCode.Default())
+        return local_matrix.ExtractTranslation()
+
+    def _set_local_translation(self, prim, new_pos):
+        """Robustly set local translation handling various XformOp types"""
+        if not prim or not prim.IsValid():
+            return
+            
+        new_vec = Gf.Vec3d(new_pos)
+        
+        # 1. Try XformCommonAPI (standard operations)
+        # This API handles Rotation Orders and pivots nicely IF standard ops exist.
+        xform_api = UsdGeom.XformCommonAPI(prim)
+        
+        # We can try SetTranslate. If incompatible, it might fail or warn.
+        # To avoid the warning, we ideally check ops manually.
+        xformable = UsdGeom.Xformable(prim)
+        xform_ops = xformable.GetOrderedXformOps()
+        
+        # Check for existing Translate Op
+        translate_op = None
+        transform_op = None
+        
+        for op in xform_ops:
+            if op.GetOpType() == UsdGeom.XformOp.TypeTranslate:
+                translate_op = op
+                break
+            elif op.GetOpType() == UsdGeom.XformOp.TypeTransform:
+                transform_op = op
+                break
+                
+        if translate_op:
+            # Case A: Standard Translate Op exists
+            translate_op.Set(new_vec)
+        elif transform_op:
+            # Case B: Matrix Transform Op exists
+            # We need to preserve rotation/scale in the matrix
+            current_matrix = transform_op.Get(Usd.TimeCode.Default())
+            
+            # Decompose to set translation
+            # A simple way: set the last row/column (depending on matrix layout)
+            # USD uses Row-Major logical, but GfMatrix4d storage implementation details vary.
+            # actually SetTranslateOnly helps
+            current_matrix.SetTranslateOnly(new_vec)
+            transform_op.Set(current_matrix)
+        else:
+            # Case C: No Ops or no translation-capable op found
+            # If XformCommonAPI is compatible (no complex ops), use it to ADD ops
+            # Otherwise, just add a legacy Translate op at the front or back?
+            # Safest is XformCommonAPI.SetTranslate which adds ops if compatible.
+            try:
+                xform_api.SetTranslate(new_vec)
+            except:
+                # Fallback: Add a raw translate op
+                xformable.AddTranslateOp().Set(new_vec)
+
     def _save_snapshot(self):
         """Save current translation of selected objects to undo stack"""
         paths = self._usd_context.get_selection().get_selected_prim_paths()
@@ -193,10 +262,9 @@ class SmartAlignWidget:
         snapshot = {}
         for p in paths:
             prim = stage.GetPrimAtPath(p)
-            if not prim.IsValid(): continue
-            xform_api = UsdGeom.XformCommonAPI(prim)
-            t, _, _, _, _ = xform_api.GetXformVectors(Usd.TimeCode.Default())
-            snapshot[p] = t
+            pos = self._get_local_translation(prim)
+            if pos is not None:
+                snapshot[p] = pos
             
         self._undo_stack.append(snapshot)
         self._update_undo_ui()
@@ -210,9 +278,7 @@ class SmartAlignWidget:
         
         for path, pos in snapshot.items():
             prim = stage.GetPrimAtPath(path)
-            if not prim.IsValid(): continue
-            xform_api = UsdGeom.XformCommonAPI(prim)
-            xform_api.SetTranslate(pos)
+            self._set_local_translation(prim, pos)
             
         self._update_undo_ui()
         
@@ -300,13 +366,14 @@ class SmartAlignWidget:
             if i == idx: continue # Skip Target
             
             prim = stage.GetPrimAtPath(p)
-            xform_api = UsdGeom.XformCommonAPI(prim)
-            t, r, s, p_rot, r_ord = xform_api.GetXformVectors(Usd.TimeCode.Default())
+            current_pos = self._get_local_translation(prim)
             
-            new_pos = Gf.Vec3d(t)
+            if current_pos is None: continue
+            
+            new_pos = Gf.Vec3d(current_pos)
             new_pos[axis] = target_trans[axis] 
             
-            xform_api.SetTranslate(new_pos)
+            self._set_local_translation(prim, new_pos)
 
     def _drop_to_ground(self):
         # Save state
@@ -317,11 +384,12 @@ class SmartAlignWidget:
         paths = self._usd_context.get_selection().get_selected_prim_paths()
         for p in paths:
             prim = stage.GetPrimAtPath(p)
-            xform_api = UsdGeom.XformCommonAPI(prim)
-            t, _, _, _, _ = xform_api.GetXformVectors(Usd.TimeCode.Default())
-            new_pos = Gf.Vec3d(t)
+            current_pos = self._get_local_translation(prim)
+            if current_pos is None: continue
+            
+            new_pos = Gf.Vec3d(current_pos)
             new_pos[2] = 0.0 # 假設 Z-up, 地板在 0
-            xform_api.SetTranslate(new_pos)
+            self._set_local_translation(prim, new_pos)
 
 
 # ========================================================
