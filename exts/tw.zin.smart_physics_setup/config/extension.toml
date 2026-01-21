@@ -1,0 +1,19 @@
+[package]
+title = "Smart Physics Setup"
+id = "tw.zin.smart_physics_setup"
+version = "0.1.0"
+description = "A tool to setup physics properties quickly."
+authors = ["Zin"]
+repository = ""
+changelog = "docs/CHANGELOG.md"
+readme = "docs/README.md"
+preview_image = "data/preview.png"
+keywords = ["physics", "utils"]
+category = "ZinTools"
+
+[dependencies]
+"omni.kit.uiapp" = {}
+"omni.usd" = {}
+
+[[python.module]]
+name = "smart_physics_setup"

@@ -1,0 +1,16 @@
+[package]
+title = "SmartMeasure"
+version = "0.1.0"
+description = "Measurement helpers (skeleton)."
+authors = ["Zin"]
+readme = "README.md"
+repository = "https://github.com/<YOUR_GITHUB>/<YOUR_REPO>"
+keywords = ["omniverse", "kit", "extension", "tw.zin"]
+category = "ZinTools"
+
+[dependencies]
+"omni.ui" = {}
+"omni.usd" = {}
+
+[[python.module]]
+name = "smart_measure"

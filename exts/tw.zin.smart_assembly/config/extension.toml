@@ -1,0 +1,40 @@
+[package]
+# Extension 版本
+version = "0.1.0"
+
+# 分類
+category = "Simulation"
+
+# 顯示名稱
+title = "Smart Assembly"
+
+# 描述
+description = "Assembly sequence manager with physics-based alignment and collision detection."
+
+# 作者
+authors = ["Zin"]
+
+# 關鍵字
+keywords = ["assembly", "physics", "sequence", "animation"]
+
+# 文件路徑 (若無可忽略)
+changelog = "docs/CHANGELOG.md"
+readme = "docs/README.md"
+icon = "data/icon.png"
+
+# ---------------------------------------------------------------
+# [關鍵] 依賴關係
+# 根據您的程式碼 import，必須加入以下模組才能正常運作
+# ---------------------------------------------------------------
+[dependencies]
+"omni.kit.uiapp" = {}    # 基礎 UI
+"omni.usd" = {}          # USD 操作
+"omni.timeline" = {}     # 控制播放/暫停 (homing sequence 用)
+"omni.physx" = {}        # 物理碰撞偵測 (detect_collision_object 用)
+
+# ---------------------------------------------------------------
+# Python 模組設定
+# 對應到資料夾名稱 (exts/tw.zin.smart_assembly/smart_assembly/)
+# ---------------------------------------------------------------
+[[python.module]]
+name = "smart_assembly"

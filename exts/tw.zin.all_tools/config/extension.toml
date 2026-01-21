@@ -1,0 +1,22 @@
+[package]
+title = "Zin All Tools"
+version = "0.1.0"
+description = "Integrated UI for all Zin tools."
+authors = ["Zin"]
+readme = "README.md"
+category = "ZinTools"
+
+# 【關鍵修改】在這裡加入其他工具的 ID
+[dependencies]
+"omni.ui" = {}
+"omni.usd" = {}
+
+# --- 加入這行，讓 All Tools 能看見其他子工具 ---
+"tw.zin.smart_align" = {}
+"tw.zin.smart_assets_builder" = {}
+"tw.zin.smart_measure" = {}
+"tw.zin.smart_reference" = {}
+"tw.zin.smart_assembly" = {}
+"tw.zin.smart_physics_setup" = {}
+[[python.module]]
+name = "all_tools"
