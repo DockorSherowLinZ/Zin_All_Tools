@@ -57,12 +57,13 @@ class SmartMeasureWidget:
 
     def startup(self):
         self._init_bbox_cache()
-        self._subscribe_events()
-        self._on_update(None)
+        # [Lifecycle] Do NOT start subscriptions here.
+        # self._subscribe_events()
+        # self._refresh_stage_info()
+        # self._check_selection_and_measure()
 
     def shutdown(self):
         self._stage_event_sub = None
-        self._update_sub = None
         self._bbox_cache = None
 
     def build_ui_layout(self):
@@ -129,8 +130,13 @@ class SmartMeasureWidget:
                                 ui.Button("Copy", width=50, clicked_fn=lambda: self._copy_result("dist"))
                 ui.Spacer(height=10)
         
+        # [Lifecycle] Create Subscription Lazy (Active Mode)
+        if not self._stage_event_sub:
+            stream = self._usd_context.get_stage_event_stream()
+            self._stage_event_sub = stream.create_subscription_to_pop(self._on_stage_event, name="smart_measure_stage")
+
         self._refresh_stage_info()
-        self._on_update(None)
+        self._check_selection_and_measure()
         return scroll_frame
 
     def _init_bbox_cache(self):
@@ -138,30 +144,35 @@ class SmartMeasureWidget:
         self._bbox_cache = UsdGeom.BBoxCache(Usd.TimeCode.Default(), purposes, useExtentsHint=False)
 
     def _subscribe_events(self):
+        # [Refactor] Consolidated into stage event stream
         stream = self._usd_context.get_stage_event_stream()
         self._stage_event_sub = stream.create_subscription_to_pop(self._on_stage_event, name="smart_measure_stage")
-        app = omni.kit.app.get_app()
-        self._update_sub = app.get_update_event_stream().create_subscription_to_pop(self._on_update, name="smart_measure_update")
+        # Removed per-frame update subscription
 
     def _on_stage_event(self, event):
+        # [Lifecycle] Liveness Check
+        # Check if UI is still part of the layout (visible)
+        if not self._sel_paths_label or not self._sel_paths_label.visible:
+            self._stage_event_sub = None
+            return
+
         if event.type == int(omni.usd.StageEventType.OPENED):
             self._init_bbox_cache()
             self._refresh_stage_info()
-            self._on_update(None)
+            self._check_selection_and_measure()
+        
+        elif event.type == int(omni.usd.StageEventType.SELECTION_CHANGED):
+            # [Refactor] Only update measurement on selection change
+            self._check_selection_and_measure()
+
         elif event.type == int(omni.usd.StageEventType.CLOSING):
             self._last_size_m = None
             self._last_dist_data = None
             self._refresh_header_info()
             self._update_all_labels(clear=True)
             
-            # [修正點] 直接清除選取路徑文字，不呼叫不存在的函式
             if self._sel_paths_label:
                 self._sel_paths_label.text = ""
-
-    def _on_update(self, _):
-        if not hasattr(self, "_len_label") or self._len_label is None: return
-        self._refresh_stage_info()
-        self._check_selection_and_measure()
 
     def _refresh_stage_info(self):
         stage = self._usd_context.get_stage()

@@ -2,6 +2,10 @@ import omni.ext
 import omni.ui as ui
 import weakref
 
+# --- DEBUG SWITCH ---
+# Set to True to DISABLE all sub-tools and test pure UI shell stability.
+DEBUG_DISABLE_ALL_TOOLS = False
+
 # --- 匯入既有的五個子工具 (維持不變) ---
 from smart_align.extension import SmartAlignExtension
 from smart_assets_builder.extension import SmartAssetsBuilderExtension
@@ -15,30 +19,32 @@ class ToolsBoxExtension(omni.ext.IExt):
         print("[Tools Box] Startup")
 
         # --- 1. 實例化子工具 ---
-        self.tool_align = SmartAlignExtension()
-        if hasattr(self.tool_align, "startup_logic"):
-            self.tool_align.startup_logic()
+        self.tool_align = None
+        self.tool_assets = None
+        self.tool_measure = None
+        self.tool_reference = None
+        self.tool_assembly = None
+        self.tool_physics = None
 
-        self.tool_assets = SmartAssetsBuilderExtension()
-        
-        self.tool_measure = SmartMeasureExtension()
-        self.tool_measure.startup_logic()
-        
-        self.tool_reference = SmartReferenceExtension()
+        if not DEBUG_DISABLE_ALL_TOOLS:
+            self.tool_align = SmartAlignExtension()
+            if hasattr(self.tool_align, "startup_logic"):
+                self.tool_align.startup_logic()
 
-        self.tool_assembly = SmartAssemblyExtension()
-        self.tool_assembly.startup_logic()
+            self.tool_assets = SmartAssetsBuilderExtension()
+            
+            self.tool_measure = SmartMeasureExtension()
+            self.tool_measure.startup_logic()
+            
+            self.tool_reference = SmartReferenceExtension()
 
-        self.tool_physics = SmartPhysicsSetupExtension()
-        if hasattr(self.tool_physics, "_init_data"):
-            self.tool_physics._init_data()
-        
-        # --- [NEW] 實例化 Physics 工具 ---
-        # 由於是本地模組，不需要 try-except 也不用擔心 extension 沒載入
-        self.tool_physics = SmartPhysicsSetupExtension()
-        # 如果你的 Physics 類別保留了 on_startup，可以手動呼叫它 (看你的需求)
-        if hasattr(self.tool_physics, "on_startup"):
-            self.tool_physics.on_startup(ext_id)
+            self.tool_assembly = SmartAssemblyExtension()
+            self.tool_assembly.startup_logic()
+            
+            # --- [NEW] 實例化 Physics 工具 ---
+            self.tool_physics = SmartPhysicsSetupExtension()
+            if hasattr(self.tool_physics, "on_startup"):
+                self.tool_physics.on_startup(ext_id)
 
         # 記錄當前啟用的 Tab 名稱
         self._current_tab = "Measure" 
@@ -99,29 +105,34 @@ class ToolsBoxExtension(omni.ext.IExt):
             # 包裹一層 VStack(TOP) 確保所有子工具都靠上對齊
             with ui.VStack(alignment=ui.Alignment.TOP):
                 
+                if DEBUG_DISABLE_ALL_TOOLS:
+                    ui.Label("DEBUG MODE: ALL TOOLS DISABLED", style={"color": 0xFFFF0000, "font_size": 24}, alignment=ui.Alignment.CENTER)
+                    ui.Label("If flickering persists, it is NOT the sub-tools.", alignment=ui.Alignment.CENTER)
+                    return
+
                 if self._current_tab == "Align":
                     self._highlight_tab(self._btn_align)
-                    if hasattr(self.tool_align, "build_ui_layout"):
+                    if self.tool_align and hasattr(self.tool_align, "build_ui_layout"):
                         self.tool_align.build_ui_layout()
 
                 elif self._current_tab == "Assets":
                     self._highlight_tab(self._btn_assets)
-                    if hasattr(self.tool_assets, "build_ui_layout"):
+                    if self.tool_assets and hasattr(self.tool_assets, "build_ui_layout"):
                         self.tool_assets.build_ui_layout()
 
                 elif self._current_tab == "Measure":
                     self._highlight_tab(self._btn_measure)
-                    if hasattr(self.tool_measure, "build_ui_layout"):
+                    if self.tool_measure and hasattr(self.tool_measure, "build_ui_layout"):
                         self.tool_measure.build_ui_layout()
 
                 elif self._current_tab == "Reference":
                     self._highlight_tab(self._btn_ref)
-                    if hasattr(self.tool_reference, "build_ui_layout"):
+                    if self.tool_reference and hasattr(self.tool_reference, "build_ui_layout"):
                         self.tool_reference.build_ui_layout()
 
                 elif self._current_tab == "Assembly":
                     self._highlight_tab(self._btn_assembly)
-                    if hasattr(self.tool_assembly, "build_ui_layout"):
+                    if self.tool_assembly and hasattr(self.tool_assembly, "build_ui_layout"):
                         self.tool_assembly.build_ui_layout()
                         
                 # --- [NEW] Physics UI ---

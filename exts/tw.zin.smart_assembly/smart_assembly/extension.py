@@ -44,8 +44,9 @@ class SmartAssemblyWidget:
         self.status_dict = {item: 0 for item in self.items} 
         self.last_error_val = {item: 0.0 for item in self.items}
         self.record_home_positions()
-        if self._update_task: self._update_task.cancel()
-        self._update_task = asyncio.ensure_future(self.update_sliders_loop())
+        # [Lifecycle] Do NOT start loop here. Loop starts only when UI is built.
+        # if self._update_task: self._update_task.cancel()
+        # self._update_task = asyncio.ensure_future(self.update_sliders_loop())
         self.refresh_list_ui()
 
     def _on_stage_event(self, event):
@@ -78,6 +79,13 @@ class SmartAssemblyWidget:
                     ui.Button("RE-CALIBRATE", clicked_fn=lambda: asyncio.ensure_future(self.perform_homing_sequence()), style={"background_color": 0xFF222288})
                 self.progress_label = ui.Label(f"Ready. Next Step: 1 / {len(self.items)}", height=20, alignment=ui.Alignment.CENTER)
                 ui.Spacer()
+        
+        # [Lifecycle] Ensure List is populated and Loop is active
+        self.refresh_list_ui()
+        
+        if self._update_task: self._update_task.cancel()
+        self._update_task = asyncio.ensure_future(self.update_sliders_loop())
+
         return main_frame
 
     def refresh_list_ui(self):
@@ -192,7 +200,25 @@ class SmartAssemblyWidget:
 
     async def update_sliders_loop(self):
         while True:
-            await asyncio.sleep(0.05)
+            # [Lifecycle] Throttled Loop & Auto-Termination
+            await asyncio.sleep(0.2)
+            
+            # Check if UI is alive
+            try:
+                # If frame is None or destroyed, stop.
+                if not self.ui_list_frame:
+                    break
+                # Optional: Check if we are still the active tab? 
+                # If ToolsBox cleared us, ui_list_frame might still be a valid Python object but logically dead.
+                # Checking visibility might help if parent is gone?
+                # For now, let's assume we rely on manual cancellation OR garbage collection eventually?
+                # Actually, wait. ToolsBox clears the parent. 
+                # Does self.ui_list_frame become invalid? 
+                # Let's add a check for a property that would fail.
+                _ = self.ui_list_frame.visible 
+            except:
+                break
+
             if not self.slider_models or self.is_user_dragging: continue
             for p, m in self.slider_models.items():
                 cur = self.get_current_joint_pos(p); home = self.home_positions.get(p, 0.0)
