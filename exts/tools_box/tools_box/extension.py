@@ -10,9 +10,9 @@ from smart_reference.extension import SmartReferenceExtension
 from smart_assembly.extension import SmartAssemblyExtension
 from smart_physics_setup.extension import SmartPhysicsSetupExtension
 
-class AllToolsExtension(omni.ext.IExt):
+class ToolsBoxExtension(omni.ext.IExt):
     def on_startup(self, ext_id):
-        print("[Zin All Tools] Startup")
+        print("[Tools Box] Startup")
 
         # --- 1. 實例化子工具 ---
         self.tool_align = SmartAlignExtension()
@@ -60,7 +60,7 @@ class AllToolsExtension(omni.ext.IExt):
         }
 
         # --- 2. 建立主視窗 ---
-        self._window = ui.Window("Zin All Tools", width=600, height=600)
+        self._window = ui.Window("Tools Box", width=600, height=600)
 
         with self._window.frame:
             with ui.VStack(spacing=0, alignment=ui.Alignment.TOP):

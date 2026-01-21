@@ -1,5 +1,5 @@
 [package]
-title = "Zin All Tools"
+title = "Tools Box"
 version = "0.1.0"
 description = "Integrated UI for all Zin tools."
 authors = ["Zin"]
@@ -19,4 +19,4 @@ category = "ZinTools"
 "tw.zin.smart_assembly" = {}
 "tw.zin.smart_physics_setup" = {}
 [[python.module]]
-name = "all_tools"
+name = "tools_box"
