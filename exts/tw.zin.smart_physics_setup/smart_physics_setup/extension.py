@@ -27,7 +27,7 @@ class SmartPhysicsSetupExtension(omni.ext.IExt):
                 # --- 1. Rigid Body ---
                 with ui.CollapsableFrame("1. Rigid Body (Connectors)", height=0):
                     with ui.VStack(spacing=5, height=0):
-                        ui.Button("Add Selected to Rigid List", clicked_fn=self._add_to_rigid, height=40, style=self._btn_style)
+                        ui.Button("Add Selected to Rigid List", clicked_fn=self._add_to_rigid, height=40)
                         
                         with ui.HStack(height=20):
                             ui.Label("Make Static (Kinematic):", width=150, tooltip="Check this if the plug should NOT fall.")
@@ -39,7 +39,7 @@ class SmartPhysicsSetupExtension(omni.ext.IExt):
                 # --- 2. Soft Body ---
                 with ui.CollapsableFrame("2. Soft Body (Cable)", height=0):
                     with ui.VStack(spacing=5, height=0):
-                        ui.Button("Add Selected to Soft List", clicked_fn=self._add_to_soft, height=40, style=self._btn_style)
+                        ui.Button("Add Selected to Soft List", clicked_fn=self._add_to_soft, height=40)
                         
                         ui.Label("Current List:", style={"color": 0xFFAAAAAA})
                         ui.StringField(model=self._soft_list_str, height=60, multiline=True, read_only=True)
@@ -66,8 +66,10 @@ class SmartPhysicsSetupExtension(omni.ext.IExt):
 
                 # --- Actions ---
                 with ui.HStack(height=40, spacing=10):
-                    ui.Button("Reset Lists", clicked_fn=self._clear_lists, style=self._btn_style)
-                    ui.Button("Apply All (Fix Visibility)", clicked_fn=self._apply_physics_logic, style=self._btn_style)
+                    btn_apply = ui.Button("Apply All (Fix Visibility)", clicked_fn=self._apply_physics_logic, style={"background_color": 0xFF225522})
+                    self._setup_hover(btn_apply, 0xFF225522)
+                    ui.Button("Reset Lists", clicked_fn=self._clear_lists)
+
 
                 # --- Status ---
                 ui.StringField(
@@ -99,16 +101,30 @@ class SmartPhysicsSetupExtension(omni.ext.IExt):
         self._soft_list_str = ui.SimpleStringModel("")
         self._status_model = ui.SimpleStringModel("Ready")
 
-        self._btn_style = {
-            "background_color": 0xFF444444,
-            "color": 0xFFEEEEEE,            
-            "border_radius": 4,
-            "font_size": 14,
-            "margin_height": 2,
-            "padding": 5,
-            ":hover": { "background_color": 0xFFAAAAAA, "color": 0xFF222222 },
-            ":pressed": { "background_color": 0xFF222222, "color": 0xFFEEEEEE }
-        }
+        self._status_model = ui.SimpleStringModel("Ready")
+
+    # [UX] Hover Helper
+    def _setup_hover(self, btn, base_color):
+        if not btn: return
+        
+        # Calc brighter color (+40%)
+        # Format: 0xAABBGGRR
+        a = (base_color >> 24) & 0xFF
+        b = (base_color >> 16) & 0xFF
+        g = (base_color >> 8) & 0xFF
+        r = base_color & 0xFF
+        
+        # Increase brightness
+        b = min(255, int(b * 1.4))
+        g = min(255, int(g * 1.4))
+        r = min(255, int(r * 1.4))
+        
+        hover_color = (a << 24) | (b << 16) | (g << 8) | r
+        
+        def _on_hover(hovered):
+            btn.style = {"background_color": hover_color if hovered else base_color}
+            
+        btn.set_mouse_hovered_fn(_on_hover)
 
     def _get_current_selection(self):
         ctx = omni.usd.get_context()

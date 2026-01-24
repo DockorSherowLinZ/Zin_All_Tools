@@ -86,32 +86,31 @@ class SmartMeasureWidget:
                 # Selected
                 with ui.CollapsableFrame("Selected", collapsed=False, height=0):
                     with ui.VStack(spacing=4, padding=4):
-                        with ui.HStack(height=0):
-                            ui.Label("Prim", width=40, style={"color": 0xAAAAAAFF})
-                            with ui.ScrollingFrame(height=70, style={"background_color": 0x33000000, "border_radius": 4}):
-                                self._sel_paths_label = ui.Label("", word_wrap=True, alignment=ui.Alignment.LEFT_TOP, style={"margin": 4})
+                        with ui.ScrollingFrame(height=80, style={"background_color": 0x33000000, "border_radius": 4}):
+                             # [New] Dynamic list container
+                             self._sel_list_vbox = ui.VStack(spacing=2, padding=4)
 
                 # Size
                 with ui.CollapsableFrame("Object Size (Union)", collapsed=False, height=0):
-                    with ui.Frame(style={"background_color": 0x11111111, "border_radius": 4}):
+                    with ui.Frame(style={"background_color": 0x33000000, "border_radius": 4}):
                         with ui.VStack(spacing=4, padding=6, height=0):
                             with ui.VStack(spacing=2, height=0):
                                 self._len_label = ui.Label("X length: --")
                                 self._wid_label = ui.Label("Y width : --")
                                 self._hei_label = ui.Label("Z height: --")
                             ui.Spacer(height=2)
-                            with ui.HStack(height=24):
+                            with ui.HStack(height=30):
                                 ui.Label("Units", width=50, style={"color": 0xAAAAAAFF})
                                 items = [u[0] for u in self.DISPLAY_UNITS]
                                 # Add background color for better visibility
                                 cb = ui.ComboBox(1, *items, style={"background_color": 0xFF222222})
                                 cb.model.get_item_value_model().add_value_changed_fn(self._on_size_unit_changed)
                                 ui.Spacer(width=5)
-                                ui.Button("Copy", width=50, clicked_fn=lambda: self._copy_result("size"))
+                                ui.Button("Copy", width=40, clicked_fn=lambda: self._copy_result("size"))
 
                 # Distance
                 with ui.CollapsableFrame("Distance (2 Objects)", collapsed=False, height=0):
-                    with ui.Frame(style={"background_color": 0x11111111, "border_radius": 4}):
+                    with ui.Frame(style={"background_color": 0x33000000, "border_radius": 4}):
                         with ui.VStack(spacing=4, padding=6, height=0):
                             self._dist_msg_label = ui.Label("Select exactly 2 objects", style={"color": 0xFFAA00FF}, word_wrap=True)
                             self._dist_main_label = ui.Label("Dist: --", style={"font_size": 16, "color": 0xFF00AA00})
@@ -120,14 +119,14 @@ class SmartMeasureWidget:
                                 self._gap_y_label = ui.Label("Gap Y: --")
                                 self._gap_z_label = ui.Label("Gap Z: --")
                             ui.Spacer(height=2)
-                            with ui.HStack(height=24):
+                            with ui.HStack(height=30):
                                 ui.Label("Units", width=50, style={"color": 0xAAAAAAFF})
                                 items = [u[0] for u in self.DISPLAY_UNITS]
                                 # Add background color for better visibility
                                 cb = ui.ComboBox(1, *items, style={"background_color": 0xFF222222})
                                 cb.model.get_item_value_model().add_value_changed_fn(self._on_dist_unit_changed)
                                 ui.Spacer(width=5)
-                                ui.Button("Copy", width=50, clicked_fn=lambda: self._copy_result("dist"))
+                                ui.Button("Copy", width=40, clicked_fn=lambda: self._copy_result("dist"))
                 ui.Spacer(height=10)
         
         # [Lifecycle] Create Subscription Lazy (Active Mode)
@@ -138,6 +137,48 @@ class SmartMeasureWidget:
         self._refresh_stage_info()
         self._check_selection_and_measure()
         return scroll_frame
+
+    def _resolve_icons(self):
+        # Allow checking only once
+        if hasattr(self, '_icon_cache'): return
+        self._icon_cache = {}
+        
+        # Try to find omni.kit.window.stage extension path
+        try:
+            import omni.kit.app
+            import pathlib
+            ext_id = omni.kit.app.get_app().get_extension_manager().get_enabled_extension_id("omni.kit.window.stage")
+            if ext_id:
+                ext_path = omni.kit.app.get_app().get_extension_manager().get_extension_path(ext_id)
+                # Search common locations
+                # 1. resources/icons/default
+                # 2. resources/icons/svg
+                # We look recursively or check specific known paths
+                root = pathlib.Path(ext_path) / "resources" / "icons"
+                
+                # Helper to find file
+                def find_icon(name_part):
+                     # Recursive glob
+                     for f in root.rglob("*.svg"):
+                         if name_part.lower() in f.name.lower():
+                             return str(f.as_posix())
+                     return None
+                
+                self._icon_cache['Mesh'] = find_icon("mesh") or find_icon("cube")
+                self._icon_cache['Xform'] = find_icon("xform") or find_icon("transform") or find_icon("group")
+                self._icon_cache['Camera'] = find_icon("camera")
+                self._icon_cache['Light'] = find_icon("light")
+        except: 
+            pass
+
+    def _get_icon_path(self, type_name):
+        self._resolve_icons()
+        key = 'Xform'
+        if "Mesh" in type_name or "Cube" in type_name or "Sphere" in type_name: key = 'Mesh'
+        elif "Camera" in type_name: key = 'Camera'
+        elif "Light" in type_name: key = 'Light'
+        
+        return self._icon_cache.get(key)
 
     def _init_bbox_cache(self):
         purposes = [UsdGeom.Tokens.default_, UsdGeom.Tokens.render, UsdGeom.Tokens.proxy, UsdGeom.Tokens.guide]
@@ -152,9 +193,10 @@ class SmartMeasureWidget:
     def _on_stage_event(self, event):
         # [Lifecycle] Liveness Check
         # Check if UI is still part of the layout (visible)
-        if not self._sel_paths_label or not self._sel_paths_label.visible:
-            self._stage_event_sub = None
-            return
+        # Check vstack existence instead of label
+        if not self._sel_list_vbox:
+             self._stage_event_sub = None
+             return
 
         if event.type == int(omni.usd.StageEventType.OPENED):
             self._init_bbox_cache()
@@ -170,9 +212,7 @@ class SmartMeasureWidget:
             self._last_dist_data = None
             self._refresh_header_info()
             self._update_all_labels(clear=True)
-            
-            if self._sel_paths_label:
-                self._sel_paths_label.text = ""
+            if self._sel_list_vbox: self._sel_list_vbox.clear()
 
     def _refresh_stage_info(self):
         stage = self._usd_context.get_stage()
@@ -204,9 +244,43 @@ class SmartMeasureWidget:
 
     def _check_selection_and_measure(self):
         paths = self._usd_context.get_selection().get_selected_prim_paths()
-        path_str = "\n".join(paths)
-        if self._sel_paths_label and self._sel_paths_label.text != path_str:
-            self._sel_paths_label.text = path_str
+        # [Redesign] Update List UI
+        if self._sel_list_vbox:
+            self._sel_list_vbox.clear()
+            stage = self._usd_context.get_stage()
+            if paths and stage:
+                with self._sel_list_vbox:
+                    for p in paths:
+                        prim = stage.GetPrimAtPath(p)
+                        if not prim or not prim.IsValid(): continue
+                        name = prim.GetName()
+                        type_name = prim.GetTypeName()
+                        
+                        # Icon Logic (Real Stage Icons)
+                        icon_path = self._get_icon_path(type_name)
+                        
+                        with ui.HStack(height=20):
+                            # Icon
+                            with ui.ZStack(width=16, height=16):
+                                if icon_path:
+                                    # Use Real Icon
+                                    ui.Image(icon_path, width=16, height=16)
+                                else:
+                                    # Fallback: Color Box
+                                    # Mesh: Grey [M], Xform: Blue [X], Camera: Purple [C], Light: Yellow [L]
+                                    icon_color = 0xFF555555 # Default Grey
+                                    if "Mesh" in type_name or "Cube" in type_name: icon_color = 0xFF777777
+                                    elif "Xform" in type_name: icon_color = 0xFFEB9E3B
+                                    elif "Camera" in type_name: icon_color = 0xFF880088
+                                    elif "Light" in type_name: icon_color = 0xFF00FFFF
+                                    ui.Rectangle(style={"background_color": icon_color, "border_radius": 3})
+
+                            ui.Spacer(width=8)
+                            ui.Label(name, style={"color": 0xFFDDDDDD})
+            else:
+                 with self._sel_list_vbox:
+                     ui.Label("None", style={"color": 0xFF888888, "font_style": "italic"})
+
         if paths: self._measure_paths(paths)
         else: self._on_clear()
 

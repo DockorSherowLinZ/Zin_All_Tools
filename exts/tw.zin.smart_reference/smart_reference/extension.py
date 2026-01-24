@@ -110,19 +110,42 @@ class SmartReferenceExtension(omni.ext.IExt):
 
                 # --- Row 5: Action Buttons (Apply & Reset) ---
                 with ui.HStack(height=40, spacing=10):
-                    ui.Button(
+                    btn_apply = ui.Button(
                         "Apply Reference", 
                         clicked_fn=self._on_apply_reference,
                         style={"background_color": 0xFF225522}
                     )
+                    self._setup_hover(btn_apply, 0xFF225522)
                     
                     ui.Button(
                         "Reset", 
-                        clicked_fn=self._on_reset,
-                        style={"background_color": 0xFF552222} 
+                        clicked_fn=self._on_reset
                     )
 
                 ui.Spacer()
+
+    # [UX] Hover Helper
+    def _setup_hover(self, btn, base_color):
+        if not btn: return
+        
+        # Calc brighter color (+40%)
+        # Format: 0xAABBGGRR
+        a = (base_color >> 24) & 0xFF
+        b = (base_color >> 16) & 0xFF
+        g = (base_color >> 8) & 0xFF
+        r = base_color & 0xFF
+        
+        # Increase brightness
+        b = min(255, int(b * 1.4))
+        g = min(255, int(g * 1.4))
+        r = min(255, int(r * 1.4))
+        
+        hover_color = (a << 24) | (b << 16) | (g << 8) | r
+        
+        def _on_hover(hovered):
+            btn.style = {"background_color": hover_color if hovered else base_color}
+            
+        btn.set_mouse_hovered_fn(_on_hover)
 
     # ========================================================
     #  邏輯處理區
@@ -209,7 +232,7 @@ class SmartReferenceExtension(omni.ext.IExt):
             if count > 0:
                 self._update_status(f"Scan Complete: Found {count} items.", 0xFF76B900)
             else:
-                self._update_status(f"Scan Finished: 0 matches for '{prefix_name}'", 0xFFFFAA00)
+                self._update_status(f"Scan Finished: 0 matches for '{prefix_name}'", 0xFF3D3DF5)
 
         except Exception as e:
             self._update_status(f"Exception during scan: {str(e)}", 0xFF5555FF)
@@ -221,7 +244,7 @@ class SmartReferenceExtension(omni.ext.IExt):
         print("[SmartReference] _on_apply_reference called")
         
         if not self._found_paths:
-            self._update_status("Warning: No targets found. Please Scan first.", 0xFFFFAA00)
+            self._update_status("Warning: No targets found. Please Scan first.", 0xFF3D3DF5)
             return
 
         if not self._field_url:

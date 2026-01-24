@@ -620,91 +620,122 @@ class SmartAssetsBuilderExtension(omni.ext.IExt):
         """
         self._init_data()
         
-        self._STYLE_HEAD  = {"font_size": 18, "color": 0xFFDDDDDD}
-        self._STYLE_LABEL = {"color": 0xFFAAAAAA}
-        COMPACT_STYLE = {"font_size": 14, "padding": 2}
+        # Styles
+        # Header: Small Caps, Bold, slightly dimmed
+        self._STYLE_SECTION = {"font_size": 12, "color": 0xFF888888, "font_weight": "bold"} 
+        self._STYLE_LABEL = {"color": 0xFFC0C0C0, "font_size": 14}
+        COMPACT_STYLE = {"font_size": 14, "padding": 4}
+        
+        # Background for Groups (Card look: Darker, Rounded)
+        # 0x33000000 = ~20% Black overlay
+        CARD_BG_COLOR = 0x33000000 
+        CARD_RADIUS = 5
 
         # [Important] Use a VStack as root container with height=0 to auto-shrink
-        # [UI Polish] Increased padding to 20 for more breathing room
-        with ui.VStack(spacing=0, height=0, style={"padding": 20}):
+        # [Refactor] Wrap in ScrollingFrame to match Align tool's container style (which affects default button look)
+        scroll = ui.ScrollingFrame(
+            horizontal_scrollbar_policy=ui.ScrollBarPolicy.SCROLLBAR_AS_NEEDED,
+            vertical_scrollbar_policy=ui.ScrollBarPolicy.SCROLLBAR_AS_NEEDED
+        )
+        with scroll:
+            with ui.VStack(spacing=20, height=0, style={"padding": 20}): # Main Container Padding: 15 -> 20
             
-            # --- Header Removed ---
-            # [Mod v1.10.5] No Title or flowchart text here
-
-            # --- Source Section ---
-            with ui.VStack(spacing=8):
-                ui.Label("Source Folder URL", style=self._STYLE_LABEL)
-                # [UI Polish] Height 26px
-                self._folder_field = ui.StringField(height=ui.Pixel(26), width=ui.Fraction(1), style=COMPACT_STYLE)
-
-                # Filter Row
-                with ui.HStack(spacing=15, height=ui.Pixel(26)):
-                    ui.Label("Filename filter", width=0, style=self._STYLE_LABEL)
-                    self._filter_field = ui.StringField(width=ui.Fraction(1), style=COMPACT_STYLE)
-                    self._filter_field.model.set_value("max_*.usd")
-                
-                # Recurse Row
-                with ui.HStack(height=ui.Pixel(26), spacing=5):
-                    self._recurse_cb = ui.CheckBox(width=20)
-                    self._recurse_cb.model.set_value(True) # Default Checked
-                    ui.Label("Recurse", width=0, style=self._STYLE_LABEL)
-                    ui.Label("(Search inside sub-folders)", style={"color": 0xFF666666, "font_size": 12})
-
-                # ID Suffix / Overwrite Row
-                with ui.HStack(spacing=10, height=ui.Pixel(26)):
-                    ui.Label("ID Suffix", width=0, style=self._STYLE_LABEL)
-                    self._id_field = ui.StringField(width=ui.Fraction(1), style=COMPACT_STYLE)
-                    self._id_field.model.set_value("") # Default Empty
+                # ========================== SOURCE GROUP ==========================
+                with ui.VStack(spacing=5):
+                    ui.Label("SOURCE CONFIGURATION", style=self._STYLE_SECTION, height=16)
                     
-                    ui.Spacer(width=20)
+                    with ui.ZStack():
+                        ui.Rectangle(style={"background_color": CARD_BG_COLOR, "border_radius": CARD_RADIUS})
+                        with ui.VStack(spacing=10, padding=15): # Card Padding: 10 -> 15
+                            
+                            # Row 1: Source URL using Label above field for clarity
+                            with ui.VStack(spacing=4):
+                                ui.Label("Source Folder URL", style=self._STYLE_LABEL)
+                                self._folder_field = ui.StringField(width=ui.Fraction(1), height=24, style=COMPACT_STYLE)
+
+                            # Row 2: Filter & Recurse
+                            with ui.HStack(spacing=15, height=24):
+                                with ui.HStack(width=ui.Fraction(1)):
+                                    ui.Label("Filter:", width=40, style=self._STYLE_LABEL)
+                                    self._filter_field = ui.StringField(width=ui.Fraction(1), style=COMPACT_STYLE)
+                                    self._filter_field.model.set_value("max_*.usd")
+                                
+                                # Separator
+                                ui.Line(width=1, style={"color": 0xFF555555})
+                                
+                                with ui.HStack(width=ui.Fraction(0.6)):
+                                    self._recurse_cb = ui.CheckBox(width=20)
+                                    self._recurse_cb.model.set_value(True)
+                                    ui.Label("Recurse Sub-folders", style={"color": 0xFFAAAAAA})
+
+                            # Row 3: ID Suffix & Overwrite
+                            with ui.HStack(spacing=15, height=24):
+                                with ui.HStack(width=ui.Fraction(1)):
+                                    ui.Label("Suffix:", width=40, style=self._STYLE_LABEL)
+                                    self._id_field = ui.StringField(width=ui.Fraction(1), style=COMPACT_STYLE)
+                                    self._id_field.model.set_value("")
+                                
+                                # Separator
+                                ui.Line(width=1, style={"color": 0xFF555555})
+                                
+                                with ui.HStack(width=ui.Fraction(0.6)):
+                                    self._overwrite_cb = ui.CheckBox(width=20)
+                                    self._overwrite_cb.model.set_value(False)
+                                    ui.Label("Overwrite Existing", style={"color": 0xFFAAAAAA})
+
+                            ui.Spacer(height=2)
+                            
+                            # Row 4: Action (Scan)
+                            with ui.HStack(height=24):
+                                ui.Button("Scan Source", clicked_fn=self._on_scan, width=ui.Fraction(0.4))
+                                ui.Spacer(width=10)
+                                self._count_label = ui.Label("Ready to scan...", width=ui.Fraction(0.6), alignment=ui.Alignment.LEFT, style={"color": 0xFF888888})
+
+                # ========================== OUTPUT GROUP ==========================
+                with ui.VStack(spacing=5):
+                    ui.Label("OUTPUT CONFIGURATION", style=self._STYLE_SECTION, height=16)
                     
-                    with ui.HStack(width=0, spacing=5):
-                        self._overwrite_cb = ui.CheckBox(width=20)
-                        self._overwrite_cb.model.set_value(False)
-                        ui.Label("Overwrite", style=self._STYLE_LABEL)
+                    with ui.ZStack():
+                        ui.Rectangle(style={"background_color": CARD_BG_COLOR, "border_radius": CARD_RADIUS})
+                        with ui.VStack(spacing=10, padding=15): # Card Padding: 10 -> 15
+                            
+                            # Row 1: Root URL
+                            with ui.VStack(spacing=4):
+                                ui.Label("Output Root URL (local or omniverse://)", style=self._STYLE_LABEL)
+                                self._out_root_field = ui.StringField(width=ui.Fraction(1), height=24, style=COMPACT_STYLE)
 
-                # Scan Button (Inline with Count Label)
-                with ui.HStack(height=40, style={"margin_top": 5}):
-                    ui.Button("Scan", clicked_fn=self._on_scan, width=ui.Fraction(1))
-                    ui.Spacer(width=10)
-                    self._count_label = ui.Label("Ready to scan...", width=ui.Fraction(1), alignment=ui.Alignment.CENTER, style={"color": 0xFF888888})
+                            # Row 2: Material Path
+                            with ui.VStack(spacing=4):
+                                ui.Label("Material Overlay Path (Optional)", style=self._STYLE_LABEL)
+                                self._mat_field = ui.StringField(width=ui.Fraction(1), height=24, style=COMPACT_STYLE)
+                                self._mat_field.model.set_value(r"C:\Users\iec141194\Desktop\Inventec\Library\Material\mat_Product_v2.usd")
 
-            ui.Spacer(height=5)
-            # [Mod v1.10.5] Light gray line
-            ui.Line(height=1, style={"color": 0xFF555555})
-            ui.Spacer(height=5)
+                            # Row 3: Options
+                            with ui.HStack(height=24):
+                                self._inplace_cb = ui.CheckBox(width=20)
+                                self._inplace_cb.model.set_value(False)
+                                ui.Label("Allow Same Root (In-Place Build)", style={"color": 0xFFDDDDDD})
 
-            # --- Output Section ---
-            with ui.VStack(spacing=12):
-                ui.Label("Output Root URL (local or omniverse://)", style=self._STYLE_LABEL)
-                self._out_root_field = ui.StringField(height=ui.Pixel(26), width=ui.Fraction(1), style=COMPACT_STYLE)
+                ui.Spacer(height=5)
                 
-                ui.Label("Material Overlay Path (Optional)", style=self._STYLE_LABEL)
-                self._mat_field = ui.StringField(height=ui.Pixel(26), width=ui.Fraction(1), style=COMPACT_STYLE)
-                self._mat_field.model.set_value(r"C:\Users\iec141194\Desktop\Inventec\Library\Material\mat_Product_v2.usd")
-
-                # In-place Row
-                with ui.HStack(spacing=5, height=ui.Pixel(26)):
-                    self._inplace_cb = ui.CheckBox(width=20)
-                    self._inplace_cb.model.set_value(False)
-                    ui.Label("Allow Same Root (in-place) - skips Materials copy", style={"color": 0xFFDDDDDD})
-
-            ui.Spacer(height=10)
-            # [Mod v1.10.5] Light gray line
-            ui.Line(height=1, style={"color": 0xFF555555})
-            ui.Spacer(height=10)
-
-            # --- Footer (Compactly Stacked) ---
-            with ui.HStack(height=40, spacing=15):
-                ui.Button("Start (build trio)", clicked_fn=self._on_start_clicked, width=150)
-                
-                # Real Progress Bar
-                with ui.ZStack(height=40): 
-                    self._progress_bar = ui.ProgressBar(width=ui.Fraction(1), height=40)
-                    self._progress_bar.model.set_value(0.0)
+                # ========================== FOOTER ==========================
+                # Compactly Stacked, separate from groups
+                with ui.VStack(spacing=5):
+                    with ui.HStack(height=30, spacing=15, alignment=ui.Alignment.CENTER):
+                        # [Style] Match Assembly STEP (Green)
+                        self._btn_start = ui.Button("Start (build trio)", clicked_fn=self._on_start_clicked, width=150, style={"background_color": 0xFF225522})
+                        self._setup_hover(self._btn_start, 0xFF225522)
+                        
+                        # Real Progress Bar
+                        with ui.ZStack(): 
+                            self._progress_bar = ui.ProgressBar(width=ui.Fraction(1), height=24)
+                            self._progress_bar.model.set_value(0.0)
+                            
+                            # Overlay Text
+                            self._progress_label = ui.Label("0/0", alignment=ui.Alignment.CENTER, style={"color": 0xFFFFFFFF})
                     
-                    # Overlay Text
-                    self._progress_label = ui.Label("0/0", alignment=ui.Alignment.CENTER, style={"color": 0xFFFFFFFF})
+                    # Version / Status Footer
+                    ui.Label("v1.10.6 Redesigned", height=10, alignment=ui.Alignment.RIGHT, style={"color": 0xFF666666, "font_size": 10})
 
     # ---------- Logging (Console Only) ----------
     def _log_to_console(self, level: str, text: str):
@@ -737,6 +768,29 @@ class SmartAssetsBuilderExtension(omni.ext.IExt):
         elif self._progress_bar:
             self._progress_bar.model.set_value(0.0)
 
+    # [UX] Hover Helper
+    def _setup_hover(self, btn, base_color):
+        if not btn: return
+        
+        # Calc brighter color (+20%)
+        # Format: 0xAABBGGRR
+        a = (base_color >> 24) & 0xFF
+        b = (base_color >> 16) & 0xFF
+        g = (base_color >> 8) & 0xFF
+        r = base_color & 0xFF
+        
+        # Increase brightness
+        b = min(255, int(b * 1.4))
+        g = min(255, int(g * 1.4))
+        r = min(255, int(r * 1.4))
+        
+        hover_color = (a << 24) | (b << 16) | (g << 8) | r
+        
+        def _on_hover(hovered):
+            btn.style = {"background_color": hover_color if hovered else base_color}
+            
+        btn.set_mouse_hovered_fn(_on_hover)
+
     # ---------- UI actions ----------
     def _on_scan(self):
         self._progress(0, 0)
@@ -754,7 +808,7 @@ class SmartAssetsBuilderExtension(omni.ext.IExt):
             self._error("Please enter a Source Folder URL")
             if self._count_label: 
                 self._count_label.text = "Error: Missing URL"
-                self._count_label.style = {"color": 0xFFFF5555}
+                self._count_label.style = {"color": 0xFF3D3DF5}
             return
 
         try:
@@ -779,7 +833,7 @@ class SmartAssetsBuilderExtension(omni.ext.IExt):
             self._error(f"Scan failed: {e}")
             if self._count_label: 
                 self._count_label.text = "Scan Error (check console)"
-                self._count_label.style = {"color": 0xFFFF5555}
+                self._count_label.style = {"color": 0xFF3D3DF5}
             traceback.print_exc()
 
     def _on_start_clicked(self):
@@ -791,7 +845,7 @@ class SmartAssetsBuilderExtension(omni.ext.IExt):
             self._warn("Nothing to process: please scan first")
             if self._count_label: 
                 self._count_label.text = "Please Scan First!"
-                self._count_label.style = {"color": 0xFFFF5555}
+                self._count_label.style = {"color": 0xFF3D3DF5}
             return
 
         out_root = self._out_root_field.model.get_value_as_string().strip()
