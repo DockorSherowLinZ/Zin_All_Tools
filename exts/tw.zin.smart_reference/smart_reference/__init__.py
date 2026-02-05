@@ -1,1 +1,1 @@
-from .extension import SmartReferenceExtension
+from .extension import SmartReferenceExtension, SmartReferenceUI

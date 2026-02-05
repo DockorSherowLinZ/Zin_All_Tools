@@ -6,11 +6,13 @@ import weakref
 # Set to True to DISABLE all sub-tools and test pure UI shell stability.
 DEBUG_DISABLE_ALL_TOOLS = False
 
-# --- 匯入既有的五個子工具 (維持不變) ---
+# --- 匯入既有的子工具 ---
 from smart_align.extension import SmartAlignExtension
 from smart_assets_builder.extension import SmartAssetsBuilderExtension
 from smart_measure.extension import SmartMeasureExtension
 from smart_reference.extension import SmartReferenceExtension
+# 關鍵：匯入提供嵌入式 UI 的類別
+from smart_reference.extension import SmartReferenceUI 
 from smart_assembly.extension import SmartAssemblyExtension
 from smart_physics_setup.extension import SmartPhysicsSetupExtension
 
@@ -23,6 +25,7 @@ class ToolsBoxExtension(omni.ext.IExt):
         self.tool_assets = None
         self.tool_measure = None
         self.tool_reference = None
+        self.tool_reference_ui = None  # 儲存 Smart Reference UI 實例
         self.tool_assembly = None
         self.tool_physics = None
 
@@ -36,12 +39,15 @@ class ToolsBoxExtension(omni.ext.IExt):
             self.tool_measure = SmartMeasureExtension()
             self.tool_measure.startup_logic()
             
+            # --- Smart Reference 整合修正 ---
             self.tool_reference = SmartReferenceExtension()
+            # 建立 UI 實例，供 Tab 切換時呼叫 build_ui
+            self.tool_reference_ui = SmartReferenceUI() 
 
             self.tool_assembly = SmartAssemblyExtension()
             self.tool_assembly.startup_logic()
             
-            # --- [NEW] 實例化 Physics 工具 ---
+            # --- Physics 工具 ---
             self.tool_physics = SmartPhysicsSetupExtension()
             if hasattr(self.tool_physics, "on_startup"):
                 self.tool_physics.on_startup(ext_id)
@@ -50,7 +56,7 @@ class ToolsBoxExtension(omni.ext.IExt):
         self._current_tab = "Measure" 
         self._content_frame = None
 
-        # --- 定義按鈕樣式 (Style) ---
+        # --- 定義按鈕樣式 ---
         self._STYLE_TAB_ACTIVE = {
             "background_color": 0xFF44AA44,  # Green
             "border_radius": 4,
@@ -66,7 +72,7 @@ class ToolsBoxExtension(omni.ext.IExt):
         }
 
         # --- 2. 建立主視窗 ---
-        self._window = ui.Window("Tools Box", width=600, height=600)
+        self._window = ui.Window("Zin Tools Box", width=600, height=600)
 
         with self._window.frame:
             with ui.VStack(spacing=0, alignment=ui.Alignment.TOP):
@@ -102,12 +108,10 @@ class ToolsBoxExtension(omni.ext.IExt):
 
         # 2. 繪製新內容
         with self._content_frame:
-            # 包裹一層 VStack(TOP) 確保所有子工具都靠上對齊
             with ui.VStack(alignment=ui.Alignment.TOP):
                 
                 if DEBUG_DISABLE_ALL_TOOLS:
                     ui.Label("DEBUG MODE: ALL TOOLS DISABLED", style={"color": 0xFFFF0000, "font_size": 24}, alignment=ui.Alignment.CENTER)
-                    ui.Label("If flickering persists, it is NOT the sub-tools.", alignment=ui.Alignment.CENTER)
                     return
 
                 if self._current_tab == "Align":
@@ -127,30 +131,28 @@ class ToolsBoxExtension(omni.ext.IExt):
 
                 elif self._current_tab == "Reference":
                     self._highlight_tab(self._btn_ref)
-                    if self.tool_reference and hasattr(self.tool_reference, "build_ui_layout"):
-                        self.tool_reference.build_ui_layout()
+                    # 關鍵：呼叫 SmartReferenceUI 的 build_ui() 嵌入內容
+                    if self.tool_reference_ui:
+                        self.tool_reference_ui.build_ui()
 
                 elif self._current_tab == "Assembly":
                     self._highlight_tab(self._btn_assembly)
                     if self.tool_assembly and hasattr(self.tool_assembly, "build_ui_layout"):
                         self.tool_assembly.build_ui_layout()
                         
-                # --- [NEW] Physics UI ---
                 elif self._current_tab == "Physics":
                     self._highlight_tab(self._btn_physics)
-                    # 直接呼叫 build_ui_layout，因為現在確定它一定存在
                     if self.tool_physics:
                         self.tool_physics.build_ui_layout()
 
     def _highlight_tab(self, active_btn):
-        """按鈕視覺回饋：切換樣式"""
+        """按鈕視覺回饋"""
         self._btn_align.style = self._STYLE_TAB_INACTIVE
         self._btn_assets.style = self._STYLE_TAB_INACTIVE
         self._btn_measure.style = self._STYLE_TAB_INACTIVE
         self._btn_ref.style = self._STYLE_TAB_INACTIVE
         self._btn_assembly.style = self._STYLE_TAB_INACTIVE 
         self._btn_physics.style = self._STYLE_TAB_INACTIVE
-
         active_btn.style = self._STYLE_TAB_ACTIVE
 
     def on_shutdown(self):
@@ -158,7 +160,6 @@ class ToolsBoxExtension(omni.ext.IExt):
             self._window.destroy()
             self._window = None
         
-        # 釋放子工具並停止監聽
         if self.tool_measure:
             self.tool_measure.shutdown_logic()
             self.tool_measure = None
@@ -167,12 +168,13 @@ class ToolsBoxExtension(omni.ext.IExt):
             self.tool_assembly.shutdown_logic()
             self.tool_assembly = None
             
-        # --- [NEW] 清理 Physics ---
         if self.tool_physics:
             if hasattr(self.tool_physics, "on_shutdown"):
                 self.tool_physics.on_shutdown()
             self.tool_physics = None
             
+        # 清理 Reference UI 引用
+        self.tool_reference_ui = None
         self.tool_reference = None
         self.tool_assets = None
         
