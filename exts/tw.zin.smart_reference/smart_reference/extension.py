@@ -8,10 +8,43 @@ from pxr import Usd, UsdGeom, Sdf
 from omni.kit.window.filepicker import FilePickerDialog
 
 # ========================================================
-# 1. 統一樣式定義 (14px)
+# 1. 整合樣式表 (解決 Hover 失效問題)
 # ========================================================
-ACTION_STYLE = {"background_color": 0xFF343432, "border_radius": 3, "font_size": 14, "color": 0xFFDDDDDD}
-FIELD_STYLE = {"background_color": 0xFF1A1A1A, "border_radius": 2, "color": 0xFFFFFFFF, "font_size": 14}
+SMART_REFERENCE_STYLE = {
+    # 基礎文字與輸入框
+    "Label": {"font_size": 14},
+    "StringField": {"background_color": 0xFF1A1A1A, "border_radius": 2, "color": 0xFFFFFFFF, "font_size": 14},
+    
+    # 一般功能按鈕 (name="action")
+    "Button.action": {
+        "background_color": 0xFF343432, 
+        "border_radius": 3, 
+        "color": 0xFFDDDDDD
+    },
+    "Button.action:hover": {"background_color": 0xFF444442},
+    "Button.action:pressed": {"background_color": 0xFF222220},
+
+    # 瀏覽按鈕 (name="browse")
+    "Button.browse": {
+        "background_color": 0xFF4A4A48, 
+        "border_radius": 3, 
+        "color": 0xFFFFFFFF
+    },
+    "Button.browse:hover": {"background_color": 0xFF5A5A58},
+    "Button.browse:pressed": {"background_color": 0xFF3A3A38},
+
+    # 執行按鈕 (name="execute")
+    "Button.execute": {
+        "background_color": 0xFF444442, 
+        "border_radius": 4, 
+        "color": 0xFF00BFFF, 
+        "border_color": 0xFF00BFFF,
+        "border_width": 0.5
+    },
+    "Button.execute:hover": {"background_color": 0xFF555552, "border_width": 1.0},
+    "Button.execute:pressed": {"background_color": 0xFF333330},
+}
+
 TITLE_STYLE = {"color": 0xFF00BFFF, "font_size": 14, "font_weight": "bold"}
 SUB_LABEL_STYLE = {"color": 0xFFAAAAAA, "font_size": 14}
 INFO_BOX_STYLE = {"background_color": 0xFF101010, "border_radius": 4}
@@ -25,79 +58,79 @@ class SmartReferenceUI:
         self._found_paths = []
 
     def build_ui(self):
-        """14px 字體、Recent 標籤、雙版本兼容對齊佈局"""
         scroll_frame = ui.ScrollingFrame()
         with scroll_frame:
-            with ui.VStack(spacing=10, padding=12, alignment=ui.Alignment.TOP):
+            # 關鍵點：將樣式表套用在最外層的容器上
+            with ui.VStack(spacing=10, padding=12, alignment=ui.Alignment.TOP, style=SMART_REFERENCE_STYLE):
                 
                 # --- [Section 1] Quick Prefix Reference ---
                 ui.Label("Quick Prefix Reference", height=20, style=TITLE_STYLE)
                 with ui.VStack(spacing=6):
                     with ui.HStack(height=28, spacing=8):
                         ui.Label("Prefix:", width=50, style=SUB_LABEL_STYLE)
-                        self._field_prefix = ui.StringField(style=FIELD_STYLE)
+                        self._field_prefix = ui.StringField()
                         self._field_prefix.model.set_value("/World/Assembly")
-                        ui.Button("Scan", width=70, style=ACTION_STYLE, clicked_fn=self._on_scan)
-                        ui.Spacer(width=85) # 配合下方寬度調整
+                        # 指定 name 以對應樣式
+                        ui.Button("Scan", width=70, name="action", clicked_fn=self._on_scan)
+                        ui.Spacer(width=85)
                     
                     with ui.HStack(height=28, spacing=8):
                         ui.Label("URL:", width=50, style=SUB_LABEL_STYLE)
-                        self._field_url = ui.StringField(style=FIELD_STYLE)
-                        ui.Button("Apply", width=70, style=ACTION_STYLE, clicked_fn=self._on_apply_reference)
-                        ui.Button("Reset", width=70, style=ACTION_STYLE, clicked_fn=self._on_reset_quick)
+                        self._field_url = ui.StringField()
+                        ui.Button("Apply", width=70, name="action", clicked_fn=self._on_apply_reference)
+                        ui.Button("Reset", width=70, name="action", clicked_fn=self._on_reset_quick)
                     
                     with ui.ZStack(height=45):
                         ui.Rectangle(style=INFO_BOX_STYLE)
-                        # 使用嵌套容器實現垂直置中靠左
                         with ui.HStack(padding=6, alignment=ui.Alignment.CENTER): 
-                            self._lbl_results = ui.Label("Scan Results appear here...", word_wrap=True, style={"color": 0xFF00DD00, "font_size": 14})
+                            self._lbl_results = ui.Label("Scan Results appear here...", word_wrap=True, style={"color": 0xFF00DD00})
 
                 ui.Separator(height=8, style={"color": 0x22FFFFFF})
 
                 # --- [Section 2] BOM Generator ---
                 ui.Label("BOM Generator", height=22, style=TITLE_STYLE)
                 with ui.VStack(spacing=8):
-                    # Excel 欄位 + Recent CheckBox
                     with ui.HStack(height=28, spacing=8):
                         ui.Label("Excel:", width=50, style=SUB_LABEL_STYLE)
-                        self.excel_path_field = ui.StringField(style=FIELD_STYLE)
+                        self.excel_path_field = ui.StringField()
                         last_excel = self._settings.get(self._setting_excel) or "Select a file..."
                         self.excel_path_field.model.set_value(last_excel)
-                        ui.Button("Browse", width=70, style=ACTION_STYLE, clicked_fn=self._on_browse_excel)
+                        # 指定 name="browse"
+                        ui.Button("Browse", width=70, name="browse", clicked_fn=self._on_browse_excel)
                         
-                        # 修正點：改名為 "Recent" 並調整寬度以垂直置中
                         with ui.HStack(width=85, spacing=4, alignment=ui.Alignment.CENTER):
                             self.remember_excel_model = ui.SimpleBoolModel(True)
                             ui.CheckBox(model=self.remember_excel_model)
                             ui.Label("Recent", style=SUB_LABEL_STYLE, tooltip="Remember Path")
 
-                    # Assets 欄位 + Recent CheckBox
                     with ui.HStack(height=28, spacing=8):
                         ui.Label("Assets:", width=50, style=SUB_LABEL_STYLE)
-                        self.asset_dir_field = ui.StringField(style=FIELD_STYLE)
+                        self.asset_dir_field = ui.StringField()
                         last_assets = self._settings.get(self._setting_assets) or "omniverse://localhost/Assets"
                         self.asset_dir_field.model.set_value(last_assets)
-                        ui.Button("Browse", width=70, style=ACTION_STYLE, clicked_fn=self._on_browse_folder)
+                        # 指定 name="browse"
+                        ui.Button("Browse", width=70, name="browse", clicked_fn=self._on_browse_folder)
                         
-                        # 修正點：改名為 "Recent" 並調整寬度以垂直置中
                         with ui.HStack(width=85, spacing=4, alignment=ui.Alignment.CENTER):
                             self.remember_assets_model = ui.SimpleBoolModel(True)
                             ui.CheckBox(model=self.remember_assets_model)
                             ui.Label("Recent", style=SUB_LABEL_STYLE, tooltip="Remember Path")
 
-                    ui.Button("Execute BOM Import", height=36, style=ACTION_STYLE, clicked_fn=self._on_import_execute)
+                    # 指定 name="execute"
+                    ui.Button("Execute BOM Import", height=36, name="execute", clicked_fn=self._on_import_execute)
 
                 # --- Status Log ---
                 with ui.ZStack(height=40):
                     ui.Rectangle(style=INFO_BOX_STYLE)
                     with ui.HStack(spacing=8, padding=6, alignment=ui.Alignment.CENTER):
                         ui.Label("STATUS:", width=65, style={"font_size": 12, "color": 0xFF888888, "font_weight": "bold"})
-                        self.log_output = ui.Label("Ready", style={"color": 0xFF00BFFF, "font_size": 14})
+                        # 動態顏色邏輯
+                        self.log_output = ui.Label("Ready", style={"color": 0xFF00BFFF})
                 
                 ui.Spacer() 
         return scroll_frame
 
-    # 邏輯處理部分保持不變
+    # 邏輯處理 (BOM Import)
     def _on_import_execute(self):
         excel_path = self.excel_path_field.model.get_value_as_string().strip()
         asset_folder = self.asset_dir_field.model.get_value_as_string().strip()
@@ -105,8 +138,10 @@ class SmartReferenceUI:
             df = pd.read_excel(excel_path)
             self._process_bom(df, asset_folder)
             self.log_output.text = f"Success: {len(df)} items processed."
+            self.log_output.style = {"color": 0xFF00FF00} # 成功變綠
         except Exception as e:
             self.log_output.text = f"Error: {str(e)}"
+            self.log_output.style = {"color": 0xFF0000FF} # 失敗變紅
 
     def _process_bom(self, df, asset_folder):
         stage = omni.usd.get_context().get_stage()
