@@ -1,0 +1,16 @@
+[package]
+title = "Smart Assets Library"
+description = "A custom asset library for Zin All Tools supporting Local and Nucleus paths."
+version = "1.0.0"
+keywords = ["nvidia", "omniverse", "asset", "library", "zin"]
+changelog = "README.md"
+readme = "README.md"
+icon = "data/icon.png"
+preview_image = "data/preview.png"
+
+[dependencies]
+"omni.kit.uiapp" = {}
+"omni.client" = {}
+
+[[python.module]]
+name = "tw.zin.smart_assets_library"

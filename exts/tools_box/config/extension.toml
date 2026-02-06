@@ -1,15 +1,19 @@
 [package]
 title = "Tools Box"
-version = "0.1.0"
-description = "Integrated UI for all Zin tools."
+version = "1.1.0"
+description = "A comprehensive suite including Smart Assets Library, Measure, and Reference tools."
 authors = ["Zin"]
 readme = "README.md"
 category = "ZinTools"
+
+icon = "data/icon.png"
+preview_image = "data/preview.png"
 
 # 【關鍵修改】在這裡加入其他工具的 ID
 [dependencies]
 "omni.ui" = {}
 "omni.usd" = {}
+"omni.kit.uiapp" = {}
 
 # --- 加入這行，讓 All Tools 能看見其他子工具 ---
 "tw.zin.smart_align" = {}
