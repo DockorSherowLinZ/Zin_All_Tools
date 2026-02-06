@@ -5,12 +5,15 @@ version = "1.0.0"
 keywords = ["nvidia", "omniverse", "asset", "library", "zin"]
 changelog = "README.md"
 readme = "README.md"
-icon = "data/icon.png"
+
+icon = "data/SMART_ASSETS_LIBRARY.png"
 preview_image = "data/preview.png"
 
+# 【關鍵修改】在這裡加入其他工具的 ID
 [dependencies]
+"omni.ui" = {}
+"omni.usd" = {}
 "omni.kit.uiapp" = {}
-"omni.client" = {}
 
 [[python.module]]
 name = "tw.zin.smart_assets_library"

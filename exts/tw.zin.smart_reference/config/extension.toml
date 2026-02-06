@@ -16,12 +16,16 @@ keywords = [
 ]
 category = "ZinTools"
 
+icon = "data/SMART_REFERENCE.png"
+preview_image = "data/preview.png"
+
 [dependencies]
 "omni.ui" = {}
 "omni.usd" = {}
 "omni.kit.pipapi" = {}
-
+"omni.kit.uiapp" = {}
 [[python.pipapi.dependencies]]
+
 "pandas" = {}
 "openpyxl" = {} # 讀取 Excel 檔案 (.xlsx) 必須安裝這個
 

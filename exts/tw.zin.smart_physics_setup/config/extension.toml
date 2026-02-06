@@ -7,13 +7,17 @@ authors = ["Zin"]
 repository = ""
 changelog = "docs/CHANGELOG.md"
 readme = "docs/README.md"
-preview_image = "data/preview.png"
 keywords = ["physics", "utils"]
 category = "ZinTools"
 
+icon = "data/SMART_PHYSICS_SETUP.png"
+preview_image = "data/preview.png"
+
+# 【關鍵修改】在這裡加入其他工具的 ID
 [dependencies]
-"omni.kit.uiapp" = {}
+"omni.ui" = {}
 "omni.usd" = {}
+"omni.kit.uiapp" = {}
 
 [[python.module]]
 name = "smart_physics_setup"

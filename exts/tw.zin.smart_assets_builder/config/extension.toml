@@ -8,9 +8,14 @@ repository = "https://github.com/<YOUR_GITHUB>/<YOUR_REPO>"
 keywords = ["omniverse", "kit", "extension", "tw.zin"]
 category = "ZinTools"
 
+icon = "data/SMART_ASSETS_BUILDER.png"
+preview_image = "data/preview.png"
+
+# 【關鍵修改】在這裡加入其他工具的 ID
 [dependencies]
 "omni.ui" = {}
 "omni.usd" = {}
+"omni.kit.uiapp" = {}
 
 [[python.module]]
 name = "smart_assets_builder"
