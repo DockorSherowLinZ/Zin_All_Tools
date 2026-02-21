@@ -75,6 +75,7 @@ class SmartAssemblyWidget:
         if event.type == int(omni.usd.StageEventType.OPENED): asyncio.ensure_future(self._deferred_startup())
 
     def build_ui_layout(self):
+        # 使用 ScrollingFrame 作為根容器，確保內部內容總寬度可支撐
         self.ui_root_frame = ui.ScrollingFrame(
             horizontal_scrollbar_policy=ui.ScrollBarPolicy.SCROLLBAR_AS_NEEDED,
             vertical_scrollbar_policy=ui.ScrollBarPolicy.SCROLLBAR_ALWAYS_ON
@@ -93,7 +94,6 @@ class SmartAssemblyWidget:
                     txt, clr = ("PHYSICS ON", 0xFF00FF00) if self.timeline and self.timeline.is_playing() else ("PHYSICS OFF", 0xFF3D3DF5)
                     ui.Label(txt, width=80, style={"color": clr, "font_size": 12})
                 ui.Spacer(height=5)
-                ui.Spacer(height=5)
                 
                 # Config Manager Section
                 ui.Label("Configuration Manager", height=20, style={"color": 0xFFAAAAAA})
@@ -107,25 +107,20 @@ class SmartAssemblyWidget:
                     if self.configs: self.ui_field_name.model.as_string = self.configs[self.current_config_index]["name"]
 
                 with ui.HStack(height=30, spacing=10):
-                    ui.Button("RENAME", clicked_fn=self.rename_current_config, tooltip="Rename current config to text in field")
-                    ui.Button("SAVE NEW", clicked_fn=self.save_current_as_new, tooltip="Save current state as a NEW config")
-                    self.ui_btn_delete = ui.Button("DELETE", clicked_fn=self.delete_current_config, style={"background_color": 0xFF222288}, tooltip="Delete current config (Double Click)")
+                    ui.Button("RENAME", clicked_fn=self.rename_current_config)
+                    ui.Button("SAVE NEW", clicked_fn=self.save_current_as_new)
+                    self.ui_btn_delete = ui.Button("DELETE", clicked_fn=self.delete_current_config, style={"background_color": 0xFF222288})
                     self._setup_hover(self.ui_btn_delete, 0xFF222288)
 
                 ui.Spacer(height=10)
                 
-                # --- [Layout] Table Headers ---
+                # --- [Layout Fix] Table Headers ---
                 with ui.HStack(height=20):
-                    # Left Group
-                    ui.Label("Class", width=80, style={"color": 0xFFAAAAAA})
-                    ui.Label("Part Name", width=220, style={"color": 0xFFAAAAAA})
-                    
-                    # [Spacer] Pushes right group to the edge
+                    ui.Label("Class", width=ui.Pixel(80), style={"color": 0xFFAAAAAA})
+                    ui.Label("Part Name", width=ui.Pixel(220), style={"color": 0xFFAAAAAA})
                     ui.Spacer()
-                    
-                    # Right Group (Status + Slider + Buttons)
-                    ui.Label("Status", width=100, style={"color": 0xFFAAAAAA})
-                    ui.Label("Slider / Controls", width=280, style={"color": 0xFFAAAAAA}, alignment=ui.Alignment.CENTER)
+                    ui.Label("Status", width=ui.Pixel(100), style={"color": 0xFFAAAAAA})
+                    ui.Label("Slider / Controls", style={"color": 0xFFAAAAAA}, alignment=ui.Alignment.CENTER)  # [RWD] Fraction fill
                 
                 self.ui_list_frame = ui.VStack(spacing=4)
                 
@@ -141,7 +136,6 @@ class SmartAssemblyWidget:
                     any_error = any(v == -1 for v in self.status_dict.values())
                     cal_txt = "AUTO FIX (Calibrate)" if any_error else "RE-CALIBRATE"
                     cal_style = {"background_color": 0xFF222288} if any_error else {}
-                    
                     self.ui_btn_calibrate = ui.Button(cal_txt, clicked_fn=lambda: asyncio.ensure_future(self.perform_homing_sequence()), style=cal_style)
                 
                 self.progress_label = ui.Label(f"Ready. Next Step: 1 / {len(self.items)}", height=20, alignment=ui.Alignment.CENTER)
@@ -153,7 +147,6 @@ class SmartAssemblyWidget:
                 ui.Spacer()
         
         self.refresh_list_ui()
-        
         if self._update_task: self._update_task.cancel()
         self._update_task = asyncio.ensure_future(self.update_sliders_loop())
 
@@ -177,29 +170,21 @@ class SmartAssemblyWidget:
                 with ui.ZStack(height=32):
                     ui.Rectangle(style={"background_color": bg})
                     with ui.HStack(spacing=5):
-                        # 1. Left Fixed Info
-                        ui.Label(self.get_semantic_info(item_path), width=80, style={"color": 0xFFAAAAAA})
-                        ui.Label(self.get_display_name(item_path), width=220, style={"color": name_color})
-                        
-                        # --- [Spacer] Pushes Status & Controls to the right ---
+                        ui.Label(self.get_semantic_info(item_path), width=ui.Pixel(80), style={"color": 0xFFAAAAAA})
+                        ui.Label(self.get_display_name(item_path), width=ui.Pixel(220), style={"color": name_color})
                         ui.Spacer()
-                        
-                        # 2. Right Aligned Info & Controls
-                        lab = ui.Label(txt, width=100, style={"color": color, "font_weight": "bold" if status == -1 else "normal"})
+                        lab = ui.Label(txt, width=ui.Pixel(100), style={"color": color, "font_weight": "bold" if status == -1 else "normal"})
                         self.pos_labels[item_path] = lab
-                        
                         model = ui.SimpleFloatModel(self.get_drive_target(item_path))
                         self.slider_models[item_path] = model
                         model.add_value_changed_fn(lambda m, p=item_path: self.on_slider_manual_change(m, p))
                         model.add_begin_edit_fn(lambda m: setattr(self, 'is_user_dragging', True))
                         model.add_end_edit_fn(lambda m: setattr(self, 'is_user_dragging', False))
                         s_style = {"color": 0xFF3D3DF5} if status == -1 else {"color": 0xFF00AA00}
-                        
-                        ui.FloatSlider(model, min=0.0, max=self.get_joint_limit(item_path), style=s_style, format="%.1f", width=160)
-                        
-                        ui.Button("Reset", width=40, clicked_fn=lambda idx=i: self.reset_single_item(idx))
-                        ui.Button("UP", width=30, clicked_fn=lambda idx=i: self.move_item(idx, -1))
-                        ui.Button("DW", width=30, clicked_fn=lambda idx=i: self.move_item(idx, 1))
+                        ui.FloatSlider(model, min=0.0, max=self.get_joint_limit(item_path), style=s_style, format="%.1f", width=ui.Fraction(1))  # [RWD] 填滿剩餘寬度
+                        ui.Button("Reset", width=ui.Pixel(40), clicked_fn=lambda idx=i: self.reset_single_item(idx))
+                        ui.Button("UP", width=ui.Pixel(30), clicked_fn=lambda idx=i: self.move_item(idx, -1))
+                        ui.Button("DW", width=ui.Pixel(30), clicked_fn=lambda idx=i: self.move_item(idx, 1))
 
     def _setup_hover(self, btn, base_color):
         if not btn: return
@@ -207,12 +192,9 @@ class SmartAssemblyWidget:
         b = (base_color >> 16) & 0xFF
         g = (base_color >> 8) & 0xFF
         r = base_color & 0xFF
-        b = min(255, int(b * 1.4))
-        g = min(255, int(g * 1.4))
-        r = min(255, int(r * 1.4))
+        b = min(255, int(b * 1.4)); g = min(255, int(g * 1.4)); r = min(255, int(r * 1.4))
         hover_color = (a << 24) | (b << 16) | (g << 8) | r
-        def _on_hover(hovered):
-            btn.style = {"background_color": hover_color if hovered else base_color}
+        def _on_hover(hovered): btn.style = {"background_color": hover_color if hovered else base_color}
         btn.set_mouse_hovered_fn(_on_hover)
 
     def get_prim_safe(self, path):
@@ -223,52 +205,34 @@ class SmartAssemblyWidget:
         return None
 
     def find_assembly_items(self):
-        if not self.stage: return []
+        if not hasattr(self, 'stage') or not self.stage: return []
         if not hasattr(self, 'current_config_index'): self.current_config_index = 0
         if not hasattr(self, 'configs'): self.configs = []
-        
         found_items = sorted([str(p.GetParent().GetPath()) for p in self.stage.Traverse() if p.IsA(UsdPhysics.PrismaticJoint)])
-        
         saved_configs = []
         try:
             layer = self.stage.GetRootLayer()
             if layer and layer.customLayerData:
                 data = layer.customLayerData.get("smart_assembly_configs")
-                if data and isinstance(data, str):
-                    saved_configs = json.loads(data)
+                if data and isinstance(data, str): saved_configs = json.loads(data)
         except: pass
-
-        if not saved_configs:
-            saved_configs = [{"name": "config 1", "sequence": list(found_items)}]
-
-        seen_names = {}
-        sanitized = []
+        if not saved_configs: saved_configs = [{"name": "config 1", "sequence": list(found_items)}]
+        seen_names = {}; sanitized = []
         for c in saved_configs:
             name = c.get("name", "config")
             if name in seen_names:
-                count = seen_names[name]
-                new_name = f"{name}_{count}"
-                seen_names[name] += 1
-                c["name"] = new_name
-            else:
-                seen_names[name] = 1
+                count = seen_names[name]; new_name = f"{name}_{count}"; seen_names[name] += 1; c["name"] = new_name
+            else: seen_names[name] = 1
             sanitized.append(c)
         self.configs = sanitized
-        
-        if self.current_config_index >= len(self.configs):
-            self.current_config_index = 0
-            
+        if self.current_config_index >= len(self.configs): self.current_config_index = 0
         target_seq = self.configs[self.current_config_index]["sequence"]
-        
         final_list = []
         for path in target_seq:
-            if path in found_items:
-                final_list.append(path)
+            if path in found_items: final_list.append(path)
         existing_set = set(final_list)
         for path in found_items:
-            if path not in existing_set:
-                final_list.append(path)
-                
+            if path not in existing_set: final_list.append(path)
         return final_list
 
     def on_config_selected(self, model, item):
@@ -276,18 +240,15 @@ class SmartAssemblyWidget:
         if 0 <= idx < len(self.configs):
             self.current_config_index = idx
             self.items = self.sync_sequence(self.configs[idx]["sequence"])
-            if self.ui_field_name:
-                self.ui_field_name.model.as_string = self.configs[idx]["name"]
+            if self.ui_field_name: self.ui_field_name.model.as_string = self.configs[idx]["name"]
             self.refresh_list_ui()
 
     def rename_current_config(self):
         new_name = self.ui_field_name.model.as_string.strip()
         if not new_name: return
-        
         if 0 <= self.current_config_index < len(self.configs):
             old_name = self.configs[self.current_config_index]["name"]
             if old_name == new_name: return
-
             self.configs[self.current_config_index]["name"] = new_name
             self.persist_configs()
             self._temp_message = f"Renamed: '{old_name}' -> '{new_name}'"
@@ -295,38 +256,27 @@ class SmartAssemblyWidget:
 
     def delete_current_config(self):
         if not self.configs: return
-        
         now = time.time()
         if now - self._delete_confirm_time > 3.0:
             self._delete_confirm_time = now
-            if self.ui_btn_delete:
-                self.ui_btn_delete.text = "CONFIRM?"
-                self.ui_btn_delete.style = {"background_color": 0xFF222288}
+            if self.ui_btn_delete: self.ui_btn_delete.text = "CONFIRM?"; self.ui_btn_delete.style = {"background_color": 0xFF222288}
             return
-
         self._delete_confirm_time = 0.0 
-        
         deleted_name = self.configs[self.current_config_index]["name"]
         del self.configs[self.current_config_index]
-        
         if not self.configs:
-            self.configs = [{"name": "config 1", "sequence": list(self.items)}]
-            self.current_config_index = 0
+            self.configs = [{"name": "config 1", "sequence": list(self.items)}]; self.current_config_index = 0
             self._temp_message = "Reset to default config 1"
         else:
-            if self.current_config_index >= len(self.configs):
-                self.current_config_index = len(self.configs) - 1
+            if self.current_config_index >= len(self.configs): self.current_config_index = len(self.configs) - 1
             self._temp_message = f"Deleted: {deleted_name}"
-            
         self.items = self.sync_sequence(self.configs[self.current_config_index]["sequence"])
         self.persist_configs()
         asyncio.ensure_future(self._defer_refresh_full())
 
     async def _defer_refresh_full(self):
         await omni.kit.app.get_app().next_update_async()
-        if self.ui_root_frame:
-            self.ui_root_frame.clear()
-            self._build_content()
+        if self.ui_root_frame: self.ui_root_frame.clear(); self._build_content()
             
     def sync_sequence(self, stored_seq):
         current_in_stage = set([str(p.GetParent().GetPath()) for p in self.stage.Traverse() if p.IsA(UsdPhysics.PrismaticJoint)])
@@ -339,67 +289,43 @@ class SmartAssemblyWidget:
 
     def save_current_as_new(self):
         current_loaded_name = self.configs[self.current_config_index]["name"]
-        
         for c in self.configs:
             if self.items == c["sequence"]:
-                conflict_name = c["name"]
-                print(f"[SmartAssembly] Sequence matches existing config '{conflict_name}'. Save aborted.")
-                self._temp_message = f"Error: Same sequence as '{conflict_name}'!"
+                conflict_name = c["name"]; self._temp_message = f"Error: Same sequence as '{conflict_name}'!"
                 if self.progress_label: self.progress_label.style = {"color": 0xFF3D3DF5}
-                asyncio.ensure_future(self._defer_refresh_full())
-                return
-
-        input_name = self.ui_field_name.model.as_string.strip()
-        new_name = ""
+                asyncio.ensure_future(self._defer_refresh_full()); return
+        input_name = self.ui_field_name.model.as_string.strip(); new_name = ""
         existing_names = set(c["name"] for c in self.configs)
-
         if input_name and input_name != current_loaded_name:
             candidate = input_name
             if candidate in existing_names:
-                print(f"[SmartAssembly] Name '{candidate}' already exists. Save aborted.")
                 self._temp_message = f"Error: Name '{candidate}' exists!"
                 if self.progress_label: self.progress_label.style = {"color": 0xFF3D3DF5}
-                asyncio.ensure_future(self._defer_refresh_full())
-                return
+                asyncio.ensure_future(self._defer_refresh_full()); return
             new_name = candidate
         else:
-            max_n = 0
-            pattern = re.compile(r"config\s+(\d+)")
+            max_n = 0; pattern = re.compile(r"config\s+(\d+)")
             for name in existing_names:
                 m = pattern.match(name)
                 if m:
                     val = int(m.group(1))
                     if val > max_n: max_n = val
-            
             next_n = max_n + 1
             while True:
                 candidate = f"config {next_n}"
-                if candidate not in existing_names:
-                    new_name = candidate
-                    break
+                if candidate not in existing_names: new_name = candidate; break
                 next_n += 1
-        
-        new_entry = {"name": new_name, "sequence": list(self.items)}
-        self.configs.append(new_entry)
-        self.current_config_index = len(self.configs) - 1
-        
-        self.persist_configs()
-        self._temp_message = f"Saved: {new_name}"
-        asyncio.ensure_future(self._defer_refresh_full())
+        new_entry = {"name": new_name, "sequence": list(self.items)}; self.configs.append(new_entry)
+        self.current_config_index = len(self.configs) - 1; self.persist_configs()
+        self._temp_message = f"Saved: {new_name}"; asyncio.ensure_future(self._defer_refresh_full())
 
     def persist_configs(self):
         try:
             stage = omni.usd.get_context().get_stage()
             if not stage: return
-            layer = stage.GetRootLayer()
-            if not layer: return
-            
-            data_str = json.dumps(self.configs)
-            current_data = layer.customLayerData
-            current_data["smart_assembly_configs"] = data_str
-            layer.customLayerData = current_data
-        except Exception as e:
-            print(f"Persist Failed: {e}")
+            layer = stage.GetRootLayer(); data_str = json.dumps(self.configs)
+            current_data = layer.customLayerData; current_data["smart_assembly_configs"] = data_str; layer.customLayerData = current_data
+        except: pass
 
     def apply_physics_parameters(self):
         if not self.stage: return
@@ -438,8 +364,7 @@ class SmartAssemblyWidget:
         self.refresh_list_ui()
 
     def get_semantic_info(self, p):
-        prim = self.get_prim_safe(p)
-        curr = prim
+        prim = self.get_prim_safe(p); curr = prim
         for _ in range(3):
             if not curr or str(curr.GetPath()) == "/": break
             attr = curr.GetAttribute("semantics:labels:class") or curr.GetAttribute("semantic:class")
@@ -463,8 +388,7 @@ class SmartAssemblyWidget:
             if not hp: return True
             hp = str(hp)
             if item_path in hp or "Ground" in hp or ("MLB" in hp and "Slot" in hp): return True
-            hits.append(hp.split("/")[-1])
-            return True
+            hits.append(hp.split("/")[-1]); return True
         iface.overlap_sphere(5.0, (xf[0], xf[1], xf[2]), report, False)
         return list(set(hits))[0] if hits else "Unknown Block"
 
@@ -475,11 +399,9 @@ class SmartAssemblyWidget:
                 if not self.ui_list_frame: break
                 _ = self.ui_list_frame.visible 
             except: break
-
             if not self.slider_models or self.is_user_dragging: continue
             for p, m in self.slider_models.items():
-                cur = self.get_current_joint_pos(p); home = self.home_positions.get(p, 0.0)
-                val = abs(cur - home)
+                cur = self.get_current_joint_pos(p); home = self.home_positions.get(p, 0.0); val = abs(cur - home)
                 if p in self.pos_labels and self.status_dict[p] == 0:
                     self.pos_labels[p].text = f"Pos: {val:.1f}"; self.pos_labels[p].style = {"color": 0xFFCCCCCC}
                 if abs(m.as_float - val) > 0.1:
@@ -525,8 +447,7 @@ class SmartAssemblyWidget:
         return 999.9
 
     def reset_single_item(self, idx):
-        p = self.items[idx]; lim = self.get_joint_limit(p)
-        self.set_joint_target(p, lim)
+        p = self.items[idx]; lim = self.get_joint_limit(p); self.set_joint_target(p, lim)
         if p in self.slider_models: self.is_updating_ui = True; self.slider_models[p].as_float = lim; self.is_updating_ui = False
         self.status_dict[p] = 0; self.failure_report[p] = "---"
         if idx < self.current_step_index:
@@ -535,9 +456,7 @@ class SmartAssemblyWidget:
         asyncio.ensure_future(self._defer_refresh())
 
     def reset_scene(self):
-        self.current_step_index = 0
-        self.status_dict = {i: 0 for i in self.items}
-        self.failure_report = {i: "---" for i in self.items}
+        self.current_step_index = 0; self.status_dict = {i: 0 for i in self.items}; self.failure_report = {i: "---" for i in self.items}
         self.apply_physics_parameters()
         for i in self.items:
             lim = self.get_joint_limit(i); self.set_joint_target(i, lim)
@@ -552,10 +471,8 @@ class SmartAssemblyWidget:
             self.current_step_index += 1
         if self.current_step_index >= len(self.items):
             if self.progress_label: self.progress_label.text = "Assembly Complete!"; self.progress_label.style = {"color": 0xFF00FF00}
-            nm.post_notification(nm.Notification("Assembly Sequence Complete!", duration=3))
-            return
-        target = self.items[self.current_step_index]
-        self.set_joint_target(target, 0.0)
+            nm.post_notification(nm.Notification("Assembly Sequence Complete!", duration=3)); return
+        target = self.items[self.current_step_index]; self.set_joint_target(target, 0.0)
         if target in self.slider_models: self.is_updating_ui = True; self.slider_models[target].as_float = 0.0; self.is_updating_ui = False
         asyncio.ensure_future(self.monitor_assembly(target))
         self.current_step_index += 1
@@ -565,13 +482,10 @@ class SmartAssemblyWidget:
     async def monitor_assembly(self, p):
         for _ in range(90): await omni.kit.app.get_app().next_update_async()
         cur, tgt = self.get_current_joint_pos(p), self.home_positions.get(p, 0.0)
-        
-        # [關鍵修正] 嚴格判定：誤差小於 0.1 才算成功
-        if abs(cur - tgt) < 0.1:
-            print("[Assembly] SUCCESS."); self.status_dict[p] = 1; self.failure_report[p] = "OK"
+        if abs(cur - tgt) < 0.1: # 嚴格公差
+            self.status_dict[p] = 1; self.failure_report[p] = "OK"
         else:
-            obs = self.detect_collision_object(p); msg = f"Hit [{obs}]"
-            print(f"[Assembly] {msg}"); self.status_dict[p] = -1; self.failure_report[p] = msg
+            obs = self.detect_collision_object(p); msg = f"Hit [{obs}]"; self.status_dict[p] = -1; self.failure_report[p] = msg
         self.refresh_list_ui()
 
 
@@ -614,6 +528,7 @@ class SmartAssemblyExtension(omni.ext.IExt):
             if not self._window:
                 self._window = ui.Window(self.WINDOW_NAME, width=700, height=650)
                 self._window.set_visibility_changed_fn(self._on_visibility_changed)
+                
                 self._widget.set_window(self._window)
                 with self._window.frame:
                     self._widget.build_ui_layout()
@@ -627,14 +542,9 @@ class SmartAssemblyExtension(omni.ext.IExt):
             try: omni.kit.ui.get_editor_menu().set_value(self.MENU_PATH, bool(visible))
             except: pass
 
-    # ========================================================
-    #  Bridge Methods for Zin All Tools
-    # ========================================================
     def startup_logic(self): 
         if self._widget: self._widget.startup()
-    
     def shutdown_logic(self): 
         if self._widget: self._widget.shutdown()
-    
     def build_ui_layout(self): 
         return self._widget.build_ui_layout()

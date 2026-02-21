@@ -18,10 +18,12 @@ class SmartPhysicsSetupExtension(omni.ext.IExt):
         if not hasattr(self, "_rigid_paths"):
             self._init_data()
 
-        with ui.ScrollingFrame(
+        # [Bug Fix] 將 ScrollingFrame 存入變數，後面才能 return
+        scroll_frame = ui.ScrollingFrame(
             horizontal_scrollbar_policy=ui.ScrollBarPolicy.SCROLLBAR_AS_NEEDED,
             vertical_scrollbar_policy=ui.ScrollBarPolicy.SCROLLBAR_AS_NEEDED
-        ):
+        )
+        with scroll_frame:
             with ui.VStack(spacing=10, padding=10):
                 
                 # --- 1. Rigid Body ---
@@ -30,7 +32,7 @@ class SmartPhysicsSetupExtension(omni.ext.IExt):
                         ui.Button("Add Selected to Rigid List", clicked_fn=self._add_to_rigid, height=40)
                         
                         with ui.HStack(height=20):
-                            ui.Label("Make Static (Kinematic):", width=150, tooltip="Check this if the plug should NOT fall.")
+                            ui.Label("Make Static (Kinematic):", width=ui.Pixel(150), tooltip="Check this if the plug should NOT fall.")
                             ui.CheckBox(model=self._kinematic_model)
 
                         ui.Label("Current List:", style={"color": 0xFFAAAAAA})
@@ -48,10 +50,10 @@ class SmartPhysicsSetupExtension(omni.ext.IExt):
                 with ui.CollapsableFrame("3. Physics Parameters", height=0):
                     with ui.VStack(spacing=5, height=0):
                         with ui.HStack():
-                            ui.Label("Contact Offset:", width=150)
+                            ui.Label("Contact Offset:", width=ui.Pixel(150))
                             ui.FloatDrag(model=self._contact_offset_model, min=0.0001, max=0.1, step=0.0001)
                         with ui.HStack():
-                            ui.Label("Stiffness:", width=150)
+                            ui.Label("Stiffness:", width=ui.Pixel(150))
                             ui.FloatDrag(model=self._stiffness_model, min=100.0, max=1000000.0, step=100.0)
 
                 # --- 4. Attachment ---
@@ -59,7 +61,7 @@ class SmartPhysicsSetupExtension(omni.ext.IExt):
                     with ui.VStack(spacing=5, height=0):
                         ui.Label("Auto-bind Soft to Rigid objects.", style={"color": 0xFF888888})
                         with ui.HStack():
-                            ui.Label("Attachment Range:", width=150)
+                            ui.Label("Attachment Range:", width=ui.Pixel(150))
                             ui.FloatDrag(model=self._attach_distance_model, min=0.001, max=0.1, step=0.001)
 
                 ui.Separator(height=10)
@@ -79,6 +81,8 @@ class SmartPhysicsSetupExtension(omni.ext.IExt):
                     alignment=ui.Alignment.CENTER,
                     style={"background_color": 0x00000000, "border_width": 0, "color": 0xFFFFFF00}
                 )
+
+        return scroll_frame  # [Bug Fix] 必須 return，否則 tools_box 嵌入時特此 tab 會顯示空白
 
     # ----------------------------------------------------------------------
     #  Initialization & Logic

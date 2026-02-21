@@ -1,316 +1,217 @@
 import omni.ext
 import omni.ui as ui
 import omni.usd
-from pxr import Sdf, Usd
+import os
+import carb.settings
+import pandas as pd 
+from pxr import Usd, UsdGeom, Sdf
+from omni.kit.window.filepicker import FilePickerDialog
 
-class SmartReferenceExtension(omni.ext.IExt):
-    WINDOW_NAME = "Smart Reference"
-    MENU_PATH = f"Zin Tools/{WINDOW_NAME}"
+# ========================================================
+# 1. 整合樣式表 (解決 Hover 失效問題)
+# ========================================================
+SMART_REFERENCE_STYLE = {
+    # 基礎文字與輸入框
+    "Label": {"font_size": 14},
+    "StringField": {"background_color": 0xFF1A1A1A, "border_radius": 2, "color": 0xFFFFFFFF, "font_size": 14},
+    
+    # 一般功能按鈕 (name="action")
+    "Button.action": {
+        "background_color": 0xFF343432, 
+        "border_radius": 3, 
+        "color": 0xFFDDDDDD
+    },
+    "Button.action:hover": {"background_color": 0xFF444442},
+    "Button.action:pressed": {"background_color": 0xFF222220},
 
-    def on_startup(self, ext_id):
-        # 1. 初始化資料
-        self._init_data()
+    # 瀏覽按鈕 (name="browse")
+    "Button.browse": {
+        "background_color": 0xFF4A4A48, 
+        "border_radius": 3, 
+        "color": 0xFFFFFFFF
+    },
+    "Button.browse:hover": {"background_color": 0xFF5A5A58},
+    "Button.browse:pressed": {"background_color": 0xFF3A3A38},
 
-        # 2. 建立選單 (Standalone 模式)
-        self._menu_added = False
-        self._build_menu()
+    # 執行按鈕 (name="execute")
+    "Button.execute": {
+        "background_color": 0xFF444442, 
+        "border_radius": 4, 
+        "color": 0xFF00BFFF, 
+        "border_color": 0xFF00BFFF,
+        "border_width": 0.5
+    },
+    "Button.execute:hover": {"background_color": 0xFF555552, "border_width": 1.0},
+    "Button.execute:pressed": {"background_color": 0xFF333330},
+}
 
-        # 3. 建立視窗 (Standalone 模式)
-        # 注意：這裡只建立 Window 物件，內容由 build_ui 填充
-        self._window = ui.Window(self.WINDOW_NAME, width=400, height=450)
-        self._window.set_visibility_changed_fn(self._on_visibility_changed)
-        
-        with self._window.frame:
-            self.build_ui_layout()
-            
-        # 預設隱藏視窗 (等待選單開啟)
-        self._window.visible = False
+TITLE_STYLE = {"color": 0xFF00BFFF, "font_size": 14, "font_weight": "bold"}
+SUB_LABEL_STYLE = {"color": 0xFFAAAAAA, "font_size": 14}
+INFO_BOX_STYLE = {"background_color": 0xFF101010, "border_radius": 4}
 
-    def _init_data(self):
-        """初始化內部變數"""
-        if hasattr(self, "_field_prefix"):
-            return
-            
-        self._field_prefix = None
-        self._field_url = None
-        self._lbl_status = None
-        
-        # 新增：掃描結果存放區
-        self._found_paths = [] 
-        self._field_results = None 
-
-    def on_shutdown(self):
-        self._remove_menu()
-        if self._window:
-            self._window.destroy()
-            self._window = None
-
-    # ========================================================
-    #  UI 建構區 (All Tools 與 Standalone 共用)
-    # ========================================================
-    def build_ui_layout(self):
-        """
-        Zin All Tools 會呼叫此方法。
-        """
-        print("[SmartReference] build_ui_layout called")
-        # 確保資料已初始化
-        self._init_data()
-
-        # 使用 ScrollingFrame 確保內容不會被切掉
-        with ui.ScrollingFrame(
-            horizontal_scrollbar_policy=ui.ScrollBarPolicy.SCROLLBAR_AS_NEEDED,
-            vertical_scrollbar_policy=ui.ScrollBarPolicy.SCROLLBAR_AS_NEEDED
-        ):
-            # 內容靠上對齊
-            with ui.VStack(spacing=10, padding=20, alignment=ui.Alignment.TOP):
-                
-                # --- Row 1: Target Prefix ---
-                ui.Label("Target Prefix (Parent/Name):", height=20, style={"color": 0xFFDDDDDD, "font_size": 14})
-                
-                # Instruction (Translated & Moved Up)
-                ui.Label("Please remove the suffix serial number, ex: Prim_001 >> Prim_", height=20, style={"color": 0xFF888888, "font_size": 12})
-                
-                self._field_prefix = ui.StringField(height=30)
-                self._field_prefix.model.set_value("/World/Example")
-                    
-                ui.Spacer(height=5)
-                
-                # Scan Button (Moved Below)
-                ui.Button(
-                    "Scan", 
-                    height=30,
-                    clicked_fn=self._on_scan
-                    # Match SmartAssetsBuilder style: fills width naturally in VStack or use width=ui.Fraction(1)
-                )
-
-                # --- Row 2: Asset URL ---
-                ui.Label("Asset URL (.usd):", height=20, style={"color": 0xFFDDDDDD, "font_size": 14})
-                self._field_url = ui.StringField(height=30)
-                self._field_url.model.set_value("omniverse://localhost/Projects/Asset.usd")
-
-                ui.Spacer(height=15)
-
-                # --- Row 3: Status (Moved Up) ---
-                ui.Label("Status:", height=20, style={"color": 0xFFAAAAAA, "font_size": 12})
-                self._lbl_status = ui.Label(
-                    "Ready", 
-                    height=20, 
-                    style={"color": 0xFFDDDDDD, "font_size": 14},
-                    word_wrap=True
-                )
-                
-                ui.Spacer(height=10)
-
-                # --- Row 4: Results ---
-                ui.Label("Scan Results:", height=20, style={"color": 0xFFAAAAAA, "font_size": 12})
-                self._field_results = ui.StringField(height=100, multiline=True, read_only=True)
-                
-                ui.Spacer(height=10)
-                ui.Separator(height=10)
-
-                # --- Row 5: Action Buttons (Apply & Reset) ---
-                with ui.HStack(height=40, spacing=10):
-                    btn_apply = ui.Button(
-                        "Apply Reference", 
-                        clicked_fn=self._on_apply_reference,
-                        style={"background_color": 0xFF225522}
-                    )
-                    self._setup_hover(btn_apply, 0xFF225522)
-                    
-                    ui.Button(
-                        "Reset", 
-                        clicked_fn=self._on_reset
-                    )
-
-                ui.Spacer()
-
-    # [UX] Hover Helper
-    def _setup_hover(self, btn, base_color):
-        if not btn: return
-        
-        # Calc brighter color (+40%)
-        # Format: 0xAABBGGRR
-        a = (base_color >> 24) & 0xFF
-        b = (base_color >> 16) & 0xFF
-        g = (base_color >> 8) & 0xFF
-        r = base_color & 0xFF
-        
-        # Increase brightness
-        b = min(255, int(b * 1.4))
-        g = min(255, int(g * 1.4))
-        r = min(255, int(r * 1.4))
-        
-        hover_color = (a << 24) | (b << 16) | (g << 8) | r
-        
-        def _on_hover(hovered):
-            btn.style = {"background_color": hover_color if hovered else base_color}
-            
-        btn.set_mouse_hovered_fn(_on_hover)
-
-    # ========================================================
-    #  邏輯處理區
-    # ========================================================
-    def _update_status(self, message, color=0xFFDDDDDD):
-        """更新狀態標籤"""
-        if self._lbl_status:
-            self._lbl_status.text = message
-            self._lbl_status.style = {"color": color, "font_size": 14}
-        print(f"[SmartReference] {message}")
-
-    def _on_reset(self):
-        """重置部分欄位 (保留 Asset URL)"""
-        print("[SmartReference] _on_reset called")
+class SmartReferenceUI:
+    def __init__(self):
+        self._file_picker = None 
+        self._settings = carb.settings.get_settings()
+        self._setting_excel = "/persistent/exts/tw.zin.smart_reference/last_excel_path"
+        self._setting_assets = "/persistent/exts/tw.zin.smart_reference/last_assets_path"
         self._found_paths = []
-        
-        if self._field_prefix:
-            self._field_prefix.model.set_value("/World/Example")
-        
-        # [Modified] User requested to KEEP Asset URL
-        # if self._field_url:
-        #    self._field_url.model.set_value("omniverse://localhost/Projects/Asset.usd")
 
-        if self._field_results:
-            self._field_results.model.set_value("")
+    def build_ui(self):
+        scroll_frame = ui.ScrollingFrame()
+        with scroll_frame:
+            # 關鍵點：將樣式表套用在最外層的容器上
+            with ui.VStack(spacing=10, padding=12, alignment=ui.Alignment.TOP, style=SMART_REFERENCE_STYLE):
+                
+                # --- [Section 1] Quick Prefix Reference ---
+                ui.Label("Quick Prefix Reference", height=20, style=TITLE_STYLE)
+                with ui.VStack(spacing=6):
+                    with ui.HStack(height=28, spacing=8):
+                        ui.Label("Prefix:", width=50, style=SUB_LABEL_STYLE)
+                        self._field_prefix = ui.StringField()
+                        self._field_prefix.model.set_value("/World/Assembly")
+                        # 指定 name 以對應樣式
+                        ui.Button("Scan", width=70, name="action", clicked_fn=self._on_scan)
+                        ui.Spacer(width=85)
+                    
+                    with ui.HStack(height=28, spacing=8):
+                        ui.Label("URL:", width=50, style=SUB_LABEL_STYLE)
+                        self._field_url = ui.StringField()
+                        ui.Button("Apply", width=70, name="action", clicked_fn=self._on_apply_reference)
+                        ui.Button("Reset", width=70, name="action", clicked_fn=self._on_reset_quick)
+                    
+                    with ui.ZStack(height=45):
+                        ui.Rectangle(style=INFO_BOX_STYLE)
+                        with ui.HStack(padding=6, alignment=ui.Alignment.CENTER): 
+                            self._lbl_results = ui.Label("Scan Results appear here...", word_wrap=True, style={"color": 0xFF00DD00})
+
+                ui.Separator(height=8, style={"color": 0x22FFFFFF})
+
+                # --- [Section 2] BOM Generator ---
+                ui.Label("BOM Generator", height=22, style=TITLE_STYLE)
+                with ui.VStack(spacing=8):
+                    with ui.HStack(height=28, spacing=8):
+                        ui.Label("Excel:", width=50, style=SUB_LABEL_STYLE)
+                        self.excel_path_field = ui.StringField()
+                        last_excel = self._settings.get(self._setting_excel) or "Select a file..."
+                        self.excel_path_field.model.set_value(last_excel)
+                        # 指定 name="browse"
+                        ui.Button("Browse", width=70, name="browse", clicked_fn=self._on_browse_excel)
+                        
+                        with ui.HStack(width=85, spacing=4, alignment=ui.Alignment.CENTER):
+                            self.remember_excel_model = ui.SimpleBoolModel(True)
+                            ui.CheckBox(model=self.remember_excel_model)
+                            ui.Label("Recent", style=SUB_LABEL_STYLE, tooltip="Remember Path")
+
+                    with ui.HStack(height=28, spacing=8):
+                        ui.Label("Assets:", width=50, style=SUB_LABEL_STYLE)
+                        self.asset_dir_field = ui.StringField()
+                        last_assets = self._settings.get(self._setting_assets) or "omniverse://localhost/Assets"
+                        self.asset_dir_field.model.set_value(last_assets)
+                        # 指定 name="browse"
+                        ui.Button("Browse", width=70, name="browse", clicked_fn=self._on_browse_folder)
+                        
+                        with ui.HStack(width=85, spacing=4, alignment=ui.Alignment.CENTER):
+                            self.remember_assets_model = ui.SimpleBoolModel(True)
+                            ui.CheckBox(model=self.remember_assets_model)
+                            ui.Label("Recent", style=SUB_LABEL_STYLE, tooltip="Remember Path")
+
+                    # 指定 name="execute"
+                    ui.Button("Execute BOM Import", height=36, name="execute", clicked_fn=self._on_import_execute)
+
+                # --- Status Log ---
+                with ui.ZStack(height=40):
+                    ui.Rectangle(style=INFO_BOX_STYLE)
+                    with ui.HStack(spacing=8, padding=6, alignment=ui.Alignment.CENTER):
+                        ui.Label("STATUS:", width=65, style={"font_size": 12, "color": 0xFF888888, "font_weight": "bold"})
+                        # 動態顏色邏輯
+                        self.log_output = ui.Label("Ready", style={"color": 0xFF00BFFF})
+                
+                ui.Spacer() 
+        return scroll_frame
+
+    # 邏輯處理 (BOM Import)
+    def _on_import_execute(self):
+        excel_path = self.excel_path_field.model.get_value_as_string().strip()
+        asset_folder = self.asset_dir_field.model.get_value_as_string().strip()
+        try:
+            df = pd.read_excel(excel_path)
+            self._process_bom(df, asset_folder)
+            self.log_output.text = f"Success: {len(df)} items processed."
+            self.log_output.style = {"color": 0xFF00FF00} # 成功變綠
+        except Exception as e:
+            self.log_output.text = f"Error: {str(e)}"
+            self.log_output.style = {"color": 0xFF0000FF} # 失敗變紅
+
+    def _process_bom(self, df, asset_folder):
+        stage = omni.usd.get_context().get_stage()
+        clean_folder = asset_folder.rstrip("/\\")
+        for _, row in df.iterrows():
+            p_name = str(row['Part_Number']).strip()
+            sub_path = str(row['Asset_Sub_Path']).strip().lstrip("/\\")
+            parent_path = str(row['Parent_Path']).strip()
+            f_id = str(int(row['Instance_ID'])).zfill(2)
+            final_path = f"{clean_folder}/{sub_path}"
+
+            if not stage.GetPrimAtPath(parent_path):
+                omni.kit.commands.execute('CreatePrim', prim_type='Xform', prim_path=parent_path)
+
+            prim_path = f"{parent_path}/{p_name}_{f_id}"
+            prim = stage.DefinePrim(prim_path, "Xform")
+            prim.GetReferences().ClearReferences()
+            prim.GetReferences().AddReference(final_path)
             
-        self._update_status("Reset Complete (URL preserved).", 0xFFDDDDDD)
+            xform = UsdGeom.Xformable(prim)
+            xform.ClearXformOpOrder()
+            xform.AddTranslateOp().Set((row['Pos_X'], row['Pos_Y'], row['Pos_Z']))
+            xform.AddRotateXYZOp().Set((row['Rot_X'], row['Rot_Y'], row['Rot_Z']))
+            
+            sx, sy, sz = row.get('Scale_X', 1.0), row.get('Scale_Y', 1.0), row.get('Scale_Z', 1.0)
+            sx = 1.0 if pd.isna(sx) else sx
+            sy = 1.0 if pd.isna(sy) else sy
+            sz = 1.0 if pd.isna(sz) else sz
+            xform.AddScaleOp().Set((sx, sy, sz))
 
     def _on_scan(self):
-        """執行掃描邏輯"""
-        print("[SmartReference] _on_scan called")
-        self._update_status("Scanning...", 0xFFFFFF00)
-        self._found_paths = [] # Reset
-        if self._field_results:
-            self._field_results.model.set_value("")
-
-        # 確保 UI 元件存在
-        if not self._field_prefix:
-            return
-
-        prefix_input = self._field_prefix.model.get_value_as_string().strip()
-
-        if not prefix_input:
-            self._update_status("Error: Prefix field is empty.", 0xFF5555FF)
-            return
-
-        # 解析路徑
-        if "/" in prefix_input:
-            parent_path, prefix_name = prefix_input.rsplit("/", 1)
-            if not parent_path: parent_path = "/"
-        else:
-            parent_path = "/World"
-            prefix_name = prefix_input
-
-        print(f"[SmartReference] Scanning {parent_path} for children starting with '{prefix_name}'")
-
-        ctx = omni.usd.get_context()
-        stage = ctx.get_stage()
-        
-        if not stage:
-            self._update_status("Error: No stage opened.", 0xFF5555FF)
-            return
-
-        parent_prim = stage.GetPrimAtPath(parent_path)
-        if not parent_prim.IsValid():
-            self._update_status(f"Error: Parent '{parent_path}' not found.", 0xFF5555FF)
-            return
-
-        try:
-            children = list(parent_prim.GetChildren())
-            count = 0
-            found_list_str = ""
-
-            for child in children:
-                if child.GetName().startswith(prefix_name):
-                    path = str(child.GetPath())
-                    self._found_paths.append(path)
-                    found_list_str += f"{path}\n"
-                    count += 1
-            
-            if self._field_results:
-                self._field_results.model.set_value(found_list_str)
-
-            if count > 0:
-                self._update_status(f"Scan Complete: Found {count} items.", 0xFF76B900)
-            else:
-                self._update_status(f"Scan Finished: 0 matches for '{prefix_name}'", 0xFF3D3DF5)
-
-        except Exception as e:
-            self._update_status(f"Exception during scan: {str(e)}", 0xFF5555FF)
-            print(e)
-
+        prefix = self._field_prefix.model.get_value_as_string().strip()
+        if not prefix: return
+        stage = omni.usd.get_context().get_stage()
+        self._found_paths = [str(p.GetPath()) for p in stage.Traverse() if str(p.GetPath()).startswith(prefix)]
+        self._lbl_results.text = f"Found {len(self._found_paths)} items."
 
     def _on_apply_reference(self):
-        """執行 Applying 邏輯"""
-        print("[SmartReference] _on_apply_reference called")
-        
-        if not self._found_paths:
-            self._update_status("Warning: No targets found. Please Scan first.", 0xFF3D3DF5)
-            return
-
-        if not self._field_url:
-            return
-
         asset_url = self._field_url.model.get_value_as_string().strip()
-        # [Fix] Sanitize path for Windows
-        asset_url = asset_url.replace("\\", "/")
+        stage = omni.usd.get_context().get_stage()
+        for path in self._found_paths:
+            prim = stage.GetPrimAtPath(path)
+            if prim.IsValid():
+                prim.GetReferences().ClearReferences()
+                prim.GetReferences().AddReference(asset_url)
 
-        if not asset_url:
-            self._update_status("Error: Asset URL is empty.", 0xFF5555FF)
-            return
+    def _on_reset_quick(self):
+        self._lbl_results.text = ""
+        self._found_paths = []
 
-        self._update_status(f"Applying reference to {len(self._found_paths)} items...", 0xFFFFFF00)
+    def _on_browse_excel(self):
+        def on_selected(filename, path):
+            full_path = f"{path}/{filename}".replace("\\", "/")
+            self.excel_path_field.model.set_value(full_path)
+            if self.remember_excel_model.as_bool:
+                self._settings.set(self._setting_excel, full_path)
+            self._file_picker.hide()
+        self._file_picker = FilePickerDialog("Select Excel", click_apply_handler=on_selected)
+        self._file_picker.show()
 
-        ctx = omni.usd.get_context()
-        stage = ctx.get_stage()
-        
-        if not stage:
-            self._update_status("Error: Stage lost.", 0xFF5555FF)
-            return
+    def _on_browse_folder(self):
+        def on_selected(filename, path):
+            full_path = path.replace("\\", "/")
+            self.asset_dir_field.model.set_value(full_path)
+            if self.remember_assets_model.as_bool:
+                self._settings.set(self._setting_assets, full_path)
+            self._file_picker.hide()
+        self._file_picker = FilePickerDialog("Select Assets", click_apply_handler=on_selected)
+        self._file_picker.show()
 
-        success_count = 0
-        try:
-            for path in self._found_paths:
-                prim = stage.GetPrimAtPath(path)
-                if prim.IsValid():
-                    print(f"[SmartReference] Applying to {path} -> {asset_url}")
-                    refs = prim.GetReferences()
-                    refs.ClearReferences()
-                    refs.AddReference(asset_url)
-                    success_count += 1
-            
-            self._update_status(f"Success: Updated {success_count} prims.", 0xFF76B900)
-
-        except Exception as e:
-            self._update_status(f"Exception during apply: {str(e)}", 0xFF5555FF)
-            print(e)
-
-    # ========================================================
-    #  選單與視窗管理 (Standalone 模式)
-    # ========================================================
-    def _build_menu(self):
-        try:
-            m = omni.kit.ui.get_editor_menu()
-            if m: 
-                m.add_item(self.MENU_PATH, self._toggle_window, toggle=True, value=False)
-            self._menu_added = True
-        except: 
-            pass
-
-    def _remove_menu(self):
-        try:
-            m = omni.kit.ui.get_editor_menu()
-            if m and m.has_item(self.MENU_PATH): 
-                m.remove_item(self.MENU_PATH)
-        except: 
-            pass
-
-    def _toggle_window(self, menu, value):
-        if self._window:
-            self._window.visible = bool(value)
-
-    def _on_visibility_changed(self, visible):
-        if self._menu_added:
-            try: 
-                omni.kit.ui.get_editor_menu().set_value(self.MENU_PATH, bool(visible))
-            except: 
-                pass
+class SmartReferenceExtension(omni.ext.IExt):
+    def on_startup(self, ext_id): pass
+    def on_shutdown(self): pass

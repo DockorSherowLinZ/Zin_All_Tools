@@ -16,4 +16,4 @@ preview_image = "data/preview.png"
 "omni.kit.uiapp" = {}
 
 [[python.module]]
-name = "tw.zin.smart_assets_library"
+name = "smart_assets_library"

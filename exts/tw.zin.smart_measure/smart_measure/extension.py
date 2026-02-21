@@ -76,10 +76,10 @@ class SmartMeasureWidget:
                 # Header
                 with ui.VStack(spacing=2, height=0):
                     with ui.HStack(height=18):
-                        ui.Label("Stage unit :", width=80, style={"color": 0x888888FF})
+                        ui.Label("Stage unit :", width=ui.Pixel(80), style={"color": 0x888888FF})
                         self._stage_unit_label = ui.Label("--", style={"color": 0xFFDDDDDD})
                     with ui.HStack(height=18):
-                        ui.Label("Up-Axis    :", width=80, style={"color": 0x888888FF})
+                        ui.Label("Up-Axis    :", width=ui.Pixel(80), style={"color": 0x888888FF})
                         self._up_axis_label = ui.Label("--", style={"color": 0xFFDDDDDD})
                 ui.Spacer(height=4)
                 
@@ -99,14 +99,16 @@ class SmartMeasureWidget:
                                 self._wid_label = ui.Label("Y width : --")
                                 self._hei_label = ui.Label("Z height: --")
                             ui.Spacer(height=2)
-                            with ui.HStack(height=30):
-                                ui.Label("Units", width=50, style={"color": 0xAAAAAAFF})
-                                items = [u[0] for u in self.DISPLAY_UNITS]
-                                # Add background color for better visibility
-                                cb = ui.ComboBox(1, *items, style={"background_color": 0xFF222222})
-                                cb.model.get_item_value_model().add_value_changed_fn(self._on_size_unit_changed)
-                                ui.Spacer(width=5)
-                                ui.Button("Copy", width=40, clicked_fn=lambda: self._copy_result("size"))
+                            with ui.ZStack(height=30):
+                                with ui.VStack():
+                                    ui.Spacer()
+                                    with ui.HStack(spacing=4):
+                                        ui.Label("Units", width=ui.Pixel(50), style={"color": 0xAAAAAAFF})
+                                        items = [u[0] for u in self.DISPLAY_UNITS]
+                                        cb = ui.ComboBox(1, *items, width=ui.Fraction(1), style={"background_color": 0xFF222222})
+                                        cb.model.get_item_value_model().add_value_changed_fn(self._on_size_unit_changed)
+                                        ui.Button("Copy", width=ui.Pixel(50), clicked_fn=lambda: self._copy_result("size"))
+                                    ui.Spacer()
 
                 # Distance
                 with ui.CollapsableFrame("Distance (2 Objects)", collapsed=False, height=0):
@@ -119,14 +121,16 @@ class SmartMeasureWidget:
                                 self._gap_y_label = ui.Label("Gap Y: --")
                                 self._gap_z_label = ui.Label("Gap Z: --")
                             ui.Spacer(height=2)
-                            with ui.HStack(height=30):
-                                ui.Label("Units", width=50, style={"color": 0xAAAAAAFF})
-                                items = [u[0] for u in self.DISPLAY_UNITS]
-                                # Add background color for better visibility
-                                cb = ui.ComboBox(1, *items, style={"background_color": 0xFF222222})
-                                cb.model.get_item_value_model().add_value_changed_fn(self._on_dist_unit_changed)
-                                ui.Spacer(width=5)
-                                ui.Button("Copy", width=40, clicked_fn=lambda: self._copy_result("dist"))
+                            with ui.ZStack(height=30):
+                                with ui.VStack():
+                                    ui.Spacer()
+                                    with ui.HStack(spacing=4):
+                                        ui.Label("Units", width=ui.Pixel(50), style={"color": 0xAAAAAAFF})
+                                        items = [u[0] for u in self.DISPLAY_UNITS]
+                                        cb = ui.ComboBox(1, *items, width=ui.Fraction(1), style={"background_color": 0xFF222222})
+                                        cb.model.get_item_value_model().add_value_changed_fn(self._on_dist_unit_changed)
+                                        ui.Button("Copy", width=ui.Pixel(50), clicked_fn=lambda: self._copy_result("dist"))
+                                    ui.Spacer()
                 ui.Spacer(height=10)
         
         # [Lifecycle] Create Subscription Lazy (Active Mode)
@@ -138,47 +142,6 @@ class SmartMeasureWidget:
         self._check_selection_and_measure()
         return scroll_frame
 
-    def _resolve_icons(self):
-        # Allow checking only once
-        if hasattr(self, '_icon_cache'): return
-        self._icon_cache = {}
-        
-        # Try to find omni.kit.window.stage extension path
-        try:
-            import omni.kit.app
-            import pathlib
-            ext_id = omni.kit.app.get_app().get_extension_manager().get_enabled_extension_id("omni.kit.window.stage")
-            if ext_id:
-                ext_path = omni.kit.app.get_app().get_extension_manager().get_extension_path(ext_id)
-                # Search common locations
-                # 1. resources/icons/default
-                # 2. resources/icons/svg
-                # We look recursively or check specific known paths
-                root = pathlib.Path(ext_path) / "resources" / "icons"
-                
-                # Helper to find file
-                def find_icon(name_part):
-                     # Recursive glob
-                     for f in root.rglob("*.svg"):
-                         if name_part.lower() in f.name.lower():
-                             return str(f.as_posix())
-                     return None
-                
-                self._icon_cache['Mesh'] = find_icon("mesh") or find_icon("cube")
-                self._icon_cache['Xform'] = find_icon("xform") or find_icon("transform") or find_icon("group")
-                self._icon_cache['Camera'] = find_icon("camera")
-                self._icon_cache['Light'] = find_icon("light")
-        except: 
-            pass
-
-    def _get_icon_path(self, type_name):
-        self._resolve_icons()
-        key = 'Xform'
-        if "Mesh" in type_name or "Cube" in type_name or "Sphere" in type_name: key = 'Mesh'
-        elif "Camera" in type_name: key = 'Camera'
-        elif "Light" in type_name: key = 'Light'
-        
-        return self._icon_cache.get(key)
 
     def _init_bbox_cache(self):
         purposes = [UsdGeom.Tokens.default_, UsdGeom.Tokens.render, UsdGeom.Tokens.proxy, UsdGeom.Tokens.guide]
@@ -256,15 +219,51 @@ class SmartMeasureWidget:
                         name = prim.GetName()
                         type_name = prim.GetTypeName()
                         
-                        # Icon Logic (Real Stage Icons)
-                        icon_path = self._get_icon_path(type_name)
+                        # Icon Logic — direct ${glyphs} mapping
+                        # Verified paths in C:/isaac_sim_5_1_0/kit/resources/glyphs/
+                        _GLYPH_MAP = {
+                            "Cube":          "${glyphs}/cube.svg",
+                            "Sphere":        "${glyphs}/circle.svg",
+                            "Cone":          "${glyphs}/asterisk.svg",
+                            "Cylinder":      "${glyphs}/geometry.svg",
+                            "Capsule":       "${glyphs}/geometry.svg",
+                            "Mesh":          "${glyphs}/geometry.svg",
+                            "Camera":        "${glyphs}/camera.svg",
+                            "Xform":         "${glyphs}/menu_xform.svg",
+                            "RectLight":     "${glyphs}/light.svg",
+                            "DiskLight":     "${glyphs}/light.svg",
+                            "SphereLight":   "${glyphs}/light.svg",
+                            "DistantLight":  "${glyphs}/light.svg",
+                            "CylinderLight": "${glyphs}/light.svg",
+                        }
+                        icon_path = _GLYPH_MAP.get(type_name)
                         
                         with ui.HStack(height=20):
                             # Icon
                             with ui.ZStack(width=16, height=16):
                                 if icon_path:
-                                    # Use Real Icon
-                                    ui.Image(icon_path, width=16, height=16)
+                                    # Per-type color tint — match Stage panel appearance
+                                    _COLOR_MAP = {
+                                        "Cube":          0xFF909090,  # darker neutral grey
+                                        "Sphere":        0xFF909090,
+                                        "Cone":          0xFFBBA060,  # warm gold (matches Stage star icon)
+                                        "Cylinder":      0xFF909090,
+                                        "Capsule":       0xFF909090,
+                                        "Mesh":          0xFF909090,
+                                        "Camera":        0xFFFFCC44,  # warm yellow
+                                        "Xform":         0xFFEB9E3B,  # orange-gold
+                                        "RectLight":     0xFF7B9BAF,  # blue-grey
+                                        "DiskLight":     0xFF7B9BAF,
+                                        "SphereLight":   0xFF7B9BAF,
+                                        "DistantLight":  0xFF7B9BAF,
+                                        "CylinderLight": 0xFF7B9BAF,
+                                    }
+                                    icon_color = _COLOR_MAP.get(type_name, 0xFF909090)
+                                    ui.Image(
+                                        icon_path,
+                                        width=16, height=16,
+                                        style={"color": icon_color},
+                                    )
                                 else:
                                     # Fallback: Color Box
                                     # Mesh: Grey [M], Xform: Blue [X], Camera: Purple [C], Light: Yellow [L]

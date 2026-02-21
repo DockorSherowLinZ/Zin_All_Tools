@@ -3,7 +3,8 @@ import omni.ui as ui
 import omni.usd
 import os
 import carb.settings
-import pandas as pd 
+import omni.kit.pipapi  # 新增：用於自動安裝套件
+# import pandas as pd   # <--- 移除：不能放在這裡，否則會導致啟動崩潰
 from pxr import Usd, UsdGeom, Sdf
 from omni.kit.window.filepicker import FilePickerDialog
 
@@ -67,23 +68,26 @@ class SmartReferenceUI:
                 ui.Label("Quick Prefix Reference", height=20, style=TITLE_STYLE)
                 with ui.VStack(spacing=6):
                     with ui.HStack(height=28, spacing=8):
-                        ui.Label("Prefix:", width=50, style=SUB_LABEL_STYLE)
+                        ui.Label("Prefix:", width=ui.Pixel(50), style=SUB_LABEL_STYLE)
                         self._field_prefix = ui.StringField()
                         self._field_prefix.model.set_value("/World/Assembly")
                         # 指定 name 以對應樣式
-                        ui.Button("Scan", width=70, name="action", clicked_fn=self._on_scan)
-                        ui.Spacer(width=85)
+                        ui.Button("Scan", width=ui.Pixel(70), name="action", clicked_fn=self._on_scan)
+                        # [RWD] 移除固定 Spacer(width=85)，讓佈局自然展開
                     
                     with ui.HStack(height=28, spacing=8):
-                        ui.Label("URL:", width=50, style=SUB_LABEL_STYLE)
+                        ui.Label("URL:", width=ui.Pixel(50), style=SUB_LABEL_STYLE)
                         self._field_url = ui.StringField()
-                        ui.Button("Apply", width=70, name="action", clicked_fn=self._on_apply_reference)
-                        ui.Button("Reset", width=70, name="action", clicked_fn=self._on_reset_quick)
+                        ui.Button("Apply", width=ui.Pixel(70), name="action", clicked_fn=self._on_apply_reference)
+                        ui.Button("Reset", width=ui.Pixel(70), name="action", clicked_fn=self._on_reset_quick)
                     
                     with ui.ZStack(height=45):
                         ui.Rectangle(style=INFO_BOX_STYLE)
-                        with ui.HStack(padding=6, alignment=ui.Alignment.CENTER): 
-                            self._lbl_results = ui.Label("Scan Results appear here...", word_wrap=True, style={"color": 0xFF00DD00})
+                        with ui.VStack():
+                            ui.Spacer()
+                            with ui.HStack(padding=6):
+                                self._lbl_results = ui.Label("Scan Results appear here...", word_wrap=True, style={"color": 0xFF00DD00})
+                            ui.Spacer()
 
                 ui.Separator(height=8, style={"color": 0x22FFFFFF})
 
@@ -91,27 +95,29 @@ class SmartReferenceUI:
                 ui.Label("BOM Generator", height=22, style=TITLE_STYLE)
                 with ui.VStack(spacing=8):
                     with ui.HStack(height=28, spacing=8):
-                        ui.Label("Excel:", width=50, style=SUB_LABEL_STYLE)
+                        ui.Label("Excel:", width=ui.Pixel(50), style=SUB_LABEL_STYLE)
                         self.excel_path_field = ui.StringField()
                         last_excel = self._settings.get(self._setting_excel) or "Select a file..."
                         self.excel_path_field.model.set_value(last_excel)
                         # 指定 name="browse"
-                        ui.Button("Browse", width=70, name="browse", clicked_fn=self._on_browse_excel)
+                        ui.Button("Browse", width=ui.Pixel(70), name="browse", clicked_fn=self._on_browse_excel)
                         
-                        with ui.HStack(width=85, spacing=4, alignment=ui.Alignment.CENTER):
+                        # [RWD] 移除固定 width=85，讓 checkbox+label 區域自動收縮
+                        with ui.HStack(spacing=4, alignment=ui.Alignment.CENTER):
                             self.remember_excel_model = ui.SimpleBoolModel(True)
                             ui.CheckBox(model=self.remember_excel_model)
                             ui.Label("Recent", style=SUB_LABEL_STYLE, tooltip="Remember Path")
 
                     with ui.HStack(height=28, spacing=8):
-                        ui.Label("Assets:", width=50, style=SUB_LABEL_STYLE)
+                        ui.Label("Assets:", width=ui.Pixel(50), style=SUB_LABEL_STYLE)
                         self.asset_dir_field = ui.StringField()
                         last_assets = self._settings.get(self._setting_assets) or "omniverse://localhost/Assets"
                         self.asset_dir_field.model.set_value(last_assets)
                         # 指定 name="browse"
-                        ui.Button("Browse", width=70, name="browse", clicked_fn=self._on_browse_folder)
+                        ui.Button("Browse", width=ui.Pixel(70), name="browse", clicked_fn=self._on_browse_folder)
                         
-                        with ui.HStack(width=85, spacing=4, alignment=ui.Alignment.CENTER):
+                        # [RWD] 移除固定 width=85
+                        with ui.HStack(spacing=4, alignment=ui.Alignment.CENTER):
                             self.remember_assets_model = ui.SimpleBoolModel(True)
                             ui.CheckBox(model=self.remember_assets_model)
                             ui.Label("Recent", style=SUB_LABEL_STYLE, tooltip="Remember Path")
@@ -122,10 +128,12 @@ class SmartReferenceUI:
                 # --- Status Log ---
                 with ui.ZStack(height=40):
                     ui.Rectangle(style=INFO_BOX_STYLE)
-                    with ui.HStack(spacing=8, padding=6, alignment=ui.Alignment.CENTER):
-                        ui.Label("STATUS:", width=65, style={"font_size": 12, "color": 0xFF888888, "font_weight": "bold"})
-                        # 動態顏色邏輯
-                        self.log_output = ui.Label("Ready", style={"color": 0xFF00BFFF})
+                    with ui.VStack():
+                        ui.Spacer()
+                        with ui.HStack(spacing=8, padding=6):
+                            ui.Label("STATUS:", width=65, style={"font_size": 12, "color": 0xFF888888, "font_weight": "bold"})
+                            self.log_output = ui.Label("Ready", style={"color": 0xFF00BFFF})
+                        ui.Spacer()
                 
                 ui.Spacer() 
         return scroll_frame
@@ -134,16 +142,27 @@ class SmartReferenceUI:
     def _on_import_execute(self):
         excel_path = self.excel_path_field.model.get_value_as_string().strip()
         asset_folder = self.asset_dir_field.model.get_value_as_string().strip()
+        
+        self.log_output.text = "Loading Pandas & Processing..."
+        
+        # [關鍵修正] 在這裡才匯入 Pandas，避免啟動時崩潰
         try:
+            import pandas as pd
+            import openpyxl  # Excel 讀取需要這個
+            
             df = pd.read_excel(excel_path)
-            self._process_bom(df, asset_folder)
+            self._process_bom(df, asset_folder, pd) # 將 pd 傳入
             self.log_output.text = f"Success: {len(df)} items processed."
             self.log_output.style = {"color": 0xFF00FF00} # 成功變綠
+            
+        except ImportError:
+            self.log_output.text = "Error: Pandas/OpenPyXL installing... try again in 5s."
+            self.log_output.style = {"color": 0xFFFFAA00}
         except Exception as e:
             self.log_output.text = f"Error: {str(e)}"
             self.log_output.style = {"color": 0xFF0000FF} # 失敗變紅
 
-    def _process_bom(self, df, asset_folder):
+    def _process_bom(self, df, asset_folder, pd): # 接收 pd 參數
         stage = omni.usd.get_context().get_stage()
         clean_folder = asset_folder.rstrip("/\\")
         for _, row in df.iterrows():
@@ -213,5 +232,13 @@ class SmartReferenceUI:
         self._file_picker.show()
 
 class SmartReferenceExtension(omni.ext.IExt):
-    def on_startup(self, ext_id): pass
+    def on_startup(self, ext_id):
+        # [關鍵修正] 在 Extension 啟動時自動檢查並安裝 Pandas 與 OpenPyXL
+        try:
+            print("[SmartReference] Checking dependencies...")
+            omni.kit.pipapi.install("pandas")
+            omni.kit.pipapi.install("openpyxl")
+        except Exception as e:
+            print(f"[SmartReference] Warning: Dependency install failed: {e}")
+
     def on_shutdown(self): pass

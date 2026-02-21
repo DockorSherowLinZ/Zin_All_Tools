@@ -345,7 +345,7 @@ class SmartAlignWidget:
                 
                 # [Safe Mode] Toggle for Debug Draw
                 with ui.HStack(height=20):
-                    ui.Label("Show 3D Overlay:", width=120, style={"color": 0xFFAAAAAA})
+                    ui.Label("Show 3D Overlay:", width=ui.Pixel(120), style={"color": 0xFFAAAAAA})
                     ui.CheckBox(model=self._show_overlay_model)
 
                 # Instruction

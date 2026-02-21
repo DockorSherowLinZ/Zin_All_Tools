@@ -1,6 +1,8 @@
 import omni.ext
 import omni.ui as ui
 import weakref
+from .zin_style import ZIN_GLOBAL_STYLE
+from .zin_components import ZinButton
 
 # --- DEBUG SWITCH ---
 # Set to True to DISABLE all sub-tools and test pure UI shell stability.
@@ -11,7 +13,6 @@ from smart_align.extension import SmartAlignExtension
 from smart_assets_builder.extension import SmartAssetsBuilderExtension
 from smart_measure.extension import SmartMeasureExtension
 from smart_reference.extension import SmartReferenceExtension
-# 關鍵：匯入提供嵌入式 UI 的類別
 from smart_reference.extension import SmartReferenceUI 
 from smart_assembly.extension import SmartAssemblyExtension
 from smart_physics_setup.extension import SmartPhysicsSetupExtension
@@ -25,7 +26,7 @@ class ToolsBoxExtension(omni.ext.IExt):
         self.tool_assets = None
         self.tool_measure = None
         self.tool_reference = None
-        self.tool_reference_ui = None  # 儲存 Smart Reference UI 實例
+        self.tool_reference_ui = None
         self.tool_assembly = None
         self.tool_physics = None
 
@@ -56,35 +57,22 @@ class ToolsBoxExtension(omni.ext.IExt):
         self._current_tab = "Measure" 
         self._content_frame = None
 
-        # --- 定義按鈕樣式 ---
-        self._STYLE_TAB_ACTIVE = {
-            "background_color": 0xFF44AA44,  # Green
-            "border_radius": 4,
-            "margin": 2,
-            "font_size": 16
-        }
-
-        self._STYLE_TAB_INACTIVE = {
-            "background_color": 0xFF343432,  # Dark Gray
-            "border_radius": 4,
-            "margin": 2,
-            "font_size": 16
-        }
+        # --- 樣式由 ZIN_GLOBAL_STYLE 集中管理 ---
 
         # --- 2. 建立主視窗 ---
         self._window = ui.Window("Zin Tools Box", width=600, height=600)
 
         with self._window.frame:
-            with ui.VStack(spacing=0, alignment=ui.Alignment.TOP):
+            with ui.VStack(spacing=0, alignment=ui.Alignment.TOP, style=ZIN_GLOBAL_STYLE):
                 
                 # --- A. 頁籤列 (Tab Bar) ---
-                with ui.HStack(height=40, style={"margin": 5, "spacing": 5}):
-                    self._btn_measure = ui.Button("Measure", height=30, clicked_fn=lambda: self._change_tab("Measure"))
-                    self._btn_assets = ui.Button("Builder", height=30, clicked_fn=lambda: self._change_tab("Assets"))
-                    self._btn_ref = ui.Button("Reference", height=30, clicked_fn=lambda: self._change_tab("Reference"))
-                    self._btn_align = ui.Button("Align", height=30, clicked_fn=lambda: self._change_tab("Align"))
-                    self._btn_assembly = ui.Button("Assembly", height=30, clicked_fn=lambda: self._change_tab("Assembly"))
-                    self._btn_physics = ui.Button("Physics", height=30, clicked_fn=lambda: self._change_tab("Physics"))
+                with ui.HStack(height=ui.Pixel(40), style={"margin": 5, "spacing": 5}):
+                    self._btn_measure  = ZinButton("Measure",   height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Measure"))
+                    self._btn_assets   = ZinButton("Builder",   height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Assets"))
+                    self._btn_ref      = ZinButton("Reference", height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Reference"))
+                    self._btn_align    = ZinButton("Align",     height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Align"))
+                    self._btn_assembly = ZinButton("Assembly",  height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Assembly"))
+                    self._btn_physics  = ZinButton("Physics",   height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Physics"))
 
                 # --- B. 內容顯示區 (Content Area) ---
                 self._content_frame = ui.Frame(padding=1)
@@ -146,14 +134,13 @@ class ToolsBoxExtension(omni.ext.IExt):
                         self.tool_physics.build_ui_layout()
 
     def _highlight_tab(self, active_btn):
-        """按鈕視覺回饋"""
-        self._btn_align.style = self._STYLE_TAB_INACTIVE
-        self._btn_assets.style = self._STYLE_TAB_INACTIVE
-        self._btn_measure.style = self._STYLE_TAB_INACTIVE
-        self._btn_ref.style = self._STYLE_TAB_INACTIVE
-        self._btn_assembly.style = self._STYLE_TAB_INACTIVE 
-        self._btn_physics.style = self._STYLE_TAB_INACTIVE
-        active_btn.style = self._STYLE_TAB_ACTIVE
+        """按鈕視覺回饋：透過 ZinButton.set_state() 切換樣式"""
+        for btn in [
+            self._btn_align, self._btn_assets, self._btn_measure,
+            self._btn_ref, self._btn_assembly, self._btn_physics
+        ]:
+            btn.set_state("default")
+        active_btn.set_state("correct")
 
     def on_shutdown(self):
         if self._window:

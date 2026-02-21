@@ -664,9 +664,13 @@ class SmartAssetsBuilderExtension(omni.ext.IExt):
                                 ui.Line(width=1, style={"color": 0xFF555555})
                                 
                                 with ui.HStack(width=ui.Fraction(0.6)):
-                                    self._recurse_cb = ui.CheckBox(width=20)
-                                    self._recurse_cb.model.set_value(True)
-                                    ui.Label("Recurse Sub-folders", style={"color": 0xFFAAAAAA})
+                                    with ui.VStack():
+                                        ui.Spacer()
+                                        with ui.HStack(spacing=4):
+                                            self._recurse_cb = ui.CheckBox(width=20)
+                                            self._recurse_cb.model.set_value(True)
+                                            ui.Label("Recurse Sub-folders", style={"color": 0xFFAAAAAA})
+                                        ui.Spacer()
 
                             # Row 3: ID Suffix & Overwrite
                             with ui.HStack(spacing=15, height=24):
@@ -679,9 +683,13 @@ class SmartAssetsBuilderExtension(omni.ext.IExt):
                                 ui.Line(width=1, style={"color": 0xFF555555})
                                 
                                 with ui.HStack(width=ui.Fraction(0.6)):
-                                    self._overwrite_cb = ui.CheckBox(width=20)
-                                    self._overwrite_cb.model.set_value(False)
-                                    ui.Label("Overwrite Existing", style={"color": 0xFFAAAAAA})
+                                    with ui.VStack():
+                                        ui.Spacer()
+                                        with ui.HStack(spacing=4):
+                                            self._overwrite_cb = ui.CheckBox(width=20)
+                                            self._overwrite_cb.model.set_value(False)
+                                            ui.Label("Overwrite Existing", style={"color": 0xFFAAAAAA})
+                                        ui.Spacer()
 
                             ui.Spacer(height=2)
                             
@@ -712,27 +720,35 @@ class SmartAssetsBuilderExtension(omni.ext.IExt):
 
                             # Row 3: Options
                             with ui.HStack(height=24):
-                                self._inplace_cb = ui.CheckBox(width=20)
-                                self._inplace_cb.model.set_value(False)
-                                ui.Label("Allow Same Root (In-Place Build)", style={"color": 0xFFDDDDDD})
+                                with ui.VStack():
+                                    ui.Spacer()
+                                    with ui.HStack(spacing=4):
+                                        self._inplace_cb = ui.CheckBox(width=20)
+                                        self._inplace_cb.model.set_value(False)
+                                        ui.Label("Allow Same Root (In-Place Build)", style={"color": 0xFFDDDDDD})
+                                    ui.Spacer()
 
                 ui.Spacer(height=5)
                 
                 # ========================== FOOTER ==========================
                 # Compactly Stacked, separate from groups
                 with ui.VStack(spacing=5):
-                    with ui.HStack(height=30, spacing=15, alignment=ui.Alignment.CENTER):
-                        # [Style] Match Assembly STEP (Green)
-                        self._btn_start = ui.Button("Start (build trio)", clicked_fn=self._on_start_clicked, width=150, style={"background_color": 0xFF225522})
-                        self._setup_hover(self._btn_start, 0xFF225522)
-                        
-                        # Real Progress Bar
-                        with ui.ZStack(): 
-                            self._progress_bar = ui.ProgressBar(width=ui.Fraction(1), height=24)
-                            self._progress_bar.model.set_value(0.0)
-                            
-                            # Overlay Text
-                            self._progress_label = ui.Label("0/0", alignment=ui.Alignment.CENTER, style={"color": 0xFFFFFFFF})
+                    with ui.ZStack(height=30):
+                        with ui.VStack():
+                            ui.Spacer()
+                            with ui.HStack(spacing=15):
+                                # [Style] Match Assembly STEP (Green)
+                                self._btn_start = ui.Button("Start (build trio)", clicked_fn=self._on_start_clicked, width=ui.Pixel(150), style={"background_color": 0xFF225522})
+                                self._setup_hover(self._btn_start, 0xFF225522)
+                                
+                                # Real Progress Bar
+                                with ui.ZStack(): 
+                                    self._progress_bar = ui.ProgressBar(width=ui.Fraction(1), height=24)
+                                    self._progress_bar.model.set_value(0.0)
+                                    
+                                    # Overlay Text
+                                    self._progress_label = ui.Label("0/0", alignment=ui.Alignment.CENTER, style={"color": 0xFFFFFFFF})
+                            ui.Spacer()
                     
                     # Version / Status Footer
                     ui.Label("v1.10.6 Redesigned", height=10, alignment=ui.Alignment.RIGHT, style={"color": 0xFF666666, "font_size": 10})

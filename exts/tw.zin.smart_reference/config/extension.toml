@@ -4,34 +4,24 @@ version = "0.1.0"
 description = "Zin All Tools suite for automated assembly from BOM."
 authors = ["Zin"]
 readme = "README.md"
-repository = "https://github.com/<YOUR_GITHUB>/<YOUR_REPO>"
-keywords = [
-    "omniverse",
-    "kit",
-    "extension",
-    "tw.zin",
-    "bom",
-    "usd",
-    "automation",
-]
+repository = ""
+keywords = ["omniverse", "kit", "pandas", "excel", "automation"]
 category = "ZinTools"
-
 icon = "data/SMART_REFERENCE.png"
 preview_image = "data/preview.png"
 
+# 核心依賴：確保 pipapi 存在，才能安裝 pandas
 [dependencies]
+"omni.kit.pipapi" = {}
 "omni.ui" = {}
 "omni.usd" = {}
-"omni.kit.pipapi" = {}
-"omni.kit.uiapp" = {}
-[[python.pipapi.dependencies]]
 
-"pandas" = {}
-"openpyxl" = {} # 讀取 Excel 檔案 (.xlsx) 必須安裝這個
+# Python 套件依賴：在這裡宣告你需要 pandas 和 openpyxl
+[python.pip_dependencies]
+pandas = {}
+openpyxl = {}
 
-[python.pip]
-packages = ["pandas", "openpyxl"]
-
+# Extension 入口設定
 [[python.module]]
 name = "smart_reference"
-class = "SmartReferenceExtension" # 這裡必須與 extension.py 裡的類別名一模一樣
+class = "SmartReferenceExtension"
