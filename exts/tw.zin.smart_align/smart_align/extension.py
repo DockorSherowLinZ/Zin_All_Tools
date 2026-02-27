@@ -6,7 +6,7 @@ import omni.usd
 from pxr import Usd, UsdGeom, Gf
 
 try:
-    from omni.isaac.debug_draw import _debug_draw
+    from isaacsim.util.debug_draw import _debug_draw  # [Update 5.1]
 except ImportError:
     _debug_draw = None
 
@@ -37,7 +37,7 @@ class SmartAlignWidget:
         if _debug_draw:
             self._debug_draw = _debug_draw.acquire_debug_draw_interface()
         else:
-            print("[SmartAlign] Warning: omni.isaac.debug_draw not available. 3D Overlay disabled.")
+            print("[SmartAlign] Warning: isaacsim.util.debug_draw not available. 3D Overlay disabled.")  # [Update 5.1]
             
         # self._update_selection_ui() # UI creation should trigger this, no need to force it here if UI doesn't exist
 
