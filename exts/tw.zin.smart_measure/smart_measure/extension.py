@@ -12,15 +12,15 @@ try:
 except Exception:
     clipboard = None
 
+from .measure_logic import format_stage_unit, get_precision, calculate_gap
+
+
 
 # ========================================================
 #  核心邏輯與 UI Widget
 # ========================================================
 class SmartMeasureWidget:
     """ 核心邏輯與 UI 元件 """
-    METERS_PER_UNIT_TO_NAME = {
-        1.0: "m", 0.1: "dm", 0.01: "cm", 0.001: "mm", 0.0254: "inch", 0.3048: "ft",
-    }
     DISPLAY_UNITS = [
         ("mm", 0.001), ("cm", 0.01), ("m", 1.0), ("inch", 0.0254), ("ft", 0.3048),
     ]
@@ -201,9 +201,7 @@ class SmartMeasureWidget:
         except: pass
 
     def _format_stage_unit(self, mpu):
-        for val, name in self.METERS_PER_UNIT_TO_NAME.items():
-            if math.isclose(mpu, val, rel_tol=1e-5): return name
-        return f"{math.ceil(mpu*100)/100.0:.4f} m"
+        return format_stage_unit(mpu)
 
     def _check_selection_and_measure(self):
         paths = self._usd_context.get_selection().get_selected_prim_paths()
@@ -324,11 +322,8 @@ class SmartMeasureWidget:
     def _calculate_gap(self, b1, b2):
         mn1, mx1 = b1.GetMin(), b1.GetMax()
         mn2, mx2 = b2.GetMin(), b2.GetMax()
-        gap = lambda a1, a2, b1, b2: b1 - a2 if a2 < b1 else (a1 - b2 if b2 < a1 else 0.0)
-        dx = gap(mn1[0], mx1[0], mn2[0], mx2[0])
-        dy = gap(mn1[1], mx1[1], mn2[1], mx2[1])
-        dz = gap(mn1[2], mx1[2], mn2[2], mx2[2])
-        return dx, dy, dz, math.sqrt(dx*dx + dy*dy + dz*dz)
+        return calculate_gap((mn1[0], mn1[1], mn1[2]), (mx1[0], mx1[1], mx1[2]),
+                             (mn2[0], mn2[1], mn2[2]), (mx2[0], mx2[1], mx2[2]))
 
     def _on_clear(self):
         self._last_size_m = None
@@ -376,7 +371,9 @@ class SmartMeasureWidget:
                 self._gap_z_label.text = f"Gap Z: {gz/m:.{p}f} {self._display_unit_dist}"
         except: pass
 
-    def _precision(self, unit): return {"mm": 1, "cm": 2, "m": 4, "inch": 2, "ft": 3}.get(unit, 3)
+    def _precision(self, unit):
+        return get_precision(unit)
+
     def _on_size_unit_changed(self, m, _=None): 
         idx = m.get_value_as_int(); u = self.DISPLAY_UNITS[max(0, min(idx, 4))]
         self._display_unit_size = u[0]; self._display_mpu_size = u[1]; self._update_all_labels()
