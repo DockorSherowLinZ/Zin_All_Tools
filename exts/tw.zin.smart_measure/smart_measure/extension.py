@@ -37,8 +37,12 @@ class SmartMeasureWidget:
         self._bbox_cache = None
         self._display_unit_size = "cm"
         self._display_mpu_size = 0.01
+        self._custom_precision_size = ui.SimpleIntModel(2)  # 預設 cm 是 2 位
+        
         self._display_unit_dist = "cm"
         self._display_mpu_dist = 0.01
+        self._custom_precision_dist = ui.SimpleIntModel(2)  # 預設 cm 是 2 位
+        
         self._stage_event_sub = None
         self._update_sub = None
 
@@ -105,8 +109,14 @@ class SmartMeasureWidget:
                                     with ui.HStack(spacing=4):
                                         ui.Label("Units", width=ui.Pixel(50), style={"color": 0xAAAAAAFF})
                                         items = [u[0] for u in self.DISPLAY_UNITS]
-                                        cb = ui.ComboBox(1, *items, width=ui.Fraction(1), style={"background_color": 0xFF222222})
+                                        cb = ui.ComboBox(1, *items, width=ui.Pixel(60), style={"background_color": 0xFF222222})
                                         cb.model.get_item_value_model().add_value_changed_fn(self._on_size_unit_changed)
+                                        
+                                        ui.Label("Decimals", width=ui.Pixel(50), style={"color": 0xAAAAAAFF})
+                                        ui.IntDrag(self._custom_precision_size, min=0, max=6, width=ui.Pixel(40))
+                                        self._custom_precision_size.add_value_changed_fn(lambda m: self._update_all_labels())
+                                        
+                                        ui.Spacer(width=5)
                                         ui.Button("Copy", width=ui.Pixel(50), clicked_fn=lambda: self._copy_result("size"))
                                     ui.Spacer()
 
@@ -127,8 +137,14 @@ class SmartMeasureWidget:
                                     with ui.HStack(spacing=4):
                                         ui.Label("Units", width=ui.Pixel(50), style={"color": 0xAAAAAAFF})
                                         items = [u[0] for u in self.DISPLAY_UNITS]
-                                        cb = ui.ComboBox(1, *items, width=ui.Fraction(1), style={"background_color": 0xFF222222})
+                                        cb = ui.ComboBox(1, *items, width=ui.Pixel(60), style={"background_color": 0xFF222222})
                                         cb.model.get_item_value_model().add_value_changed_fn(self._on_dist_unit_changed)
+                                        
+                                        ui.Label("Decimals", width=ui.Pixel(50), style={"color": 0xAAAAAAFF})
+                                        ui.IntDrag(self._custom_precision_dist, min=0, max=6, width=ui.Pixel(40))
+                                        self._custom_precision_dist.add_value_changed_fn(lambda m: self._update_all_labels())
+                                        
+                                        ui.Spacer(width=5)
                                         ui.Button("Copy", width=ui.Pixel(50), clicked_fn=lambda: self._copy_result("dist"))
                                     ui.Spacer()
                 ui.Spacer(height=10)
@@ -339,7 +355,7 @@ class SmartMeasureWidget:
                 self._wid_label.text = "Y width : --"
                 self._hei_label.text = "Z height: --"
             else:
-                p = self._precision(self._display_unit_size)
+                p = self._custom_precision_size.as_int
                 m = self._display_mpu_size
                 x, y, z = self._last_size_m
                 self._len_label.text = f"X length: {x/m:.{p}f} {self._display_unit_size}"
@@ -361,7 +377,7 @@ class SmartMeasureWidget:
                     self._dist_msg_label.text = "Objects have no bounds"
             else:
                 self._dist_msg_label.text = "Distance Calculated"; self._dist_msg_label.style = {"color": 0xFF00AA00}
-                p = self._precision(self._display_unit_dist)
+                p = self._custom_precision_dist.as_int
                 m = self._display_mpu_dist
                 d = self._last_dist_data['dist']
                 gx, gy, gz = self._last_dist_data['gap']
@@ -371,15 +387,18 @@ class SmartMeasureWidget:
                 self._gap_z_label.text = f"Gap Z: {gz/m:.{p}f} {self._display_unit_dist}"
         except: pass
 
-    def _precision(self, unit):
-        return get_precision(unit)
-
     def _on_size_unit_changed(self, m, _=None): 
         idx = m.get_value_as_int(); u = self.DISPLAY_UNITS[max(0, min(idx, 4))]
-        self._display_unit_size = u[0]; self._display_mpu_size = u[1]; self._update_all_labels()
-    def _on_dist_unit_changed(self, m, _=None):
+        self._display_unit_size = u[0]; self._display_mpu_size = u[1]
+        self._custom_precision_size.set_value(get_precision(u[0]) if get_precision(u[0]) is not None else 3)
+        self._update_all_labels()
+        
+    def _on_dist_unit_changed(self, m, _=None): 
         idx = m.get_value_as_int(); u = self.DISPLAY_UNITS[max(0, min(idx, 4))]
-        self._display_unit_dist = u[0]; self._display_mpu_dist = u[1]; self._update_all_labels()
+        self._display_unit_dist = u[0]; self._display_mpu_dist = u[1]
+        self._custom_precision_dist.set_value(get_precision(u[0]) if get_precision(u[0]) is not None else 3)
+        self._update_all_labels()
+
     def _copy_result(self, mode):
         if not clipboard: return
         t = f"{self._len_label.text}\n{self._wid_label.text}\n{self._hei_label.text}" if mode == "size" else f"{self._dist_main_label.text}\n{self._gap_x_label.text}\n{self._gap_y_label.text}\n{self._gap_z_label.text}"
