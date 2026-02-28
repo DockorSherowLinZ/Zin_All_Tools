@@ -56,56 +56,62 @@ def test_calculate_gap_separated_boxes():
     b2_max = (3.0, 1.0, 1.0)
     
     # X 軸距離是 1.0，Y/Z 重疊距離為 0
+    """測試完全分開的兩個物件，計算 Gap X, Y, Z (中心點距離)"""
+    b1_min = (0.0, 0.0, 0.0)
+    b1_max = (2.0, 2.0, 2.0) # c=1,1,1
+    
+    b2_min = (4.0, 4.0, 4.0)
+    b2_max = (6.0, 6.0, 6.0) # c=5,5,5
+    
     dx, dy, dz, dist = calculate_gap(b1_min, b1_max, b2_min, b2_max)
-    assert math.isclose(dx, 1.0)
-    assert math.isclose(dy, 0.0)
-    assert math.isclose(dz, 0.0)
-    assert math.isclose(dist, 1.0)
+    assert dx == 4.0
+    assert dy == 4.0
+    assert dz == 4.0
+    # dist = sqrt(16+16+16) = sqrt(48) = 6.9282
+    assert math.isclose(dist, math.sqrt(48), rel_tol=1e-5)
 
 def test_calculate_gap_overlapping_boxes():
-    """測試兩個重疊的物件"""
+    """測試重疊的物件 (中心點仍會有距離除非完全重合)"""
     b1_min = (0.0, 0.0, 0.0)
-    b1_max = (2.0, 2.0, 2.0)
+    b1_max = (4.0, 4.0, 4.0) # c=2,2,2
     
-    b2_min = (1.0, 1.0, 1.0)
-    b2_max = (3.0, 3.0, 3.0)
+    b2_min = (2.0, 2.0, 2.0)
+    b2_max = (6.0, 6.0, 6.0) # c=4,4,4
     
-    # 三軸皆重疊，所有差值皆為 0
     dx, dy, dz, dist = calculate_gap(b1_min, b1_max, b2_min, b2_max)
-    assert dx == 0.0
-    assert dy == 0.0
-    assert dz == 0.0
-    assert dist == 0.0
+    assert dx == 2.0
+    assert dy == 2.0
+    assert dz == 2.0
+    assert math.isclose(dist, math.sqrt(12), rel_tol=1e-5)
 
 def test_calculate_gap_touching_boxes():
     """測試恰好碰在一起的物件"""
     b1_min = (0.0, 0.0, 0.0)
-    b1_max = (1.0, 1.0, 1.0)
+    b1_max = (1.0, 1.0, 1.0) # c=0.5, 0.5, 0.5
     
     b2_min = (1.0, 1.0, 1.0)
-    b2_max = (2.0, 2.0, 2.0)
+    b2_max = (2.0, 2.0, 2.0) # c=1.5, 1.5, 1.5
     
-    # 邊界碰在一起，距離為 0
     dx, dy, dz, dist = calculate_gap(b1_min, b1_max, b2_min, b2_max)
-    assert dx == 0.0
-    assert dy == 0.0
-    assert dz == 0.0
-    assert dist == 0.0
+    assert dx == 1.0
+    assert dy == 1.0
+    assert dz == 1.0
+    assert math.isclose(dist, math.sqrt(3), rel_tol=1e-5)
 
 def test_calculate_gap_diagonal_separation():
     """測試在斜角方向分開的物件"""
     b1_min = (0.0, 0.0, 0.0)
-    b1_max = (2.0, 5.0, 6.0)
+    b1_max = (2.0, 5.0, 6.0) # c=1.0, 2.5, 3.0
     
     b2_min = (5.0, 2.0, 10.0)
-    b2_max = (8.0, 7.0, 12.0)
+    b2_max = (8.0, 7.0, 12.0) # c=6.5, 4.5, 11.0
     
-    # 每個軸的距離都是 1
+    # 中心點差值
     dx, dy, dz, dist = calculate_gap(b1_min, b1_max, b2_min, b2_max)
-    assert dx == 3.0   # 5 - 2
-    assert dy == 0.0   # overlaps
-    assert dz == 4.0   # 10 - 6
-    assert math.isclose(dist, 5.0) # sqrt(3^2 + 4^2) = 5
+    assert dx == 5.5   # 6.5 - 1.0
+    assert dy == 2.0   # 4.5 - 2.5
+    assert dz == 8.0   # 11.0 - 3.0
+    assert math.isclose(dist, math.sqrt(5.5**2 + 2.0**2 + 8.0**2), rel_tol=1e-5)
 
 def test_calculate_gap_points():
     b1_min, b1_max = (0.0, 0.0, 0.0), (1.0, 1.0, 1.0)

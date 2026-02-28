@@ -21,15 +21,15 @@ def get_precision(unit: str) -> int:
 def calculate_gap(b1_min: Tuple[float, float, float], b1_max: Tuple[float, float, float], 
                   b2_min: Tuple[float, float, float], b2_max: Tuple[float, float, float]) -> Tuple[float, float, float, float]:
     """
-    計算兩個 AABB (Axis-Aligned Bounding Box) 之間的最小距離 (Gap)。
+    計算兩個 AABB (Axis-Aligned Bounding Box) 中心點之間在各軸上的距離 (Gap X, Y, Z)。
     回傳 (dx, dy, dz, distance)
-    如果兩個 BBox 在某個軸上重疊，該軸的 distance 為 0.
     """
-    gap_func = lambda a1, a2, b1, b2: b1 - a2 if a2 < b1 else (a1 - b2 if b2 < a1 else 0.0)
+    c1 = [(b1_min[i] + b1_max[i]) / 2.0 for i in range(3)]
+    c2 = [(b2_min[i] + b2_max[i]) / 2.0 for i in range(3)]
     
-    dx = gap_func(b1_min[0], b1_max[0], b2_min[0], b2_max[0])
-    dy = gap_func(b1_min[1], b1_max[1], b2_min[1], b2_max[1])
-    dz = gap_func(b1_min[2], b1_max[2], b2_min[2], b2_max[2])
+    dx = abs(c1[0] - c2[0])
+    dy = abs(c1[1] - c2[1])
+    dz = abs(c1[2] - c2[2])
     
     distance = math.sqrt(dx*dx + dy*dy + dz*dz)
     return dx, dy, dz, distance
