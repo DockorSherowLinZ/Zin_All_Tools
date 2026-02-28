@@ -1,10 +1,10 @@
 [package]
 title = "Smart Physics Setup"
 id = "tw.zin.smart_physics_setup"
-version = "0.1.0"
+version = "1.0.0"
 description = "A tool to setup physics properties quickly."
 authors = ["Zin"]
-repository = ""
+repository = "https://github.com/DockorSherowLinZ/Zin_All_Tools"
 changelog = "docs/CHANGELOG.md"
 readme = "docs/README.md"
 keywords = ["physics", "utils"]

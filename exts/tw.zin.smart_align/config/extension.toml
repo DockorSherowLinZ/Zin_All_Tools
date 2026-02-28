@@ -1,10 +1,10 @@
 [package]
 title = "SmartAlign"
-version = "0.1.0"
+version = "1.0.0"
 description = "Alignment helpers (skeleton)."
 authors = ["Zin"]
 readme = "README.md"
-repository = "https://github.com/<YOUR_GITHUB>/<YOUR_REPO>"
+repository = "https://github.com/DockorSherowLinZ/Zin_All_Tools"
 keywords = ["omniverse", "kit", "extension", "tw.zin"]
 category = "ZinTools"
 
