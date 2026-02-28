@@ -125,11 +125,11 @@ class SmartMeasureWidget:
                     with ui.Frame(style={"background_color": 0x33000000, "border_radius": 4}):
                         with ui.VStack(spacing=4, padding=6, height=0):
                             self._dist_msg_label = ui.Label("Select exactly 2 objects", style={"color": 0xFFAA00FF}, word_wrap=True)
-                            self._dist_main_label = ui.Label("Dist: --", style={"font_size": 16, "color": 0xFF00AA00})
+                            self._dist_main_label = ui.Label("Distance: --", style={"font_size": 16, "color": 0xFF00FFFF})
                             with ui.VStack(spacing=2, height=0):
-                                self._gap_x_label = ui.Label("Gap X: --")
-                                self._gap_y_label = ui.Label("Gap Y: --")
-                                self._gap_z_label = ui.Label("Gap Z: --")
+                                self._gap_x_label = ui.Label("Gap X: --", style={"color": 0xFF0000FF})
+                                self._gap_y_label = ui.Label("Gap Y: --", style={"color": 0xFF00FF00})
+                                self._gap_z_label = ui.Label("Gap Z: --", style={"color": 0xFFFF0000})
                             ui.Spacer(height=2)
                             with ui.ZStack(height=30):
                                 with ui.VStack():
@@ -364,7 +364,7 @@ class SmartMeasureWidget:
             
             # Distance
             if clear or self._last_dist_data is None:
-                self._dist_main_label.text = "Dist: --"
+                self._dist_main_label.text = "Distance: --"
                 self._gap_x_label.text = "Gap X: --"
                 self._gap_y_label.text = "Gap Y: --"
                 self._gap_z_label.text = "Gap Z: --"
@@ -381,7 +381,7 @@ class SmartMeasureWidget:
                 m = self._display_mpu_dist
                 d = self._last_dist_data['dist']
                 gx, gy, gz = self._last_dist_data['gap']
-                self._dist_main_label.text = f"Dist: {d/m:.{p}f} {self._display_unit_dist}"
+                self._dist_main_label.text = f"Distance: {d/m:.{p}f} {self._display_unit_dist}"
                 self._gap_x_label.text = f"Gap X: {gx/m:.{p}f} {self._display_unit_dist}"
                 self._gap_y_label.text = f"Gap Y: {gy/m:.{p}f} {self._display_unit_dist}"
                 self._gap_z_label.text = f"Gap Z: {gz/m:.{p}f} {self._display_unit_dist}"
