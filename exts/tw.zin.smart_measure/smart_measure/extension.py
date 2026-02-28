@@ -12,7 +12,7 @@ try:
 except Exception:
     clipboard = None
 
-from .measure_logic import format_stage_unit, get_precision, calculate_gap
+from .measure_logic import format_stage_unit, get_precision, calculate_gap, calculate_gap_points
 
 
 
@@ -43,6 +43,7 @@ class SmartMeasureWidget:
         self._display_mpu_dist = 0.01
         self._custom_precision_dist = ui.SimpleIntModel(2)  # 預設 cm 是 2 位
         
+        self._scene_view = None
         self._stage_event_sub = None
         self._update_sub = None
 
@@ -69,6 +70,7 @@ class SmartMeasureWidget:
     def shutdown(self):
         self._stage_event_sub = None
         self._bbox_cache = None
+        self._scene_view = None
 
     def build_ui_layout(self):
         scroll_frame = ui.ScrollingFrame(
@@ -331,8 +333,9 @@ class SmartMeasureWidget:
         self._last_dist_data = None
         if len(valid_prims) == 2:
             dx, dy, dz, dist = self._calculate_gap(valid_prims[0][1], valid_prims[1][1])
+            p1, p2 = self._calculate_gap_points(valid_prims[0][1], valid_prims[1][1])
             s = float(self._stage_mpu)
-            self._last_dist_data = {"dist": dist*s, "gap": (dx*s, dy*s, dz*s)}
+            self._last_dist_data = {"dist": dist*s, "gap": (dx*s, dy*s, dz*s), "p1": p1, "p2": p2}
         self._update_all_labels()
 
     def _calculate_gap(self, b1, b2):
@@ -340,6 +343,12 @@ class SmartMeasureWidget:
         mn2, mx2 = b2.GetMin(), b2.GetMax()
         return calculate_gap((mn1[0], mn1[1], mn1[2]), (mx1[0], mx1[1], mx1[2]),
                              (mn2[0], mn2[1], mn2[2]), (mx2[0], mx2[1], mx2[2]))
+
+    def _calculate_gap_points(self, b1, b2):
+        mn1, mx1 = b1.GetMin(), b1.GetMax()
+        mn2, mx2 = b2.GetMin(), b2.GetMax()
+        return calculate_gap_points((mn1[0], mn1[1], mn1[2]), (mx1[0], mx1[1], mx1[2]),
+                                    (mn2[0], mn2[1], mn2[2]), (mx2[0], mx2[1], mx2[2]))
 
     def _on_clear(self):
         self._last_size_m = None
@@ -385,6 +394,48 @@ class SmartMeasureWidget:
                 self._gap_x_label.text = f"Gap X: {gx/m:.{p}f} {self._display_unit_dist}"
                 self._gap_y_label.text = f"Gap Y: {gy/m:.{p}f} {self._display_unit_dist}"
                 self._gap_z_label.text = f"Gap Z: {gz/m:.{p}f} {self._display_unit_dist}"
+            
+            # [Feature] Viewport Overlay
+            self._update_scene_view(clear=clear)
+        except: pass
+
+    def _update_scene_view(self, clear=False):
+        try:
+            import omni.kit.viewport.utility as vp_utils
+            viewport_window = vp_utils.get_active_viewport_window()
+            if not viewport_window: return
+            
+            import omni.ui.scene as sc
+            if not self._scene_view:
+                with viewport_window.get_frame("smart_measure_overlay"):
+                    self._scene_view = sc.SceneView()
+
+            self._scene_view.scene.clear()
+
+            if not clear and self._last_dist_data:
+                p1 = self._last_dist_data.get("p1")
+                p2 = self._last_dist_data.get("p2")
+                if p1 and p2:
+                    d_str = self._dist_main_label.text.replace("Distance: ", "")
+                    # Calculate center point
+                    mid_x = (p1[0] + p2[0]) / 2.0
+                    mid_y = (p1[1] + p2[1]) / 2.0
+                    mid_z = (p1[2] + p2[2]) / 2.0
+                    
+                    with self._scene_view.scene:
+                        # Cyan line (0xFFFFFF00 is Alpha=FF, Blue=FF, Green=FF, Red=00 -> Cyan)
+                        sc.Line(p1, p2, color=0xFFFFFF00, thicknesses=[2.0])
+                        
+                        # Label at center, Look at Camera
+                        with sc.Transform(transform=sc.Matrix44.get_translation_matrix(mid_x, mid_y, mid_z), look_at=sc.Transform.LookAt.CAMERA):
+                            with sc.Widget():
+                                # Add padding / borders matching the styling
+                                with ui.ZStack():
+                                    ui.Rectangle(style={"background_color": 0xDD000000, "border_radius": 2, "border_color": 0xFF000000, "border_width": 1})
+                                    with ui.HStack(alignment=ui.Alignment.CENTER):
+                                        ui.Spacer(width=4)
+                                        ui.Label(d_str, style={"color": 0xFFFFFFFF, "font_size": 14, "alignment": ui.Alignment.CENTER})
+                                        ui.Spacer(width=4)
         except: pass
 
     def _on_size_unit_changed(self, m, _=None): 

@@ -33,3 +33,28 @@ def calculate_gap(b1_min: Tuple[float, float, float], b1_max: Tuple[float, float
     
     distance = math.sqrt(dx*dx + dy*dy + dz*dz)
     return dx, dy, dz, distance
+
+def calculate_gap_points(b1_min: Tuple[float, float, float], b1_max: Tuple[float, float, float], 
+                         b2_min: Tuple[float, float, float], b2_max: Tuple[float, float, float]) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
+    """
+    計算兩個 AABB 之間最短距離的連線起點與終點。
+    回傳 (p1, p2)，其中 p1 是在 b1 上的最近點，p2 是在 b2 上的最近點。
+    如果兩個 BBox 在某個軸上重疊，該軸上的最近點會取重疊區域的中心點。
+    """
+    p1 = [0.0, 0.0, 0.0]
+    p2 = [0.0, 0.0, 0.0]
+    
+    for i in range(3):
+        if b1_max[i] < b2_min[i]:
+            p1[i] = b1_max[i]
+            p2[i] = b2_min[i]
+        elif b1_min[i] > b2_max[i]:
+            p1[i] = b1_min[i]
+            p2[i] = b2_max[i]
+        else:
+            # 重疊時取交集的中心點
+            center = (max(b1_min[i], b2_min[i]) + min(b1_max[i], b2_max[i])) / 2.0
+            p1[i] = center
+            p2[i] = center
+            
+    return (p1[0], p1[1], p1[2]), (p2[0], p2[1], p2[2])

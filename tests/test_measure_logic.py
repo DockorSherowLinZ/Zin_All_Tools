@@ -11,7 +11,7 @@ EXT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'exts', 
 if EXT_DIR not in sys.path:
     sys.path.insert(0, EXT_DIR)
 
-from measure_logic import format_stage_unit, get_precision, calculate_gap
+from measure_logic import format_stage_unit, get_precision, calculate_gap, calculate_gap_points
 
 
 # ─── format_stage_unit 測試 ──────────────────────────────
@@ -95,15 +95,32 @@ def test_calculate_gap_touching_boxes():
 def test_calculate_gap_diagonal_separation():
     """測試在斜角方向分開的物件"""
     b1_min = (0.0, 0.0, 0.0)
-    b1_max = (1.0, 1.0, 1.0)
+    b1_max = (2.0, 5.0, 6.0)
     
-    b2_min = (2.0, 2.0, 2.0)
-    b2_max = (3.0, 3.0, 3.0)
+    b2_min = (5.0, 2.0, 10.0)
+    b2_max = (8.0, 7.0, 12.0)
     
     # 每個軸的距離都是 1
     dx, dy, dz, dist = calculate_gap(b1_min, b1_max, b2_min, b2_max)
-    assert dx == 1.0
-    assert dy == 1.0
-    assert dz == 1.0
-    # sqrt(1^2 + 1^2 + 1^2) = sqrt(3) ~= 1.732
-    assert math.isclose(dist, math.sqrt(3))
+    assert dx == 3.0   # 5 - 2
+    assert dy == 0.0   # overlaps
+    assert dz == 4.0   # 10 - 6
+    assert math.isclose(dist, 5.0) # sqrt(3^2 + 4^2) = 5
+
+def test_calculate_gap_points():
+    b1_min, b1_max = (0.0, 0.0, 0.0), (1.0, 1.0, 1.0)
+    b2_min, b2_max = (2.0, 0.5, 3.0), (3.0, 1.5, 4.0)
+
+    p1, p2 = calculate_gap_points(b1_min, b1_max, b2_min, b2_max)
+
+    # X axis: b1 is [0,1], b2 is [2,3]. Closest are 1.0 and 2.0
+    assert p1[0] == 1.0
+    assert p2[0] == 2.0
+
+    # Y axis: b1 is [0,1], b2 is [0.5,1.5]. Overlap [0.5, 1.0]. Center = 0.75
+    assert p1[1] == 0.75
+    assert p2[1] == 0.75
+
+    # Z axis: b1 is [0,1], b2 is [3,4]. Closest are 1.0 and 3.0
+    assert p1[2] == 1.0
+    assert p2[2] == 3.0
