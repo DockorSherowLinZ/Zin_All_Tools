@@ -4,9 +4,6 @@ import weakref
 from .zin_style import ZIN_GLOBAL_STYLE
 from .zin_components import ZinButton
 
-# --- DEBUG SWITCH ---
-# Set to True to DISABLE all sub-tools and test pure UI shell stability.
-DEBUG_DISABLE_ALL_TOOLS = False
 
 # --- 匯入既有的子工具 ---
 from smart_align.extension import SmartAlignExtension
@@ -30,28 +27,27 @@ class ToolsBoxExtension(omni.ext.IExt):
         self.tool_assembly = None
         self.tool_physics = None
 
-        if not DEBUG_DISABLE_ALL_TOOLS:
-            self.tool_align = SmartAlignExtension()
-            if hasattr(self.tool_align, "startup_logic"):
-                self.tool_align.startup_logic()
+        self.tool_align = SmartAlignExtension()
+        if hasattr(self.tool_align, "startup_logic"):
+            self.tool_align.startup_logic()
 
-            self.tool_assets = SmartAssetsBuilderExtension()
-            
-            self.tool_measure = SmartMeasureExtension()
-            self.tool_measure.startup_logic()
-            
-            # --- Smart Reference 整合修正 ---
-            self.tool_reference = SmartReferenceExtension()
-            # 建立 UI 實例，供 Tab 切換時呼叫 build_ui
-            self.tool_reference_ui = SmartReferenceUI() 
+        self.tool_assets = SmartAssetsBuilderExtension()
+        
+        self.tool_measure = SmartMeasureExtension()
+        self.tool_measure.startup_logic()
+        
+        # --- Smart Reference 整合修正 ---
+        self.tool_reference = SmartReferenceExtension()
+        # 建立 UI 實例，供 Tab 切換時呼叫 build_ui
+        self.tool_reference_ui = SmartReferenceUI() 
 
-            self.tool_assembly = SmartAssemblyExtension()
-            self.tool_assembly.startup_logic()
-            
-            # --- Physics 工具 ---
-            self.tool_physics = SmartPhysicsSetupExtension()
-            if hasattr(self.tool_physics, "on_startup"):
-                self.tool_physics.on_startup(ext_id)
+        self.tool_assembly = SmartAssemblyExtension()
+        self.tool_assembly.startup_logic()
+        
+        # --- Physics 工具 ---
+        self.tool_physics = SmartPhysicsSetupExtension()
+        if hasattr(self.tool_physics, "on_startup"):
+            self.tool_physics.on_startup(ext_id)
 
         # 記錄當前啟用的 Tab 名稱
         self._current_tab = "Measure" 
@@ -98,10 +94,6 @@ class ToolsBoxExtension(omni.ext.IExt):
         with self._content_frame:
             with ui.VStack(alignment=ui.Alignment.TOP):
                 
-                if DEBUG_DISABLE_ALL_TOOLS:
-                    ui.Label("DEBUG MODE: ALL TOOLS DISABLED", style={"color": 0xFFFF0000, "font_size": 24}, alignment=ui.Alignment.CENTER)
-                    return
-
                 if self._current_tab == "Align":
                     self._highlight_tab(self._btn_align)
                     if self.tool_align and hasattr(self.tool_align, "build_ui_layout"):
