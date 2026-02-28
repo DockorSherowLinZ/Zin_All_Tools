@@ -400,43 +400,52 @@ class SmartMeasureWidget:
         except: pass
 
     def _update_scene_view(self, clear=False):
-        try:
-            import omni.kit.viewport.utility as vp_utils
-            viewport_window = vp_utils.get_active_viewport_window()
-            if not viewport_window: return
-            
-            import omni.ui.scene as sc
-            if not self._scene_view:
-                with viewport_window.get_frame("smart_measure_overlay"):
-                    self._scene_view = sc.SceneView()
+        import omni.ui.scene as sc
+        import omni.kit.viewport.utility as vp_utils
 
+        # 取得 Viewport 視窗
+        viewport_window = vp_utils.get_active_viewport_window()
+        if not viewport_window:
+            # Fallback for older/different kit versions
+            viewport_window = ui.Window("Viewport")
+            
+        if not viewport_window:
+            return
+
+        if not self._scene_view:
+            try:
+                with viewport_window.get_frame("omni.ui.scene.view"): # Use standard viewport overlay frame name
+                    self._scene_view = sc.SceneView()
+            except Exception:
+                try: 
+                    # Fallback to create a new frame if the standard one doesn't exist
+                    with viewport_window.frame:
+                        self._scene_view = sc.SceneView()
+                except Exception:
+                    return
+
+        if self._scene_view and self._scene_view.scene:
             self._scene_view.scene.clear()
 
-            if not clear and self._last_dist_data:
-                p1 = self._last_dist_data.get("p1")
-                p2 = self._last_dist_data.get("p2")
-                if p1 and p2:
-                    d_str = self._dist_main_label.text.replace("Distance: ", "")
-                    # Calculate center point
-                    mid_x = (p1[0] + p2[0]) / 2.0
-                    mid_y = (p1[1] + p2[1]) / 2.0
-                    mid_z = (p1[2] + p2[2]) / 2.0
-                    
-                    with self._scene_view.scene:
-                        # Cyan line (0xFFFFFF00 is Alpha=FF, Blue=FF, Green=FF, Red=00 -> Cyan)
-                        sc.Line(p1, p2, color=0xFFFFFF00, thicknesses=[2.0])
-                        
-                        # Label at center, Look at Camera
-                        with sc.Transform(transform=sc.Matrix44.get_translation_matrix(mid_x, mid_y, mid_z), look_at=sc.Transform.LookAt.CAMERA):
-                            with sc.Widget():
-                                # Add padding / borders matching the styling
-                                with ui.ZStack():
-                                    ui.Rectangle(style={"background_color": 0xDD000000, "border_radius": 2, "border_color": 0xFF000000, "border_width": 1})
-                                    with ui.HStack(alignment=ui.Alignment.CENTER):
-                                        ui.Spacer(width=4)
-                                        ui.Label(d_str, style={"color": 0xFFFFFFFF, "font_size": 14, "alignment": ui.Alignment.CENTER})
-                                        ui.Spacer(width=4)
-        except: pass
+        if not clear and self._last_dist_data:
+            p1 = self._last_dist_data.get("p1")
+            p2 = self._last_dist_data.get("p2")
+            if p1 and p2:
+                d_str = self._dist_main_label.text.replace("Distance: ", "")
+                mid_x = (p1[0] + p2[0]) / 2.0
+                mid_y = (p1[1] + p2[1]) / 2.0
+                mid_z = (p1[2] + p2[2]) / 2.0
+                
+                with self._scene_view.scene:
+                    sc.Line(p1, p2, color=0xFFFFFF00, thicknesses=[2.0])
+                    with sc.Transform(transform=sc.Matrix44.get_translation_matrix(mid_x, mid_y, mid_z), look_at=sc.Transform.LookAt.CAMERA):
+                        with sc.Widget():
+                            with ui.ZStack():
+                                ui.Rectangle(style={"background_color": 0xDD000000, "border_radius": 2, "border_color": 0xFF000000, "border_width": 1})
+                                with ui.HStack(alignment=ui.Alignment.CENTER):
+                                    ui.Spacer(width=4)
+                                    ui.Label(d_str, style={"color": 0xFFFFFFFF, "font_size": 14, "alignment": ui.Alignment.CENTER})
+                                    ui.Spacer(width=4)
 
     def _on_size_unit_changed(self, m, _=None): 
         idx = m.get_value_as_int(); u = self.DISPLAY_UNITS[max(0, min(idx, 4))]
