@@ -125,11 +125,11 @@ class SmartMeasureWidget:
                     with ui.Frame(style={"background_color": 0x33000000, "border_radius": 4}):
                         with ui.VStack(spacing=4, padding=6, height=0):
                             self._dist_msg_label = ui.Label("Select exactly 2 objects", style={"color": 0xFFAA00FF}, word_wrap=True)
-                            self._dist_main_label = ui.Label("Distance: --", style={"font_size": 16, "color": 0xFF00FFFF})
+                            self._dist_main_label = ui.Label("Distance: --", style={"font_size": 16, "color": 0xFF6AD7D9}) # d9d76a
                             with ui.VStack(spacing=2, height=0):
-                                self._gap_x_label = ui.Label("Gap X: --", style={"color": 0xFF0000FF})
-                                self._gap_y_label = ui.Label("Gap Y: --", style={"color": 0xFF00FF00})
-                                self._gap_z_label = ui.Label("Gap Z: --", style={"color": 0xFFFF0000})
+                                self._gap_x_label = ui.Label("Gap X: --", style={"color": 0xFF6060AA}) # aa6060
+                                self._gap_y_label = ui.Label("Gap Y: --", style={"color": 0xFF76A371}) # 71a376
+                                self._gap_z_label = ui.Label("Gap Z: --", style={"color": 0xFFA07D4F}) # 4f7da0
                             ui.Spacer(height=2)
                             with ui.ZStack(height=30):
                                 with ui.VStack():
