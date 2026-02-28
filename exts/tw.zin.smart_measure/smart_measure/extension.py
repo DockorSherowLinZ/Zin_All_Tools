@@ -402,27 +402,32 @@ class SmartMeasureWidget:
     def _update_scene_view(self, clear=False):
         import omni.ui.scene as sc
         import omni.kit.viewport.utility as vp_utils
+        import carb
 
         # 取得 Viewport 視窗
         viewport_window = vp_utils.get_active_viewport_window()
         if not viewport_window:
-            # Fallback for older/different kit versions
+            carb.log_warn("[SmartMeasure] get_active_viewport_window() returned None, falling back to ui.Window('Viewport').")
             viewport_window = ui.Window("Viewport")
             
         if not viewport_window:
+            carb.log_error("[SmartMeasure] Could not find any Viewport window to attach overlay!")
             return
 
         if not self._scene_view:
             try:
-                with viewport_window.get_frame("omni.ui.scene.view"): # Use standard viewport overlay frame name
-                    self._scene_view = sc.SceneView()
-            except Exception:
-                try: 
-                    # Fallback to create a new frame if the standard one doesn't exist
+                # 取得 Viewport 內建的 SceneOverlay Frame (Kit 104+)
+                frame = viewport_window.get_frame("omni.ui.scene.view")
+                if frame:
+                    with frame:
+                        self._scene_view = sc.SceneView()
+                else:
+                    carb.log_warn(f"[SmartMeasure] Frame 'omni.ui.scene.view' not found in {viewport_window.title}. Trying self-created frame.")
                     with viewport_window.frame:
                         self._scene_view = sc.SceneView()
-                except Exception:
-                    return
+            except Exception as e:
+                carb.log_error(f"[SmartMeasure] Failed to create SceneView: {e}")
+                return
 
         if self._scene_view and self._scene_view.scene:
             self._scene_view.scene.clear()
@@ -436,16 +441,19 @@ class SmartMeasureWidget:
                 mid_y = (p1[1] + p2[1]) / 2.0
                 mid_z = (p1[2] + p2[2]) / 2.0
                 
-                with self._scene_view.scene:
-                    sc.Line(p1, p2, color=0xFFFFFF00, thicknesses=[2.0])
-                    with sc.Transform(transform=sc.Matrix44.get_translation_matrix(mid_x, mid_y, mid_z), look_at=sc.Transform.LookAt.CAMERA):
-                        with sc.Widget():
-                            with ui.ZStack():
-                                ui.Rectangle(style={"background_color": 0xDD000000, "border_radius": 2, "border_color": 0xFF000000, "border_width": 1})
-                                with ui.HStack(alignment=ui.Alignment.CENTER):
-                                    ui.Spacer(width=4)
-                                    ui.Label(d_str, style={"color": 0xFFFFFFFF, "font_size": 14, "alignment": ui.Alignment.CENTER})
-                                    ui.Spacer(width=4)
+                try:
+                    with self._scene_view.scene:
+                        sc.Line(p1, p2, color=0xFFFFFF00, thicknesses=[2.0])
+                        with sc.Transform(transform=sc.Matrix44.get_translation_matrix(mid_x, mid_y, mid_z), look_at=sc.Transform.LookAt.CAMERA):
+                            with sc.Widget():
+                                with ui.ZStack():
+                                    ui.Rectangle(style={"background_color": 0xDD000000, "border_radius": 2, "border_color": 0xFF000000, "border_width": 1})
+                                    with ui.HStack(alignment=ui.Alignment.CENTER):
+                                        ui.Spacer(width=4)
+                                        ui.Label(d_str, style={"color": 0xFFFFFFFF, "font_size": 14, "alignment": ui.Alignment.CENTER})
+                                        ui.Spacer(width=4)
+                except Exception as e:
+                    carb.log_error(f"[SmartMeasure] Failed to draw sc.Line/sc.Widget in SceneView: {e}")
 
     def _on_size_unit_changed(self, m, _=None): 
         idx = m.get_value_as_int(); u = self.DISPLAY_UNITS[max(0, min(idx, 4))]
