@@ -446,15 +446,15 @@ class SmartMeasureWidget:
                         # 0xFFD9D76A is ABGR for #6AD7D9 (Cyan)
                         sc.Line(p1, p2, color=0xFFD9D76A, thicknesses=[2.0])
                         with sc.Transform(transform=sc.Matrix44.get_translation_matrix(mid_x, mid_y, mid_z), look_at=sc.Transform.LookAt.CAMERA):
-                            with sc.Widget(width=150.0, height=40.0):
-                                with ui.ZStack():
-                                    ui.Rectangle(style={"background_color": 0xDD222222, "border_radius": 4, "border_color": 0xFFD9D76A, "border_width": 1})
-                                    with ui.HStack(alignment=ui.Alignment.CENTER):
-                                        ui.Spacer(width=4)
-                                        ui.Label(d_str, style={"color": 0xFFD9D76A, "font_size": 16, "font_weight": "bold", "alignment": ui.Alignment.CENTER})
-                                        ui.Spacer(width=4)
+                            # omni.ui.scene.Label allows rendering text directly in the 3D scene without needing a UI Widget context
+                            sc.Label(
+                                d_str, 
+                                color=0xFFD9D76A, 
+                                size=16,
+                                alignment=ui.Alignment.CENTER
+                            )
                 except Exception as e:
-                    carb.log_error(f"[SmartMeasure] Failed to draw sc.Line/sc.Widget in SceneView: {e}")
+                    carb.log_error(f"[SmartMeasure] Failed to draw sc.Line/sc.Label in SceneView: {e}")
 
     def _on_size_unit_changed(self, m, _=None): 
         idx = m.get_value_as_int(); u = self.DISPLAY_UNITS[max(0, min(idx, 4))]
