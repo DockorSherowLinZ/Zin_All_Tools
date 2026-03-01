@@ -16,45 +16,6 @@ from .measure_logic import format_stage_unit, get_precision, calculate_gap, calc
 
 import carb
 
-try:
-    from omni.kit.manipulator.viewport import ManipulatorBase
-except ImportError:
-    ManipulatorBase = object
-
-class SmartMeasureManipulator(ManipulatorBase):
-    def __init__(self, **kwargs):
-        if ManipulatorBase is object:
-            return
-        super().__init__(**kwargs)
-        self.p1 = None
-        self.p2 = None
-        self.label_text = ""
-
-    def on_build(self):
-        import omni.ui.scene as sc
-        import omni.ui as ui
-        if self.p1 and self.p2:
-            sc.Line(self.p1, self.p2, color=0xFFD9D76A, thicknesses=[2.0])
-            
-            # Draw visual markers (small cubes/crosshairs) at the endpoints
-            marker_size = 2.0
-            for pt in [self.p1, self.p2]:
-                with sc.Transform(transform=sc.Matrix44.get_translation_matrix(pt[0], pt[1], pt[2])):
-                    sc.Line([-marker_size, 0, 0], [marker_size, 0, 0], color=0xFF00FFFF, thicknesses=[2.0])
-                    sc.Line([0, -marker_size, 0], [0, marker_size, 0], color=0xFF00FFFF, thicknesses=[2.0])
-                    sc.Line([0, 0, -marker_size], [0, 0, marker_size], color=0xFF00FFFF, thicknesses=[2.0])
-            
-            mid_x = (self.p1[0] + self.p2[0]) / 2.0
-            mid_y = (self.p1[1] + self.p2[1]) / 2.0
-            mid_z = (self.p1[2] + self.p2[2]) / 2.0
-            with sc.Transform(transform=sc.Matrix44.get_translation_matrix(mid_x, mid_y, mid_z), look_at=sc.Transform.LookAt.CAMERA):
-                sc.Label(
-                    self.label_text, 
-                    color=0xFFD9D76A, 
-                    size=16,
-                    alignment=ui.Alignment.CENTER
-                )
-
 
 
 # ========================================================
@@ -85,6 +46,7 @@ class SmartMeasureWidget:
         self._custom_precision_dist = ui.SimpleIntModel(2)  # 預設 cm 是 2 位
         
         self._scene_view = None
+        self._scene_frame = None
         self._manipulator = None
         self._stage_event_sub = None
         self._update_sub = None
@@ -112,11 +74,7 @@ class SmartMeasureWidget:
     def shutdown(self):
         self._stage_event_sub = None
         self._bbox_cache = None
-        self._scene_view = None
-        if self._manipulator and hasattr(self._manipulator, 'destroy'):
-            try: self._manipulator.destroy()
-            except: pass
-        self._manipulator = None
+        self._destroy_scene_overlay()
 
     def build_ui_layout(self):
         scroll_frame = ui.ScrollingFrame(
@@ -446,48 +404,103 @@ class SmartMeasureWidget:
         except: pass
 
     def _update_scene_view(self, clear=False):
+        """使用 omni.ui.scene.SceneView 在 Viewport 上繪製測距線段與標籤"""
+
+        # --- 清除模式：移除 overlay ---
         if clear or not self._last_dist_data:
-            if self._manipulator:
-                if hasattr(self._manipulator, 'destroy'):
-                    try: self._manipulator.destroy()
-                    except: pass
-                self._manipulator = None
+            self._destroy_scene_overlay()
             return
 
         p1 = self._last_dist_data.get("p1")
         p2 = self._last_dist_data.get("p2")
-        
+
         if not p1 or not p2:
-            if self._manipulator:
-                if hasattr(self._manipulator, 'destroy'):
-                    try: self._manipulator.destroy()
-                    except: pass
-                self._manipulator = None
+            self._destroy_scene_overlay()
             return
 
-        if not self._manipulator:
-            try:
-                from omni.kit.manipulator.viewport import ManipulatorBase
-                from omni.kit.viewport.utility import get_active_viewport_window
-                
-                if ManipulatorBase is not object:
-                    viewport_window = get_active_viewport_window()
-                    if viewport_window:
-                        frame = viewport_window.get_frame("omni.ui.scene.view")
-                        if frame:
-                            with frame:
-                                self._manipulator = SmartMeasureManipulator()
-            except ImportError:
+        # --- 取得 Viewport 視窗 ---
+        try:
+            from omni.kit.viewport.utility import get_active_viewport_window
+            viewport_window = get_active_viewport_window()
+            if not viewport_window:
+                return
+        except ImportError:
+            carb.log_warn("[SmartMeasure] omni.kit.viewport.utility not available")
+            return
+
+        # --- 重建 SceneView overlay ---
+        # 每次都重建以確保繪製內容正確更新
+        self._destroy_scene_overlay()
+
+        try:
+            import omni.ui.scene as sc
+
+            # 取得 viewport 的 scene overlay frame
+            self._scene_frame = viewport_window.get_frame("smart_measure_overlay")
+            if not self._scene_frame:
+                carb.log_warn("[SmartMeasure] Could not get overlay frame from viewport")
                 return
 
-        if self._manipulator:
-            d_str = self._dist_main_label.text.replace("Distance: ", "")
-            self._manipulator.p1 = p1
-            self._manipulator.p2 = p2
-            self._manipulator.label_text = d_str
+            with self._scene_frame:
+                # SceneView 自動匹配 viewport 的 camera projection
+                self._scene_view = sc.SceneView(
+                    aspect_ratio_policy=sc.AspectRatioPolicy.STRETCH
+                )
+                with self._scene_view.scene:
+                    # --- 測距線段 (青色) ---
+                    p1_list = list(p1)
+                    p2_list = list(p2)
+                    sc.Line(p1_list, p2_list, color=ui.color(0.0, 1.0, 1.0, 1.0), thicknesses=[2.0])
+
+                    # --- 端點十字標記 ---
+                    marker_size = 2.0
+                    for pt in [p1_list, p2_list]:
+                        with sc.Transform(transform=sc.Matrix44.get_translation_matrix(pt[0], pt[1], pt[2])):
+                            sc.Line([-marker_size, 0, 0], [marker_size, 0, 0],
+                                    color=ui.color(0.0, 1.0, 1.0, 0.8), thicknesses=[1.5])
+                            sc.Line([0, -marker_size, 0], [0, marker_size, 0],
+                                    color=ui.color(0.0, 1.0, 1.0, 0.8), thicknesses=[1.5])
+                            sc.Line([0, 0, -marker_size], [0, 0, marker_size],
+                                    color=ui.color(0.0, 1.0, 1.0, 0.8), thicknesses=[1.5])
+
+                    # --- 中點距離標籤 ---
+                    mid = [(p1[i] + p2[i]) / 2.0 for i in range(3)]
+                    d_str = self._dist_main_label.text.replace("Distance: ", "") if self._dist_main_label else ""
+                    with sc.Transform(
+                        transform=sc.Matrix44.get_translation_matrix(mid[0], mid[1], mid[2]),
+                        look_at=sc.Transform.LookAt.CAMERA
+                    ):
+                        sc.Label(
+                            d_str,
+                            color=ui.color(0.0, 1.0, 1.0, 1.0),
+                            size=18,
+                            alignment=ui.Alignment.CENTER
+                        )
+
+            # 將 SceneView 的 camera model 綁定到 viewport 的 camera
+            viewport_api = viewport_window.viewport_api
+            if viewport_api and self._scene_view:
+                self._scene_view.model = viewport_api.scene_view.model
+
+        except Exception as e:
+            carb.log_warn(f"[SmartMeasure] Viewport overlay error: {e}")
+
+    def _destroy_scene_overlay(self):
+        """安全清除 Scene overlay 資源"""
+        if hasattr(self, '_scene_view') and self._scene_view:
             try:
-                self._manipulator.invalidate()
-            except: pass
+                self._scene_view = None
+            except:
+                pass
+        if hasattr(self, '_scene_frame') and self._scene_frame:
+            try:
+                self._scene_frame.clear()
+                self._scene_frame = None
+            except:
+                pass
+        self._manipulator = None
+
+
 
     def _on_size_unit_changed(self, m, _=None): 
         idx = m.get_value_as_int(); u = self.DISPLAY_UNITS[max(0, min(idx, 4))]
