@@ -35,6 +35,15 @@ class SmartMeasureManipulator(ManipulatorBase):
         import omni.ui as ui
         if self.p1 and self.p2:
             sc.Line(self.p1, self.p2, color=0xFFD9D76A, thicknesses=[2.0])
+            
+            # Draw visual markers (small cubes/crosshairs) at the endpoints
+            marker_size = 2.0
+            for pt in [self.p1, self.p2]:
+                with sc.Transform(transform=sc.Matrix44.get_translation_matrix(pt[0], pt[1], pt[2])):
+                    sc.Line([-marker_size, 0, 0], [marker_size, 0, 0], color=0xFF00FFFF, thicknesses=[2.0])
+                    sc.Line([0, -marker_size, 0], [0, marker_size, 0], color=0xFF00FFFF, thicknesses=[2.0])
+                    sc.Line([0, 0, -marker_size], [0, 0, marker_size], color=0xFF00FFFF, thicknesses=[2.0])
+            
             mid_x = (self.p1[0] + self.p2[0]) / 2.0
             mid_y = (self.p1[1] + self.p2[1]) / 2.0
             mid_z = (self.p1[2] + self.p2[2]) / 2.0
