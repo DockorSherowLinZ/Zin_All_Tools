@@ -14,6 +14,38 @@ except Exception:
 
 from .measure_logic import format_stage_unit, get_precision, calculate_gap, calculate_gap_points
 
+import carb
+
+try:
+    from omni.kit.manipulator.viewport import ManipulatorBase
+except ImportError:
+    ManipulatorBase = object
+
+class SmartMeasureManipulator(ManipulatorBase):
+    def __init__(self, **kwargs):
+        if ManipulatorBase is object:
+            return
+        super().__init__(**kwargs)
+        self.p1 = None
+        self.p2 = None
+        self.label_text = ""
+
+    def on_build(self):
+        import omni.ui.scene as sc
+        import omni.ui as ui
+        if self.p1 and self.p2:
+            sc.Line(self.p1, self.p2, color=0xFFD9D76A, thicknesses=[2.0])
+            mid_x = (self.p1[0] + self.p2[0]) / 2.0
+            mid_y = (self.p1[1] + self.p2[1]) / 2.0
+            mid_z = (self.p1[2] + self.p2[2]) / 2.0
+            with sc.Transform(transform=sc.Matrix44.get_translation_matrix(mid_x, mid_y, mid_z), look_at=sc.Transform.LookAt.CAMERA):
+                sc.Label(
+                    self.label_text, 
+                    color=0xFFD9D76A, 
+                    size=16,
+                    alignment=ui.Alignment.CENTER
+                )
+
 
 
 # ========================================================
@@ -44,6 +76,7 @@ class SmartMeasureWidget:
         self._custom_precision_dist = ui.SimpleIntModel(2)  # 預設 cm 是 2 位
         
         self._scene_view = None
+        self._manipulator = None
         self._stage_event_sub = None
         self._update_sub = None
 
@@ -71,6 +104,10 @@ class SmartMeasureWidget:
         self._stage_event_sub = None
         self._bbox_cache = None
         self._scene_view = None
+        if self._manipulator and hasattr(self._manipulator, 'destroy'):
+            try: self._manipulator.destroy()
+            except: pass
+        self._manipulator = None
 
     def build_ui_layout(self):
         scroll_frame = ui.ScrollingFrame(
@@ -400,61 +437,41 @@ class SmartMeasureWidget:
         except: pass
 
     def _update_scene_view(self, clear=False):
-        import omni.ui.scene as sc
-        import omni.kit.viewport.utility as vp_utils
-        import carb
-
-        # 取得 Viewport 視窗
-        viewport_window = vp_utils.get_active_viewport_window()
-        if not viewport_window:
-            carb.log_warn("[SmartMeasure] get_active_viewport_window() returned None, falling back to ui.Window('Viewport').")
-            viewport_window = ui.Window("Viewport")
-            
-        if not viewport_window:
-            carb.log_error("[SmartMeasure] Could not find any Viewport window to attach overlay!")
+        if clear or not self._last_dist_data:
+            if self._manipulator:
+                if hasattr(self._manipulator, 'destroy'):
+                    try: self._manipulator.destroy()
+                    except: pass
+                self._manipulator = None
             return
 
-        if not self._scene_view:
+        p1 = self._last_dist_data.get("p1")
+        p2 = self._last_dist_data.get("p2")
+        
+        if not p1 or not p2:
+            if self._manipulator:
+                if hasattr(self._manipulator, 'destroy'):
+                    try: self._manipulator.destroy()
+                    except: pass
+                self._manipulator = None
+            return
+
+        if not self._manipulator:
             try:
-                # 取得 Viewport 內建的 SceneOverlay Frame (Kit 104+)
-                frame = viewport_window.get_frame("omni.ui.scene.view")
-                if frame:
-                    with frame:
-                        self._scene_view = sc.SceneView()
-                else:
-                    carb.log_warn(f"[SmartMeasure] Frame 'omni.ui.scene.view' not found in {viewport_window.title}. Trying self-created frame.")
-                    with viewport_window.frame:
-                        self._scene_view = sc.SceneView()
-            except Exception as e:
-                carb.log_error(f"[SmartMeasure] Failed to create SceneView: {e}")
+                from omni.kit.manipulator.viewport import ManipulatorBase
+                if ManipulatorBase is not object:
+                    self._manipulator = SmartMeasureManipulator()
+            except ImportError:
                 return
 
-        if self._scene_view and self._scene_view.scene:
-            self._scene_view.scene.clear()
-
-        if not clear and self._last_dist_data:
-            p1 = self._last_dist_data.get("p1")
-            p2 = self._last_dist_data.get("p2")
-            if p1 and p2:
-                d_str = self._dist_main_label.text.replace("Distance: ", "")
-                mid_x = (p1[0] + p2[0]) / 2.0
-                mid_y = (p1[1] + p2[1]) / 2.0
-                mid_z = (p1[2] + p2[2]) / 2.0
-                
-                try:
-                    with self._scene_view.scene:
-                        # 0xFFD9D76A is ABGR for #6AD7D9 (Cyan)
-                        sc.Line(p1, p2, color=0xFFD9D76A, thicknesses=[2.0])
-                        with sc.Transform(transform=sc.Matrix44.get_translation_matrix(mid_x, mid_y, mid_z), look_at=sc.Transform.LookAt.CAMERA):
-                            # omni.ui.scene.Label allows rendering text directly in the 3D scene without needing a UI Widget context
-                            sc.Label(
-                                d_str, 
-                                color=0xFFD9D76A, 
-                                size=16,
-                                alignment=ui.Alignment.CENTER
-                            )
-                except Exception as e:
-                    carb.log_error(f"[SmartMeasure] Failed to draw sc.Line/sc.Label in SceneView: {e}")
+        if self._manipulator:
+            d_str = self._dist_main_label.text.replace("Distance: ", "")
+            self._manipulator.p1 = p1
+            self._manipulator.p2 = p2
+            self._manipulator.label_text = d_str
+            try:
+                self._manipulator.invalidate()
+            except: pass
 
     def _on_size_unit_changed(self, m, _=None): 
         idx = m.get_value_as_int(); u = self.DISPLAY_UNITS[max(0, min(idx, 4))]
