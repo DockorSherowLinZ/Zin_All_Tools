@@ -119,14 +119,7 @@ def test_calculate_gap_points():
 
     p1, p2 = calculate_gap_points(b1_min, b1_max, b2_min, b2_max)
 
-    # X axis: b1 is [0,1], b2 is [2,3]. Closest are 1.0 and 2.0
-    assert p1[0] == 1.0
-    assert p2[0] == 2.0
-
-    # Y axis: b1 is [0,1], b2 is [0.5,1.5]. Overlap [0.5, 1.0]. Center = 0.75
-    assert p1[1] == 0.75
-    assert p2[1] == 0.75
-
-    # Z axis: b1 is [0,1], b2 is [3,4]. Closest are 1.0 and 3.0
-    assert p1[2] == 1.0
-    assert p2[2] == 3.0
+    # 運用最新的角落找點演算法，這兩組 AABB 距離最近的 Corner pair 為:
+    # b1 的 (1.0, 0.0, 1.0) 以及 b2 的 (2.0, 0.5, 3.0)
+    assert p1 == (1.0, 0.0, 1.0)
+    assert p2 == (2.0, 0.5, 3.0)

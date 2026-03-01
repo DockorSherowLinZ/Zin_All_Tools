@@ -34,27 +34,41 @@ def calculate_gap(b1_min: Tuple[float, float, float], b1_max: Tuple[float, float
     distance = math.sqrt(dx*dx + dy*dy + dz*dz)
     return dx, dy, dz, distance
 
+def _get_corners(b_min: Tuple[float, float, float], b_max: Tuple[float, float, float]):
+    return [
+        (b_min[0], b_min[1], b_min[2]),
+        (b_min[0], b_min[1], b_max[2]),
+        (b_min[0], b_max[1], b_min[2]),
+        (b_min[0], b_max[1], b_max[2]),
+        (b_max[0], b_min[1], b_min[2]),
+        (b_max[0], b_min[1], b_max[2]),
+        (b_max[0], b_max[1], b_min[2]),
+        (b_max[0], b_max[1], b_max[2]),
+    ]
+
 def calculate_gap_points(b1_min: Tuple[float, float, float], b1_max: Tuple[float, float, float], 
                          b2_min: Tuple[float, float, float], b2_max: Tuple[float, float, float]) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
     """
     計算兩個 AABB 之間最短距離的連線起點與終點。
-    回傳 (p1, p2)，其中 p1 是在 b1 上的最近點，p2 是在 b2 上的最近點。
-    如果兩個 BBox 在某個軸上重疊，該軸上的最近點會取重疊區域的中心點。
+    改為掃描 AABB 的 8 個頂點，找出兩者之間距離最短的一對 Corners，
+    這能讓 3D Viewport 中的測距線段看起來像是精確地從物件的某個角落連到另一個角落。
     """
-    p1 = [0.0, 0.0, 0.0]
-    p2 = [0.0, 0.0, 0.0]
+    c1s = _get_corners(b1_min, b1_max)
+    c2s = _get_corners(b2_min, b2_max)
     
-    for i in range(3):
-        if b1_max[i] < b2_min[i]:
-            p1[i] = b1_max[i]
-            p2[i] = b2_min[i]
-        elif b1_min[i] > b2_max[i]:
-            p1[i] = b1_min[i]
-            p2[i] = b2_max[i]
-        else:
-            # 重疊時取交集的中心點
-            center = (max(b1_min[i], b2_min[i]) + min(b1_max[i], b2_max[i])) / 2.0
-            p1[i] = center
-            p2[i] = center
-            
-    return (p1[0], p1[1], p1[2]), (p2[0], p2[1], p2[2])
+    min_sq_dist = float('inf')
+    best_p1 = c1s[0]
+    best_p2 = c2s[0]
+    
+    for p1 in c1s:
+        for p2 in c2s:
+            dx = p1[0] - p2[0]
+            dy = p1[1] - p2[1]
+            dz = p1[2] - p2[2]
+            sq_dist = dx*dx + dy*dy + dz*dz
+            if sq_dist < min_sq_dist:
+                min_sq_dist = sq_dist
+                best_p1 = p1
+                best_p2 = p2
+                
+    return best_p1, best_p2
