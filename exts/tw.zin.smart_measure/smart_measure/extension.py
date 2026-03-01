@@ -468,8 +468,15 @@ class SmartMeasureWidget:
         if not self._manipulator:
             try:
                 from omni.kit.manipulator.viewport import ManipulatorBase
+                from omni.kit.viewport.utility import get_active_viewport_window
+                
                 if ManipulatorBase is not object:
-                    self._manipulator = SmartMeasureManipulator()
+                    viewport_window = get_active_viewport_window()
+                    if viewport_window:
+                        frame = viewport_window.get_frame("omni.ui.scene.view")
+                        if frame:
+                            with frame:
+                                self._manipulator = SmartMeasureManipulator()
             except ImportError:
                 return
 
