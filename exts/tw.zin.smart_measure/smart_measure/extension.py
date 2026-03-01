@@ -446,7 +446,7 @@ class SmartMeasureWidget:
                         # 0xFFD9D76A is ABGR for #6AD7D9 (Cyan)
                         sc.Line(p1, p2, color=0xFFD9D76A, thicknesses=[2.0])
                         with sc.Transform(transform=sc.Matrix44.get_translation_matrix(mid_x, mid_y, mid_z), look_at=sc.Transform.LookAt.CAMERA):
-                            with sc.Widget():
+                            with sc.Widget(width=150.0, height=40.0):
                                 with ui.ZStack():
                                     ui.Rectangle(style={"background_color": 0xDD222222, "border_radius": 4, "border_color": 0xFFD9D76A, "border_width": 1})
                                     with ui.HStack(alignment=ui.Alignment.CENTER):
