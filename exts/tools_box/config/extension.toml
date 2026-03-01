@@ -3,6 +3,8 @@ title = "Tools Box"
 version = "1.1.0"
 description = "A comprehensive suite including Smart Assets Library, Measure, and Reference tools."
 authors = ["Zin"]
+changelog = "docs/CHANGELOG.md"
+readme = "README.md"
 readme = "README.md"
 category = "ZinTools"
 
