@@ -48,6 +48,7 @@ class SmartMeasureWidget:
         self._scene_view = None
         self._scene_frame = None
         self._manipulator = None
+        self._show_viewport_overlay = True  # 預設開啟 viewport overlay
         self._stage_event_sub = None
         self._update_sub = None
 
@@ -153,6 +154,12 @@ class SmartMeasureWidget:
                                         ui.Spacer(width=5)
                                         ui.Button("Copy", width=ui.Pixel(50), clicked_fn=lambda: self._copy_result("dist"))
                                     ui.Spacer()
+                            # --- Viewport Overlay Toggle ---
+                            with ui.HStack(height=22, spacing=6):
+                                self._overlay_cb = ui.CheckBox(width=18, height=18)
+                                self._overlay_cb.model.set_value(self._show_viewport_overlay)
+                                self._overlay_cb.model.add_value_changed_fn(self._on_overlay_toggle)
+                                ui.Label("Show distance line in Viewport", style={"color": 0xFFBBBBBB})
                 ui.Spacer(height=10)
         
         # [Lifecycle] Create Subscription Lazy (Active Mode)
@@ -403,11 +410,19 @@ class SmartMeasureWidget:
             self._update_scene_view(clear=clear)
         except: pass
 
+    def _on_overlay_toggle(self, model):
+        """使用者切換 viewport overlay 開關"""
+        self._show_viewport_overlay = model.get_value_as_bool()
+        if not self._show_viewport_overlay:
+            self._destroy_scene_overlay()
+        else:
+            self._update_scene_view()
+
     def _update_scene_view(self, clear=False):
         """使用 omni.ui.scene.SceneView 在 Viewport 上繪製測距線段與標籤"""
 
-        # --- 清除模式：移除 overlay ---
-        if clear or not self._last_dist_data:
+        # --- 使用者關閉 overlay 或清除模式 ---
+        if not self._show_viewport_overlay or clear or not self._last_dist_data:
             self._destroy_scene_overlay()
             return
 
@@ -478,12 +493,50 @@ class SmartMeasureWidget:
                         )
 
             # 將 SceneView 的 camera model 綁定到 viewport 的 camera
-            viewport_api = viewport_window.viewport_api
-            if viewport_api and self._scene_view:
-                self._scene_view.model = viewport_api.scene_view.model
+            # 相容多版本 Kit (105~109) 的 camera model 取得方式
+            if self._scene_view:
+                self._bind_scene_view_camera(viewport_window)
 
         except Exception as e:
             carb.log_warn(f"[SmartMeasure] Viewport overlay error: {e}")
+
+    def _bind_scene_view_camera(self, viewport_window):
+        """將自建的 SceneView 的 camera model 綁定到 viewport 的 camera。
+        基於 USD Composer 109.0.3 (Kit 109) 實際 API 偵測結果。"""
+
+        vp_api = viewport_window.viewport_api
+
+        # 方法 1 (Kit 109)：使用 ViewportAPI 的 __scene_camera_model
+        # 偵測結果：_ViewportAPI__scene_camera_model = SceneCameraModel
+        try:
+            camera_model = getattr(vp_api, '_ViewportAPI__scene_camera_model', None)
+            if camera_model:
+                self._scene_view.model = camera_model
+                return
+        except Exception:
+            pass
+
+        # 方法 2 (Kit 109)：從 ViewportAPI.__scene_views 列表取得
+        # 偵測結果：_ViewportAPI__scene_views = list
+        try:
+            scene_views = getattr(vp_api, '_ViewportAPI__scene_views', None)
+            if scene_views and len(scene_views) > 0:
+                for sv in scene_views:
+                    if hasattr(sv, 'model') and sv.model:
+                        self._scene_view.model = sv.model
+                        return
+        except Exception:
+            pass
+
+        # 方法 3 (Kit 106+)：直接從 viewport_api.scene_view 取得
+        try:
+            if hasattr(vp_api, 'scene_view') and vp_api.scene_view:
+                self._scene_view.model = vp_api.scene_view.model
+                return
+        except Exception:
+            pass
+
+        carb.log_info("[SmartMeasure] Could not auto-bind camera model — overlay may not align with viewport camera")
 
     def _destroy_scene_overlay(self):
         """安全清除 Scene overlay 資源"""
