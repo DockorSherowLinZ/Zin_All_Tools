@@ -4,12 +4,65 @@ import omni.usd
 from pxr import Usd, UsdGeom, UsdPhysics, PhysxSchema, Sdf, Gf
 
 class SmartPhysicsSetupExtension(omni.ext.IExt):
+    WINDOW_NAME = "Smart Physics Setup"
+    MENU_PATH = f"Zin_All_Tools/{WINDOW_NAME}"
+
+    def __init__(self):
+        super().__init__()
+        self._window = None
+        self._menu_added = False
+
     def on_startup(self, ext_id):
         self._init_data()
+        self._build_menu()
 
     def on_shutdown(self):
+        self._remove_menu()
+        if self._window: 
+            self._window.destroy()
+            self._window = None
         self._rigid_paths = []
         self._soft_paths = []
+
+    def _build_menu(self):
+        try:
+            import omni.kit.menu.utils
+            self._menu = omni.kit.menu.utils.add_menu_items([
+                omni.kit.menu.utils.MenuItemDescription(
+                    name=self.WINDOW_NAME,
+                    onclick_fn=lambda *args: self._toggle_window(None, True)
+                )
+            ], "Zin_All_Tools")
+            self._menu_added = True
+        except Exception: pass
+
+    def _remove_menu(self):
+        try:
+            import omni.kit.menu.utils
+            if hasattr(self, '_menu') and self._menu:
+                omni.kit.menu.utils.remove_menu_items(self._menu, "Zin_All_Tools")
+                self._menu = None
+        except Exception: pass
+    def _toggle_window(self, menu, value):
+        if value:
+            if not self._window:
+                from omni.ui import DockPreference
+                self._window = ui.Window(self.WINDOW_NAME, width=320, height=540, dockPreference=DockPreference.RIGHT)
+                self._window.set_visibility_changed_fn(self._on_visibility_changed)
+                with self._window.frame:
+                    self.build_ui_layout()
+            self._window.visible = True
+        else:
+            if self._window: 
+                self._window.visible = False
+
+    def _on_visibility_changed(self, visible):
+        if self._menu_added:
+            try: 
+                import omni.kit.ui
+                omni.kit.ui.get_editor_menu().set_value(self.MENU_PATH, bool(visible))
+            except Exception: 
+                pass
 
     # ----------------------------------------------------------------------
     #  UI Layout
@@ -39,12 +92,13 @@ class SmartPhysicsSetupExtension(omni.ext.IExt):
                         ui.StringField(model=self._rigid_list_str, height=60, multiline=True, read_only=True)
 
                 # --- 2. Soft Body ---
-                with ui.CollapsableFrame("2. Soft Body (Cable)", height=0):
+                with ui.CollapsableFrame("2. Soft Body (Cable)", height=ui.Fraction(1)) as cf_sb:
+                    cf_sb.set_collapsed_changed_fn(lambda c, f=cf_sb: setattr(f, "height", ui.Pixel(0) if c else ui.Fraction(1)))
                     with ui.VStack(spacing=5, height=0):
                         ui.Button("Add Selected to Soft List", clicked_fn=self._add_to_soft, height=40)
                         
                         ui.Label("Current List:", style={"color": 0xFFAAAAAA})
-                        ui.StringField(model=self._soft_list_str, height=60, multiline=True, read_only=True)
+                        ui.StringField(model=self._soft_list_str, height=ui.Fraction(1), multiline=True, read_only=True)
 
                 # --- 3. Params ---
                 with ui.CollapsableFrame("3. Physics Parameters", height=0):

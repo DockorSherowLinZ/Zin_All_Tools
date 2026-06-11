@@ -63,9 +63,15 @@ class ZinButton:
         """
         self._state = state
         name = self._STATE_NAME_MAP.get(state, "")
-        self._btn = ui.Button(text, name=name, clicked_fn=clicked_fn, **kwargs)
+        # Inject the state style directly onto the widget (same as set_state does).
+        # This ensures hover/pressed colours work even when the button is nested
+        # inside a ui.Frame that has its own style dict — which would otherwise
+        # block inheritance of ZIN_GLOBAL_STYLE from the ancestor container.
+        initial_style = self._STATE_STYLE_MAP.get(state, self._STATE_STYLE_MAP["default"])
+        self._btn = ui.Button(text, name=name, clicked_fn=clicked_fn,
+                              style=initial_style, **kwargs)
 
-    # 各狀態對應的直接樣式（確保 Kit 109 環境下強制刷新）
+    # 各狀態對應的直接樣式（確保 Kit 109 環境下強制刷新與巢狀 Frame 樣式繼承）
     _STATE_STYLE_MAP = {
         "default": {
             "Button": {"background_color": 0xFF343432, "border_radius": 4},
@@ -73,11 +79,17 @@ class ZinButton:
             "Button:pressed": {"background_color": 0xFF5A5A58},
         },
         "correct": {
+            "Button.Correct": {"background_color": 0xFF2A5E2A, "border_radius": 4},
+            "Button.Correct:hovered": {"background_color": 0xFF33703A},
+            "Button.Correct:pressed": {"background_color": 0xFF44AA44},
             "Button": {"background_color": 0xFF2A5E2A, "border_radius": 4},
             "Button:hovered": {"background_color": 0xFF33703A},
             "Button:pressed": {"background_color": 0xFF44AA44},
         },
         "error": {
+            "Button.Error": {"background_color": 0xFF5E2A2A, "border_radius": 4},
+            "Button.Error:hovered": {"background_color": 0xFF703333},
+            "Button.Error:pressed": {"background_color": 0xFFAA4444},
             "Button": {"background_color": 0xFF5E2A2A, "border_radius": 4},
             "Button:hovered": {"background_color": 0xFF703333},
             "Button:pressed": {"background_color": 0xFFAA4444},

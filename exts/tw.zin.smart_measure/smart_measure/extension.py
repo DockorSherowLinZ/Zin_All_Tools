@@ -12,15 +12,17 @@ try:
 except Exception:
     clipboard = None
 
+from .measure_logic import format_stage_unit, get_precision, calculate_gap, calculate_gap_points
+
+import carb
+
+
 
 # ========================================================
 #  核心邏輯與 UI Widget
 # ========================================================
 class SmartMeasureWidget:
     """ 核心邏輯與 UI 元件 """
-    METERS_PER_UNIT_TO_NAME = {
-        1.0: "m", 0.1: "dm", 0.01: "cm", 0.001: "mm", 0.0254: "inch", 0.3048: "ft",
-    }
     DISPLAY_UNITS = [
         ("mm", 0.001), ("cm", 0.01), ("m", 1.0), ("inch", 0.0254), ("ft", 0.3048),
     ]
@@ -37,8 +39,16 @@ class SmartMeasureWidget:
         self._bbox_cache = None
         self._display_unit_size = "cm"
         self._display_mpu_size = 0.01
+        self._custom_precision_size = ui.SimpleIntModel(2)  # 預設 cm 是 2 位
+        
         self._display_unit_dist = "cm"
         self._display_mpu_dist = 0.01
+        self._custom_precision_dist = ui.SimpleIntModel(2)  # 預設 cm 是 2 位
+        
+        self._scene_view = None
+        self._scene_frame = None
+        self._manipulator = None
+        self._show_viewport_overlay = True  # 預設開啟 viewport overlay
         self._stage_event_sub = None
         self._update_sub = None
 
@@ -65,11 +75,13 @@ class SmartMeasureWidget:
     def shutdown(self):
         self._stage_event_sub = None
         self._bbox_cache = None
+        self._destroy_scene_overlay()
 
     def build_ui_layout(self):
         scroll_frame = ui.ScrollingFrame(
             horizontal_scrollbar_policy=ui.ScrollBarPolicy.SCROLLBAR_AS_NEEDED,
-            vertical_scrollbar_policy=ui.ScrollBarPolicy.SCROLLBAR_AS_NEEDED
+            vertical_scrollbar_policy=ui.ScrollBarPolicy.SCROLLBAR_AS_NEEDED,
+            height=ui.Fraction(1)
         )
         with scroll_frame:
             with ui.VStack(spacing=5, padding=8, alignment=ui.Alignment.TOP):
@@ -84,9 +96,10 @@ class SmartMeasureWidget:
                 ui.Spacer(height=4)
                 
                 # Selected
-                with ui.CollapsableFrame("Selected", collapsed=False, height=0):
+                with ui.CollapsableFrame("Selected", collapsed=False, height=ui.Fraction(1)) as cf_sel:
+                    cf_sel.set_collapsed_changed_fn(lambda c, f=cf_sel: setattr(f, "height", ui.Pixel(0) if c else ui.Fraction(1)))
                     with ui.VStack(spacing=4, padding=4):
-                        with ui.ScrollingFrame(height=80, style={"background_color": 0x33000000, "border_radius": 4}):
+                        with ui.ScrollingFrame(height=ui.Fraction(1), style={"background_color": 0x33000000, "border_radius": 4}):
                              # [New] Dynamic list container
                              self._sel_list_vbox = ui.VStack(spacing=2, padding=4)
 
@@ -105,8 +118,14 @@ class SmartMeasureWidget:
                                     with ui.HStack(spacing=4):
                                         ui.Label("Units", width=ui.Pixel(50), style={"color": 0xAAAAAAFF})
                                         items = [u[0] for u in self.DISPLAY_UNITS]
-                                        cb = ui.ComboBox(1, *items, width=ui.Fraction(1), style={"background_color": 0xFF222222})
+                                        cb = ui.ComboBox(1, *items, width=ui.Pixel(60), style={"background_color": 0xFF222222})
                                         cb.model.get_item_value_model().add_value_changed_fn(self._on_size_unit_changed)
+                                        
+                                        ui.Label("Decimals", width=ui.Pixel(50), style={"color": 0xAAAAAAFF})
+                                        ui.IntDrag(self._custom_precision_size, min=0, max=6, width=ui.Pixel(40))
+                                        self._custom_precision_size.add_value_changed_fn(lambda m: self._update_all_labels())
+                                        
+                                        ui.Spacer(width=5)
                                         ui.Button("Copy", width=ui.Pixel(50), clicked_fn=lambda: self._copy_result("size"))
                                     ui.Spacer()
 
@@ -115,11 +134,11 @@ class SmartMeasureWidget:
                     with ui.Frame(style={"background_color": 0x33000000, "border_radius": 4}):
                         with ui.VStack(spacing=4, padding=6, height=0):
                             self._dist_msg_label = ui.Label("Select exactly 2 objects", style={"color": 0xFFAA00FF}, word_wrap=True)
-                            self._dist_main_label = ui.Label("Dist: --", style={"font_size": 16, "color": 0xFF00AA00})
+                            self._dist_main_label = ui.Label("Distance: --", style={"font_size": 16, "color": 0xFF6AD7D9}) # d9d76a
                             with ui.VStack(spacing=2, height=0):
-                                self._gap_x_label = ui.Label("Gap X: --")
-                                self._gap_y_label = ui.Label("Gap Y: --")
-                                self._gap_z_label = ui.Label("Gap Z: --")
+                                self._gap_x_label = ui.Label("Gap X: --", style={"color": 0xFF6060AA}) # aa6060
+                                self._gap_y_label = ui.Label("Gap Y: --", style={"color": 0xFF76A371}) # 71a376
+                                self._gap_z_label = ui.Label("Gap Z: --", style={"color": 0xFFA07D4F}) # 4f7da0
                             ui.Spacer(height=2)
                             with ui.ZStack(height=30):
                                 with ui.VStack():
@@ -127,10 +146,22 @@ class SmartMeasureWidget:
                                     with ui.HStack(spacing=4):
                                         ui.Label("Units", width=ui.Pixel(50), style={"color": 0xAAAAAAFF})
                                         items = [u[0] for u in self.DISPLAY_UNITS]
-                                        cb = ui.ComboBox(1, *items, width=ui.Fraction(1), style={"background_color": 0xFF222222})
+                                        cb = ui.ComboBox(1, *items, width=ui.Pixel(60), style={"background_color": 0xFF222222})
                                         cb.model.get_item_value_model().add_value_changed_fn(self._on_dist_unit_changed)
+                                        
+                                        ui.Label("Decimals", width=ui.Pixel(50), style={"color": 0xAAAAAAFF})
+                                        ui.IntDrag(self._custom_precision_dist, min=0, max=6, width=ui.Pixel(40))
+                                        self._custom_precision_dist.add_value_changed_fn(lambda m: self._update_all_labels())
+                                        
+                                        ui.Spacer(width=5)
                                         ui.Button("Copy", width=ui.Pixel(50), clicked_fn=lambda: self._copy_result("dist"))
                                     ui.Spacer()
+                            # --- Viewport Overlay Toggle ---
+                            with ui.HStack(height=22, spacing=6):
+                                self._overlay_cb = ui.CheckBox(width=18, height=18)
+                                self._overlay_cb.model.set_value(self._show_viewport_overlay)
+                                self._overlay_cb.model.add_value_changed_fn(self._on_overlay_toggle)
+                                ui.Label("Show distance line in Viewport", style={"color": 0xFFBBBBBB})
                 ui.Spacer(height=10)
         
         # [Lifecycle] Create Subscription Lazy (Active Mode)
@@ -201,9 +232,7 @@ class SmartMeasureWidget:
         except: pass
 
     def _format_stage_unit(self, mpu):
-        for val, name in self.METERS_PER_UNIT_TO_NAME.items():
-            if math.isclose(mpu, val, rel_tol=1e-5): return name
-        return f"{math.ceil(mpu*100)/100.0:.4f} m"
+        return format_stage_unit(mpu)
 
     def _check_selection_and_measure(self):
         paths = self._usd_context.get_selection().get_selected_prim_paths()
@@ -317,18 +346,22 @@ class SmartMeasureWidget:
         self._last_dist_data = None
         if len(valid_prims) == 2:
             dx, dy, dz, dist = self._calculate_gap(valid_prims[0][1], valid_prims[1][1])
+            p1, p2 = self._calculate_gap_points(valid_prims[0][1], valid_prims[1][1])
             s = float(self._stage_mpu)
-            self._last_dist_data = {"dist": dist*s, "gap": (dx*s, dy*s, dz*s)}
+            self._last_dist_data = {"dist": dist*s, "gap": (dx*s, dy*s, dz*s), "p1": p1, "p2": p2}
         self._update_all_labels()
 
     def _calculate_gap(self, b1, b2):
         mn1, mx1 = b1.GetMin(), b1.GetMax()
         mn2, mx2 = b2.GetMin(), b2.GetMax()
-        gap = lambda a1, a2, b1, b2: b1 - a2 if a2 < b1 else (a1 - b2 if b2 < a1 else 0.0)
-        dx = gap(mn1[0], mx1[0], mn2[0], mx2[0])
-        dy = gap(mn1[1], mx1[1], mn2[1], mx2[1])
-        dz = gap(mn1[2], mx1[2], mn2[2], mx2[2])
-        return dx, dy, dz, math.sqrt(dx*dx + dy*dy + dz*dz)
+        return calculate_gap((mn1[0], mn1[1], mn1[2]), (mx1[0], mx1[1], mx1[2]),
+                             (mn2[0], mn2[1], mn2[2]), (mx2[0], mx2[1], mx2[2]))
+
+    def _calculate_gap_points(self, b1, b2):
+        mn1, mx1 = b1.GetMin(), b1.GetMax()
+        mn2, mx2 = b2.GetMin(), b2.GetMax()
+        return calculate_gap_points((mn1[0], mn1[1], mn1[2]), (mx1[0], mx1[1], mx1[2]),
+                                    (mn2[0], mn2[1], mn2[2]), (mx2[0], mx2[1], mx2[2]))
 
     def _on_clear(self):
         self._last_size_m = None
@@ -344,7 +377,7 @@ class SmartMeasureWidget:
                 self._wid_label.text = "Y width : --"
                 self._hei_label.text = "Z height: --"
             else:
-                p = self._precision(self._display_unit_size)
+                p = self._custom_precision_size.as_int
                 m = self._display_mpu_size
                 x, y, z = self._last_size_m
                 self._len_label.text = f"X length: {x/m:.{p}f} {self._display_unit_size}"
@@ -353,7 +386,7 @@ class SmartMeasureWidget:
             
             # Distance
             if clear or self._last_dist_data is None:
-                self._dist_main_label.text = "Dist: --"
+                self._dist_main_label.text = "Distance: --"
                 self._gap_x_label.text = "Gap X: --"
                 self._gap_y_label.text = "Gap Y: --"
                 self._gap_z_label.text = "Gap Z: --"
@@ -366,23 +399,176 @@ class SmartMeasureWidget:
                     self._dist_msg_label.text = "Objects have no bounds"
             else:
                 self._dist_msg_label.text = "Distance Calculated"; self._dist_msg_label.style = {"color": 0xFF00AA00}
-                p = self._precision(self._display_unit_dist)
+                p = self._custom_precision_dist.as_int
                 m = self._display_mpu_dist
                 d = self._last_dist_data['dist']
                 gx, gy, gz = self._last_dist_data['gap']
-                self._dist_main_label.text = f"Dist: {d/m:.{p}f} {self._display_unit_dist}"
+                self._dist_main_label.text = f"Distance: {d/m:.{p}f} {self._display_unit_dist}"
                 self._gap_x_label.text = f"Gap X: {gx/m:.{p}f} {self._display_unit_dist}"
                 self._gap_y_label.text = f"Gap Y: {gy/m:.{p}f} {self._display_unit_dist}"
                 self._gap_z_label.text = f"Gap Z: {gz/m:.{p}f} {self._display_unit_dist}"
+            
+            # [Feature] Viewport Overlay
+            self._update_scene_view(clear=clear)
         except: pass
 
-    def _precision(self, unit): return {"mm": 1, "cm": 2, "m": 4, "inch": 2, "ft": 3}.get(unit, 3)
+    def _on_overlay_toggle(self, model):
+        """使用者切換 viewport overlay 開關"""
+        self._show_viewport_overlay = model.get_value_as_bool()
+        if not self._show_viewport_overlay:
+            self._destroy_scene_overlay()
+        else:
+            self._update_scene_view()
+
+    def _update_scene_view(self, clear=False):
+        """使用 omni.ui.scene.SceneView 在 Viewport 上繪製測距線段與標籤"""
+
+        # --- 使用者關閉 overlay 或清除模式 ---
+        if not self._show_viewport_overlay or clear or not self._last_dist_data:
+            self._destroy_scene_overlay()
+            return
+
+        p1 = self._last_dist_data.get("p1")
+        p2 = self._last_dist_data.get("p2")
+
+        if not p1 or not p2:
+            self._destroy_scene_overlay()
+            return
+
+        # --- 取得 Viewport 視窗 ---
+        try:
+            from omni.kit.viewport.utility import get_active_viewport_window
+            viewport_window = get_active_viewport_window()
+            if not viewport_window:
+                return
+        except ImportError:
+            carb.log_warn("[SmartMeasure] omni.kit.viewport.utility not available")
+            return
+
+        # --- 重建 SceneView overlay ---
+        # 每次都重建以確保繪製內容正確更新
+        self._destroy_scene_overlay()
+
+        try:
+            import omni.ui.scene as sc
+
+            # 取得 viewport 的 scene overlay frame
+            self._scene_frame = viewport_window.get_frame("smart_measure_overlay")
+            if not self._scene_frame:
+                carb.log_warn("[SmartMeasure] Could not get overlay frame from viewport")
+                return
+
+            with self._scene_frame:
+                # SceneView 自動匹配 viewport 的 camera projection
+                self._scene_view = sc.SceneView(
+                    aspect_ratio_policy=sc.AspectRatioPolicy.STRETCH
+                )
+                with self._scene_view.scene:
+                    # --- 測距線段 (青色) ---
+                    p1_list = list(p1)
+                    p2_list = list(p2)
+                    sc.Line(p1_list, p2_list, color=ui.color(0.0, 1.0, 1.0, 1.0), thicknesses=[2.0])
+
+                    # --- 端點十字標記 ---
+                    marker_size = 2.0
+                    for pt in [p1_list, p2_list]:
+                        with sc.Transform(transform=sc.Matrix44.get_translation_matrix(pt[0], pt[1], pt[2])):
+                            sc.Line([-marker_size, 0, 0], [marker_size, 0, 0],
+                                    color=ui.color(0.0, 1.0, 1.0, 0.8), thicknesses=[1.5])
+                            sc.Line([0, -marker_size, 0], [0, marker_size, 0],
+                                    color=ui.color(0.0, 1.0, 1.0, 0.8), thicknesses=[1.5])
+                            sc.Line([0, 0, -marker_size], [0, 0, marker_size],
+                                    color=ui.color(0.0, 1.0, 1.0, 0.8), thicknesses=[1.5])
+
+                    # --- 中點距離標籤 ---
+                    mid = [(p1[i] + p2[i]) / 2.0 for i in range(3)]
+                    d_str = self._dist_main_label.text.replace("Distance: ", "") if self._dist_main_label else ""
+                    with sc.Transform(
+                        transform=sc.Matrix44.get_translation_matrix(mid[0], mid[1], mid[2]),
+                        look_at=sc.Transform.LookAt.CAMERA
+                    ):
+                        sc.Label(
+                            d_str,
+                            color=ui.color(0.0, 1.0, 1.0, 1.0),
+                            size=18,
+                            alignment=ui.Alignment.CENTER
+                        )
+
+            # 將 SceneView 的 camera model 綁定到 viewport 的 camera
+            # 相容多版本 Kit (105~109) 的 camera model 取得方式
+            if self._scene_view:
+                self._bind_scene_view_camera(viewport_window)
+
+        except Exception as e:
+            carb.log_warn(f"[SmartMeasure] Viewport overlay error: {e}")
+
+    def _bind_scene_view_camera(self, viewport_window):
+        """將自建的 SceneView 的 camera model 綁定到 viewport 的 camera。
+        基於 USD Composer 109.0.3 (Kit 109) 實際 API 偵測結果。"""
+
+        vp_api = viewport_window.viewport_api
+
+        # 方法 1 (Kit 109)：使用 ViewportAPI 的 __scene_camera_model
+        # 偵測結果：_ViewportAPI__scene_camera_model = SceneCameraModel
+        try:
+            camera_model = getattr(vp_api, '_ViewportAPI__scene_camera_model', None)
+            if camera_model:
+                self._scene_view.model = camera_model
+                return
+        except Exception:
+            pass
+
+        # 方法 2 (Kit 109)：從 ViewportAPI.__scene_views 列表取得
+        # 偵測結果：_ViewportAPI__scene_views = list
+        try:
+            scene_views = getattr(vp_api, '_ViewportAPI__scene_views', None)
+            if scene_views and len(scene_views) > 0:
+                for sv in scene_views:
+                    if hasattr(sv, 'model') and sv.model:
+                        self._scene_view.model = sv.model
+                        return
+        except Exception:
+            pass
+
+        # 方法 3 (Kit 106+)：直接從 viewport_api.scene_view 取得
+        try:
+            if hasattr(vp_api, 'scene_view') and vp_api.scene_view:
+                self._scene_view.model = vp_api.scene_view.model
+                return
+        except Exception:
+            pass
+
+        carb.log_info("[SmartMeasure] Could not auto-bind camera model — overlay may not align with viewport camera")
+
+    def _destroy_scene_overlay(self):
+        """安全清除 Scene overlay 資源"""
+        if hasattr(self, '_scene_view') and self._scene_view:
+            try:
+                self._scene_view = None
+            except:
+                pass
+        if hasattr(self, '_scene_frame') and self._scene_frame:
+            try:
+                self._scene_frame.clear()
+                self._scene_frame = None
+            except:
+                pass
+        self._manipulator = None
+
+
+
     def _on_size_unit_changed(self, m, _=None): 
         idx = m.get_value_as_int(); u = self.DISPLAY_UNITS[max(0, min(idx, 4))]
-        self._display_unit_size = u[0]; self._display_mpu_size = u[1]; self._update_all_labels()
-    def _on_dist_unit_changed(self, m, _=None):
+        self._display_unit_size = u[0]; self._display_mpu_size = u[1]
+        self._custom_precision_size.set_value(get_precision(u[0]) if get_precision(u[0]) is not None else 3)
+        self._update_all_labels()
+        
+    def _on_dist_unit_changed(self, m, _=None): 
         idx = m.get_value_as_int(); u = self.DISPLAY_UNITS[max(0, min(idx, 4))]
-        self._display_unit_dist = u[0]; self._display_mpu_dist = u[1]; self._update_all_labels()
+        self._display_unit_dist = u[0]; self._display_mpu_dist = u[1]
+        self._custom_precision_dist.set_value(get_precision(u[0]) if get_precision(u[0]) is not None else 3)
+        self._update_all_labels()
+
     def _copy_result(self, mode):
         if not clipboard: return
         t = f"{self._len_label.text}\n{self._wid_label.text}\n{self._hei_label.text}" if mode == "size" else f"{self._dist_main_label.text}\n{self._gap_x_label.text}\n{self._gap_y_label.text}\n{self._gap_z_label.text}"
@@ -394,7 +580,7 @@ class SmartMeasureWidget:
 # ========================================================
 class SmartMeasureExtension(omni.ext.IExt):
     WINDOW_NAME = "Smart Measure"
-    MENU_PATH = f"Zin Tools/{WINDOW_NAME}"
+    MENU_PATH = f"Zin_All_Tools/{WINDOW_NAME}"
 
     def __init__(self):
         super().__init__()
@@ -416,17 +602,23 @@ class SmartMeasureExtension(omni.ext.IExt):
 
     def _build_menu(self):
         try:
-            m = omni.kit.ui.get_editor_menu()
-            if m: m.add_item(self.MENU_PATH, self._toggle_window, toggle=True, value=False)
+            import omni.kit.menu.utils
+            self._menu = omni.kit.menu.utils.add_menu_items([
+                omni.kit.menu.utils.MenuItemDescription(
+                    name=self.WINDOW_NAME,
+                    onclick_fn=lambda *args: self._toggle_window(None, True)
+                )
+            ], "Zin_All_Tools")
             self._menu_added = True
-        except: pass
+        except Exception: pass
 
     def _remove_menu(self):
         try:
-            m = omni.kit.ui.get_editor_menu()
-            if m and m.has_item(self.MENU_PATH): m.remove_item(self.MENU_PATH)
-        except: pass
-
+            import omni.kit.menu.utils
+            if hasattr(self, '_menu') and self._menu:
+                omni.kit.menu.utils.remove_menu_items(self._menu, "Zin_All_Tools")
+                self._menu = None
+        except Exception: pass
     def _toggle_window(self, menu, value):
         if value:
             if not self._window:

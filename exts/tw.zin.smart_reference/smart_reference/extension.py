@@ -52,6 +52,7 @@ INFO_BOX_STYLE = {"background_color": 0xFF101010, "border_radius": 4}
 
 class SmartReferenceUI:
     def __init__(self):
+        self._cb_instanceable = None
         self._file_picker = None 
         self._settings = carb.settings.get_settings()
         self._setting_excel = "/persistent/exts/tw.zin.smart_reference/last_excel_path"
@@ -78,6 +79,10 @@ class SmartReferenceUI:
                     with ui.HStack(height=28, spacing=8):
                         ui.Label("URL:", width=ui.Pixel(50), style=SUB_LABEL_STYLE)
                         self._field_url = ui.StringField()
+                        with ui.HStack(height=24, spacing=8):
+                            self._cb_instanceable = ui.CheckBox()
+                            self._cb_instanceable.model.set_value(False)
+                            ui.Label("Instanceable", style={"color": 0xFFDDDDDD, "font_size": 14})
                         ui.Button("Apply", width=ui.Pixel(70), name="action", clicked_fn=self._on_apply_reference)
                         ui.Button("Reset", width=ui.Pixel(70), name="action", clicked_fn=self._on_reset_quick)
                     
@@ -200,12 +205,22 @@ class SmartReferenceUI:
 
     def _on_apply_reference(self):
         asset_url = self._field_url.model.get_value_as_string().strip()
+        is_instanceable = self._cb_instanceable.model.get_value_as_bool() if self._cb_instanceable else False
         stage = omni.usd.get_context().get_stage()
+        
+        applied_count = 0
         for path in self._found_paths:
             prim = stage.GetPrimAtPath(path)
             if prim.IsValid():
                 prim.GetReferences().ClearReferences()
                 prim.GetReferences().AddReference(asset_url)
+                prim.SetInstanceable(is_instanceable)
+                applied_count += 1
+                
+        success_msg = f"Successfully applied to {applied_count} items."
+        if is_instanceable:
+            success_msg += " (Instanceable: ON)"
+        self._lbl_results.text = success_msg
 
     def _on_reset_quick(self):
         self._lbl_results.text = ""
@@ -232,6 +247,15 @@ class SmartReferenceUI:
         self._file_picker.show()
 
 class SmartReferenceExtension(omni.ext.IExt):
+    WINDOW_NAME = "Smart Reference"
+    MENU_PATH = f"Zin_All_Tools/{WINDOW_NAME}"
+
+    def __init__(self):
+        super().__init__()
+        self._window = None
+        self._menu_added = False
+        self._ui = None
+
     def on_startup(self, ext_id):
         # [關鍵修正] 在 Extension 啟動時自動檢查並安裝 Pandas 與 OpenPyXL
         try:
@@ -240,5 +264,54 @@ class SmartReferenceExtension(omni.ext.IExt):
             omni.kit.pipapi.install("openpyxl")
         except Exception as e:
             print(f"[SmartReference] Warning: Dependency install failed: {e}")
+            
+        self._build_menu()
 
-    def on_shutdown(self): pass
+    def on_shutdown(self):
+        self._remove_menu()
+        if self._window:
+            self._window.destroy()
+            self._window = None
+        self._ui = None
+
+    def _build_menu(self):
+        try:
+            import omni.kit.menu.utils
+            self._menu = omni.kit.menu.utils.add_menu_items([
+                omni.kit.menu.utils.MenuItemDescription(
+                    name=self.WINDOW_NAME,
+                    onclick_fn=lambda *args: self._toggle_window(None, True)
+                )
+            ], "Zin_All_Tools")
+            self._menu_added = True
+        except Exception: pass
+
+    def _remove_menu(self):
+        try:
+            import omni.kit.menu.utils
+            if hasattr(self, '_menu') and self._menu:
+                omni.kit.menu.utils.remove_menu_items(self._menu, "Zin_All_Tools")
+                self._menu = None
+        except Exception: pass
+    def _toggle_window(self, menu, value):
+        if value:
+            if not self._window:
+                from omni.ui import DockPreference
+                self._window = ui.Window(self.WINDOW_NAME, width=320, height=540, dockPreference=DockPreference.RIGHT)
+                self._window.set_visibility_changed_fn(self._on_visibility_changed)
+                if not self._ui:
+                    self._ui = SmartReferenceUI()
+                with self._window.frame:
+                    self._ui.build_ui()
+            self._window.visible = True
+        else:
+            if self._window:
+                self._window.visible = False
+
+    def _on_visibility_changed(self, visible):
+        if self._menu_added:
+            try:
+                import omni.kit.ui
+                omni.kit.ui.get_editor_menu().set_value(self.MENU_PATH, bool(visible))
+            except Exception:
+                pass

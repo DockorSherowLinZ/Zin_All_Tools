@@ -1,0 +1,18 @@
+[package]
+id = "tw.zin.smart_exploded-1.0.0"
+version = "1.0.0"
+category = "ZinTools"
+title = "Zin Smart Exploded View"
+description = "一個專業的 USD 物件爆炸圖與合併工具，支援自定義方向與平滑動畫。"
+authors = ["Zin"]
+
+[dependencies]
+"omni.ext" = {}
+"omni.ui" = {}
+"omni.usd" = {}
+"omni.kit.app" = {}
+"omni.kit.uiapp" = {}
+"carb" = {}
+
+[[python.module]]
+name = "smart_exploded"

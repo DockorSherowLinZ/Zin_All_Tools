@@ -457,7 +457,7 @@ class SmartAlignWidget:
 # ========================================================
 class SmartAlignExtension(omni.ext.IExt):
     WINDOW_NAME = "Smart Align"
-    MENU_PATH = f"Zin Tools/{WINDOW_NAME}"
+    MENU_PATH = f"Zin_All_Tools/{WINDOW_NAME}"
 
     def __init__(self):
         super().__init__()
@@ -475,17 +475,23 @@ class SmartAlignExtension(omni.ext.IExt):
 
     def _build_menu(self):
         try:
-            m = omni.kit.ui.get_editor_menu()
-            if m: m.add_item(self.MENU_PATH, self._toggle_window, toggle=True, value=False)
+            import omni.kit.menu.utils
+            self._menu = omni.kit.menu.utils.add_menu_items([
+                omni.kit.menu.utils.MenuItemDescription(
+                    name=self.WINDOW_NAME,
+                    onclick_fn=lambda *args: self._toggle_window(None, True)
+                )
+            ], "Zin_All_Tools")
             self._menu_added = True
-        except: pass
+        except Exception: pass
 
     def _remove_menu(self):
         try:
-            m = omni.kit.ui.get_editor_menu()
-            if m and m.has_item(self.MENU_PATH): m.remove_item(self.MENU_PATH)
-        except: pass
-
+            import omni.kit.menu.utils
+            if hasattr(self, '_menu') and self._menu:
+                omni.kit.menu.utils.remove_menu_items(self._menu, "Zin_All_Tools")
+                self._menu = None
+        except Exception: pass
     def _toggle_window(self, menu, value):
         if value:
             if not self._window:

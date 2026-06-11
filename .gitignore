@@ -1,0 +1,29 @@
+# Backup files - managed by git, not needed in repo
+*.bak
+*_backup*.py
+*_alone.py
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Test & coverage
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+
+# Distribution
+*.egg-info/
+dist/
+build/
+
+# Temp files
+*.tmp
+_delete_list.tmp

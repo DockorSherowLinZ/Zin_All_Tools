@@ -1,0 +1,18 @@
+[package]
+title = "Smart Conveyor 控制面板"
+version = "1.0.0"
+description = "提供自定義節點與速度，用以控制 PCB 在智慧產線輸送帶上的移動邏輯"
+authors = ["Zin"]
+keywords = ["pcb", "conveyor", "simulation", "zin"]
+category = "ZinTools"
+
+[dependencies]
+"omni.kit.uiapp" = {}
+"omni.ui" = {}
+"omni.usd" = {}
+
+# Extension 入口設定
+[[python.module]]
+name = "smart_conveyor"
+class = "SmartConveyorExtension"
+
