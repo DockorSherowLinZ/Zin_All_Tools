@@ -1,0 +1,19 @@
+[package]
+version = "1.0.0"
+title = "Zin Web Dashboard"
+description = "End-User Web Dashboard for Zin Tools Box with WebRTC streaming and REST API"
+keywords = ["zin", "web", "dashboard", "webrtc"]
+authors = ["Zin"]
+repository = ""
+changelog = ""
+readme = "docs/README.md"
+preview_image = "data/preview.png"
+icon = "data/icon.png"
+
+[dependencies]
+"omni.kit.commands" = {}
+"omni.ui" = {}
+"tw.zin.smart_conveyor" = {}
+
+[[python.module]]
+name = "web_dashboard"

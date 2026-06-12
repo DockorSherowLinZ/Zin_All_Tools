@@ -1,0 +1,375 @@
+:root {
+    --bg-overlay: rgba(15, 23, 42, 0.4);
+    --glass-bg: rgba(30, 41, 59, 0.7);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --accent: #38bdf8;
+    --success: #10b981;
+    --danger: #ef4444;
+    --warning: #f59e0b;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+body {
+    background-color: #000;
+    color: var(--text-primary);
+    overflow: hidden;
+}
+
+/* 3D Video Layer */
+#video-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 0;
+}
+
+#webrtc-iframe {
+    width: 100%;
+    height: 100%;
+}
+
+/* UI Overlay Layer */
+#dashboard-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10;
+    pointer-events: none; /* Let clicks pass through empty areas to 3D view */
+    display: flex;
+    flex-direction: column;
+    padding: 2rem;
+}
+
+/* All interactive elements need pointer-events auto */
+header, main {
+    pointer-events: auto;
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    padding: 1rem 2rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+}
+
+.logo {
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    background: linear-gradient(90deg, #38bdf8, #818cf8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.status-indicator .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: var(--warning);
+    box-shadow: 0 0 10px var(--warning);
+}
+.status-indicator.connected .dot { background-color: var(--success); box-shadow: 0 0 10px var(--success); }
+.status-indicator.error .dot { background-color: var(--danger); box-shadow: 0 0 10px var(--danger); }
+
+main {
+    display: flex;
+    flex: 1;
+    gap: 2rem;
+    align-items: flex-start;
+    justify-content: space-between;
+    pointer-events: none; /* Let empty space pass clicks */
+}
+
+/* Make children interactive again */
+.telemetry-panel, .control-panel {
+    pointer-events: auto;
+}
+
+/* Glass Panels */
+.telemetry-panel, .control-panel {
+    background: var(--glass-bg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--glass-border);
+    border-radius: 24px;
+    padding: 2rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.telemetry-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    min-width: 250px;
+}
+
+.card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 16px;
+    padding: 1.5rem;
+    transition: transform 0.2s ease;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.card h3 {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    letter-spacing: 1px;
+    margin-bottom: 0.5rem;
+}
+
+.card .value {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.card .unit {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.text-warning { color: var(--warning) !important; }
+.text-success { color: var(--success) !important; }
+
+/* Control Panel */
+.control-panel {
+    width: auto;
+    flex: 1;
+    max-width: 450px;
+    min-width: 350px;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.control-panel h2 {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--glass-border);
+    padding-bottom: 0.5rem;
+}
+
+.control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.control-group label {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.control-group input {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+    padding: 0.8rem 1rem;
+    color: var(--text-primary);
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.control-group input:focus {
+    border-color: var(--accent);
+}
+
+.button-group {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.button-group.main-controls {
+    margin-top: auto;
+}
+
+.btn {
+    flex: 1;
+    padding: 1rem;
+    border: none;
+    border-radius: 12px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.btn:active {
+    transform: scale(0.98);
+}
+
+.btn-secondary {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+    border: 1px solid var(--glass-border);
+}
+.btn-secondary:hover { background: rgba(255, 255, 255, 0.2); }
+
+.btn-success {
+    background: rgba(16, 185, 129, 0.2);
+    color: var(--success);
+    border: 1px solid var(--success);
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.1);
+}
+.btn-success:hover { background: rgba(16, 185, 129, 0.3); box-shadow: 0 0 20px rgba(16, 185, 129, 0.3); }
+
+.btn-danger {
+    background: rgba(239, 68, 68, 0.2);
+    color: var(--danger);
+    border: 1px solid var(--danger);
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.1);
+}
+.btn-danger:hover { background: rgba(239, 68, 68, 0.3); box-shadow: 0 0 20px rgba(239, 68, 68, 0.3); }
+
+.line-cards-container { 
+    display: flex; 
+    flex-direction: column; 
+    gap: 10px; 
+    max-height: 50vh; 
+    overflow-y: auto; 
+    overflow-x: hidden; 
+    padding-right: 5px; 
+}
+
+/* Custom Scrollbar */
+.line-cards-container::-webkit-scrollbar {
+    width: 6px;
+}
+.line-cards-container::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+}
+.line-cards-container::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+}
+.line-cards-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.4);
+}
+
+.line-card { background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.line-card-header { font-size: 13px; font-weight: 600; color: #fff; word-wrap: break-word; word-break: break-all; }
+.line-card-controls { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+.line-card-input { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 60px; }
+.line-card-input label { font-size: 11px; color: rgba(255, 255, 255, 0.7); white-space: nowrap; }
+.line-card-input input { background: rgba(0, 0, 0, 0.5); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; border-radius: 4px; padding: 4px 6px; font-size: 12px; width: 100%; box-sizing: border-box; }
+.btn-line-apply { padding: 6px 12px; font-size: 11px; height: 26px; white-space: nowrap; flex-shrink: 0; }
+
+/* Responsive Web Design (RWD) */
+@media (max-width: 900px) {
+    main {
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 1rem;
+    }
+    
+    .telemetry-panel, .control-panel {
+        width: 100%;
+        max-width: 600px;
+        min-width: unset;
+        padding: 1.5rem;
+    }
+    
+    .telemetry-panel {
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 10px;
+    }
+    
+    .card {
+        flex: 1 1 150px; /* grow, shrink, basis */
+        min-width: 150px;
+        padding: 1rem;
+    }
+
+    .card .value {
+        font-size: 2rem;
+    }
+    
+    .line-cards-container {
+        max-height: 250px;
+    }
+}
+
+@media (max-width: 600px) {
+    #dashboard-overlay {
+        padding: 1rem;
+    }
+    
+    header {
+        padding: 0.8rem 1rem;
+        flex-direction: column;
+        gap: 0.8rem;
+    }
+    
+    .telemetry-panel {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .telemetry-panel, .control-panel {
+        padding: 1rem;
+    }
+    
+    .card {
+        width: 100%;
+        flex: unset;
+    }
+    
+    .card .value {
+        font-size: 2.2rem;
+    }
+    
+    .line-card-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .btn-line-apply {
+        width: 100%;
+        margin-top: 5px;
+    }
+}

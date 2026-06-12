@@ -1699,13 +1699,31 @@ class SmartConveyorExtension(omni.ext.IExt):
                 if prim_path == local_ui_path:
                     continue  # Skip the local UI configuration itself
                 
+                # Attempt to parse the actual JSON to get the real parameters
+                actual_speed = 50.0
+                actual_delay = 0.0
+                actual_interval = 3.0
+                try:
+                    attr = prim.GetAttribute("zin:conveyor_config")
+                    if attr and attr.IsValid():
+                        json_str = attr.Get()
+                        if json_str:
+                            import json
+                            cfg_data = json.loads(str(json_str))
+                            parsed_cfg = self._parse_config_dict(cfg_data)
+                            actual_speed = float(parsed_cfg.get("speed", 50.0))
+                            actual_delay = float(parsed_cfg.get("initial_delay", 0.0))
+                            actual_interval = float(parsed_cfg.get("dispatch_interval", 3.0))
+                except Exception as e:
+                    carb.log_warn(f"[tw.zin.smart_conveyor] Failed to parse config for {prim_path}: {e}")
+                
                 model = self._make_scene_override_model(
                     path=prim_path,
                     enabled=True,
                     override=False,
-                    speed=50.0,
-                    initial_delay=0.0,
-                    dispatch_interval=3.0
+                    speed=actual_speed,
+                    initial_delay=actual_delay,
+                    dispatch_interval=actual_interval
                 )
                 self._scene_overrides_models.append(model)
                 
@@ -1851,8 +1869,17 @@ class SmartConveyorExtension(omni.ext.IExt):
 
         # --- Helper to initialize a pool ---
         def _init_pool(line_id, tpl_path, config_dict, disp_interval, b_delay):
-            if not stage.GetPrimAtPath(tpl_path).IsValid():
+            tpl_prim = stage.GetPrimAtPath(tpl_path)
+            if not tpl_prim.IsValid():
                 return False
+                
+            # Hide the template prim during simulation
+            tpl_img = UsdGeom.Imageable(tpl_prim)
+            if tpl_img:
+                tpl_img.MakeInvisible()
+                if not hasattr(self, '_hidden_templates'):
+                    self._hidden_templates = set()
+                self._hidden_templates.add(tpl_path)
                 
             req_spawns = self._calc_required_pool_size(config_dict["waypoints"], config_dict["speed"], disp_interval)
             pool = []
@@ -2133,6 +2160,18 @@ class SmartConveyorExtension(omni.ext.IExt):
             except: pass
         self.controllers = []
         
+        # Restore visibility of original templates
+        if hasattr(self, '_hidden_templates'):
+            stage = omni.usd.get_context().get_stage()
+            if stage:
+                for tpl_path in self._hidden_templates:
+                    tpl_prim = stage.GetPrimAtPath(tpl_path)
+                    if tpl_prim and tpl_prim.IsValid():
+                        tpl_img = UsdGeom.Imageable(tpl_prim)
+                        if tpl_img:
+                            tpl_img.MakeVisible()
+            self._hidden_templates.clear()
+            
         # Destroy all spawned instances to clear the pool
         stage = omni.usd.get_context().get_stage()
         if stage and stage.GetPrimAtPath("/World/Spawned_PCBs").IsValid():
@@ -2186,6 +2225,59 @@ class SmartConveyorExtension(omni.ext.IExt):
                     return f.read()
         except Exception:
             return ""
+
+    async def load_config_from_url_async(self, url: str):
+        import omni.client
+        import json
+        import omni.kit.app
+        try:
+            result, entries = await omni.client.list_async(url)
+            files_to_load = []
+            if result == omni.client.Result.OK:
+                for entry in entries:
+                    if entry.relative_path.endswith(".json"):
+                        files_to_load.append(url + ("/" if not url.endswith("/") else "") + entry.relative_path)
+            else:
+                if url.endswith(".json"):
+                    files_to_load.append(url)
+                    
+            if not files_to_load:
+                carb.log_warn(f"[tw.zin.smart_conveyor] No JSON files found at {url}")
+                return
+                
+            self._save_ml_undo_snapshot()
+            
+            # Unconditionally clear existing models so we don't duplicate them
+            self._multi_line_models.clear()
+            if hasattr(self, '_scene_overrides_models'):
+                self._scene_overrides_models.clear()
+            
+            loaded_count = 0
+            for file_url in files_to_load:
+                json_str = self._read_json_file(file_url)
+                if not json_str: continue
+                try:
+                    data = json.loads(json_str)
+                    parsed = self._parse_config_dict(data)
+                    prim_paths = parsed.get("prim_paths", "")
+                    
+                    ml = self._make_multi_line_model(prim_paths, file_url)
+                    ml["speed"].set_value(float(parsed.get("speed", 50.0)))
+                    ml["initial_delay"].set_value(float(parsed.get("initial_delay", 0.0)))
+                    ml["dispatch_interval"].set_value(float(parsed.get("dispatch_interval", 3.0)))
+                        
+                    self._multi_line_models.append(ml)
+                    loaded_count += 1
+                except Exception as e:
+                    carb.log_warn(f"[tw.zin.smart_conveyor] Failed to parse {file_url}: {e}")
+                    
+            await omni.kit.app.get_app().next_update_async()
+            self._rebuild_multi_line_ui()
+            if hasattr(self, '_rebuild_scene_overrides_ui'):
+                self._rebuild_scene_overrides_ui()
+            carb.log_info(f"[tw.zin.smart_conveyor] Successfully loaded {loaded_count} JSONs from {url}")
+        except Exception as e:
+            carb.log_error(f"[tw.zin.smart_conveyor] Error loading from {url}: {e}")
     def _on_save_clicked(self):
         """Open a FilePicker dialog to save current config as a JSON file."""
         if not _HAS_FILEPICKER:
