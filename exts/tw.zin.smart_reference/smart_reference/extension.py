@@ -200,7 +200,16 @@ class SmartReferenceUI:
         prefix = self._field_prefix.model.get_value_as_string().strip()
         if not prefix: return
         stage = omni.usd.get_context().get_stage()
-        self._found_paths = [str(p.GetPath()) for p in stage.Traverse() if str(p.GetPath()).startswith(prefix)]
+        
+        self._found_paths = []
+        for p in stage.Traverse():
+            path_str = str(p.GetPath())
+            if path_str.startswith(prefix):
+                # 過濾掉子物件：如果父節點已經符合 Prefix，就不加入子節點
+                parent_path_str = str(p.GetParent().GetPath())
+                if not parent_path_str.startswith(prefix):
+                    self._found_paths.append(path_str)
+                    
         self._lbl_results.text = f"Found {len(self._found_paths)} items."
 
     def _on_apply_reference(self):
@@ -212,8 +221,16 @@ class SmartReferenceUI:
         for path in self._found_paths:
             prim = stage.GetPrimAtPath(path)
             if prim.IsValid():
+                if prim.IsInstanceProxy():
+                    continue # 略過 Instance Proxy，因為無法對其寫入
+                # 解決 "authoring to an instance proxy" 錯誤：
+                # 在修改 Reference 前，先暫時關閉 Instanceable，修改完再設回來
+                prim.SetInstanceable(False)
+                
                 prim.GetReferences().ClearReferences()
                 prim.GetReferences().AddReference(asset_url)
+                
+                # 套用新的 Instanceable 設定
                 prim.SetInstanceable(is_instanceable)
                 applied_count += 1
                 

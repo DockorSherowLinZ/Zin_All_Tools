@@ -16,6 +16,7 @@ from smart_reference.extension import SmartReferenceUI
 from smart_assembly.extension import SmartAssemblyExtension
 from smart_physics_setup.extension import SmartPhysicsSetupExtension
 from smart_conveyor.extension import SmartConveyorExtension
+from smart_cad_convert.extension import SmartCadConvertUI
 
 class ToolsBoxExtension(omni.ext.IExt):
     WINDOW_NAME = "Zin Tools Box"
@@ -50,6 +51,7 @@ class ToolsBoxExtension(omni.ext.IExt):
         self.tool_reference = SmartReferenceExtension()
         # 建立 UI 實例，供 Tab 切換時呼叫 build_ui
         self.tool_reference_ui = SmartReferenceUI() 
+        self.tool_cad_convert_ui = SmartCadConvertUI() 
 
         self.tool_assembly = SmartAssemblyExtension()
         self.tool_assembly.startup_logic()
@@ -128,6 +130,7 @@ class ToolsBoxExtension(omni.ext.IExt):
                             self._btn_physics  = ZinButton("Physics",   height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Physics"))
                             self._btn_explode  = ZinButton("Explode",   height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Explode"))
                             self._btn_conveyor = ZinButton("Conveyor",  height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Conveyor"))
+                            self._btn_cad      = ZinButton("CAD",       height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("CAD"))
 
                         # --- B. 內容顯示區 (Content Area) ---
                         self._content_frame = ui.Frame(padding=1)
@@ -203,12 +206,17 @@ class ToolsBoxExtension(omni.ext.IExt):
                     if self.tool_conveyor:
                         self.tool_conveyor.build_ui_layout()
 
+                elif self._current_tab == "CAD":
+                    self._highlight_tab(self._btn_cad)
+                    if self.tool_cad_convert_ui:
+                        self.tool_cad_convert_ui.build_ui()
+
     def _highlight_tab(self, active_btn):
         """Tab button visual feedback via ZinButton.set_state()"""
         for btn in [
             self._btn_align, self._btn_assets, self._btn_measure,
             self._btn_ref, self._btn_assembly, self._btn_physics,
-            self._btn_explode, self._btn_conveyor
+            self._btn_explode, self._btn_conveyor, self._btn_cad
         ]:
             btn.set_state("default")
         active_btn.set_state("correct")
@@ -234,6 +242,7 @@ class ToolsBoxExtension(omni.ext.IExt):
             
         # 清理 Reference UI 引用
         self.tool_reference_ui = None
+        self.tool_cad_convert_ui = None
         self.tool_reference = None
         self.tool_assets = None
         

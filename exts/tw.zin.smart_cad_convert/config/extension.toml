@@ -1,0 +1,20 @@
+[package]
+title = "Smart CAD Convert"
+version = "1.0.0"
+description = "A visual UI for DSX Blueprint CAD-to-USD Pipeline (FBX -> flattened USDA -> Recenter -> Instance -> Material)"
+authors = ["Zin"]
+readme = "README.md"
+keywords = ["inventec", "zin", "cad", "usd", "pipeline"]
+category = "ZinTools"
+
+[dependencies]
+"omni.ui" = {}
+"omni.usd" = {}
+"omni.kit.asset_converter" = {}
+"omni.kit.window.filepicker" = {}
+"omni.physx.bundle" = {}
+"omni.scene.optimizer.core" = {}
+"omni.kit.commands" = {}
+
+[[python.module]]
+name = "smart_cad_convert"

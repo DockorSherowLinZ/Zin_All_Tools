@@ -25,5 +25,6 @@ preview_image = "data/preview.png"
 "tw.zin.smart_assembly" = {}
 "tw.zin.smart_physics_setup" = {}
 "tw.zin.smart_conveyor" = {}
+"tw.zin.smart_cad_convert" = {}
 [[python.module]]
 name = "tools_box"
