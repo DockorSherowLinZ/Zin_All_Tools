@@ -1,22 +1,18 @@
 [package]
-title = "SmartAlign"
+title = "Smart Information"
 version = "1.0.0"
-description = "Alignment helpers (skeleton)."
+description = "Displays Inventec_Tester USD custom data."
 authors = ["Zin"]
-readme = "README.md"
 repository = "https://github.com/DockorSherowLinZ/Zin_All_Tools"
-changelog = "docs/CHANGELOG.md"
 keywords = ["omniverse", "kit", "extension", "tw.zin"]
 category = "ZinTools"
 
-icon = "data/SMART_ALIGN.png"
-preview_image = "data/preview.png"
-
-# 【關鍵修改】在這裡加入其他工具的 ID
 [dependencies]
 "omni.ui" = {}
 "omni.usd" = {}
 "omni.kit.uiapp" = {}
+"omni.ui.scene" = {}
+"omni.kit.viewport.utility" = {}
 
 [[python.module]]
-name = "smart_align"
+name = "smart_information"

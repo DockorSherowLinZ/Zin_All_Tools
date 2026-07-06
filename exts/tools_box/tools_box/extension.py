@@ -4,11 +4,12 @@ import weakref
 from pxr import Gf
 from .zin_style import ZIN_GLOBAL_STYLE
 from .zin_components import ZinButton
-from .ZinExplodedViewModule import ZinExplodedViewModule
 
 
 # --- Import sub-tools ---
 from smart_align.extension import SmartAlignExtension
+from smart_exploded.extension import ZinSmartExplodedExtension
+from web_dashboard.extension import ZinWebDashboardExtension
 from smart_assets_builder.extension import SmartAssetsBuilderExtension
 from smart_measure.extension import SmartMeasureExtension
 from smart_reference.extension import SmartReferenceExtension
@@ -17,6 +18,7 @@ from smart_assembly.extension import SmartAssemblyExtension
 from smart_physics_setup.extension import SmartPhysicsSetupExtension
 from smart_conveyor.extension import SmartConveyorExtension
 from smart_cad_convert.extension import SmartCadConvertUI
+from smart_information.extension import SmartInformationUI
 
 class ToolsBoxExtension(omni.ext.IExt):
     WINDOW_NAME = "Zin Tools Box"
@@ -37,6 +39,7 @@ class ToolsBoxExtension(omni.ext.IExt):
         self.tool_physics = None
         self.tool_explode = None
         self.tool_conveyor = None
+        self.tool_dashboard = None
 
         self.tool_align = SmartAlignExtension()
         if hasattr(self.tool_align, "startup_logic"):
@@ -62,13 +65,24 @@ class ToolsBoxExtension(omni.ext.IExt):
             self.tool_physics.on_startup(ext_id)
 
         # --- Exploded View tool (persistent state across tab switches) ---
-        self.tool_explode = ZinExplodedViewModule()
+        self.tool_explode = ZinSmartExplodedExtension()
+        if hasattr(self.tool_explode, "on_startup"):
+            self.tool_explode.on_startup(ext_id)
+            
+        # --- Web Dashboard tool ---
+        self.tool_dashboard = ZinWebDashboardExtension()
+        if hasattr(self.tool_dashboard, "on_startup"):
+            self.tool_dashboard.on_startup(ext_id)
 
         # --- Smart Conveyor tool (embedded mode) ---
         # startup_as_embedded() initializes Timeline subscription and USD auto-load
         # without creating a standalone 'Smart Conveyor Panel' window or menu item.
         self.tool_conveyor = SmartConveyorExtension()
         self.tool_conveyor.startup_as_embedded(ext_id)
+
+        # --- Smart Information tool ---
+        self.tool_info_ui = SmartInformationUI()
+        self.tool_info_ui.startup()
 
         # 記錄當前啟用的 Tab 名稱
         self._current_tab = "Measure" 
@@ -115,22 +129,26 @@ class ToolsBoxExtension(omni.ext.IExt):
             if not self._window:
                 # --- 2. 建立主視窗 ---
                 self._window = ui.Window(self.WINDOW_NAME, width=600, height=600)
+                self._window.deferred_dock_in("Property")
                 self._window.set_visibility_changed_fn(self._on_visibility_changed)
 
                 with self._window.frame:
                     with ui.VStack(spacing=0, alignment=ui.Alignment.TOP, style=ZIN_GLOBAL_STYLE):
                         
                         # --- A. 頁籤列 (Tab Bar) ---
-                        with ui.HStack(height=ui.Pixel(40), style={"margin": 5, "spacing": 5}):
-                            self._btn_measure  = ZinButton("Measure",   height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Measure"))
-                            self._btn_assets   = ZinButton("Builder",   height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Assets"))
-                            self._btn_ref      = ZinButton("Reference", height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Reference"))
-                            self._btn_align    = ZinButton("Align",     height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Align"))
-                            self._btn_assembly = ZinButton("Assembly",  height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Assembly"))
-                            self._btn_physics  = ZinButton("Physics",   height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Physics"))
-                            self._btn_explode  = ZinButton("Explode",   height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Explode"))
-                            self._btn_conveyor = ZinButton("Conveyor",  height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Conveyor"))
-                            self._btn_cad      = ZinButton("CAD",       height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("CAD"))
+                        with ui.ScrollingFrame(height=ui.Pixel(45), vertical_scrollbar_policy=ui.ScrollBarPolicy.SCROLLBAR_ALWAYS_OFF, horizontal_scrollbar_policy=ui.ScrollBarPolicy.SCROLLBAR_AS_NEEDED):
+                            with ui.HStack(height=ui.Pixel(30), style={"margin": 5, "spacing": 5}):
+                                self._btn_measure  = ZinButton("Measure",   height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Measure"))
+                                self._btn_assets   = ZinButton("Builder",   height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Assets"))
+                                self._btn_ref      = ZinButton("Reference", height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Reference"))
+                                self._btn_align    = ZinButton("Align",     height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Align"))
+                                self._btn_assembly = ZinButton("Assembly",  height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Assembly"))
+                                self._btn_physics  = ZinButton("Physics",   height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Physics"))
+                                self._btn_explode  = ZinButton("Explode",   height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Explode"))
+                                self._btn_conveyor = ZinButton("Conveyor",  height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Conveyor"))
+                                self._btn_cad      = ZinButton("CAD",       height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("CAD"))
+                                self._btn_dashboard = ZinButton("Dashboard", height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Dashboard"))
+                                self._btn_info     = ZinButton("Info",      height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Info"))
 
                         # --- B. 內容顯示區 (Content Area) ---
                         self._content_frame = ui.Frame(padding=1)
@@ -154,7 +172,7 @@ class ToolsBoxExtension(omni.ext.IExt):
         self._refresh_content()
 
     def _refresh_content(self):
-        """清空並重新繪製內容區域"""
+        """Clear and redraw the content area"""
         if not self._content_frame:
             return
 
@@ -210,13 +228,23 @@ class ToolsBoxExtension(omni.ext.IExt):
                     self._highlight_tab(self._btn_cad)
                     if self.tool_cad_convert_ui:
                         self.tool_cad_convert_ui.build_ui()
+                        
+                elif self._current_tab == "Dashboard":
+                    self._highlight_tab(self._btn_dashboard)
+                    if self.tool_dashboard:
+                        self.tool_dashboard.build_ui_layout()
+                        
+                elif self._current_tab == "Info":
+                    self._highlight_tab(self._btn_info)
+                    if self.tool_info_ui:
+                        self.tool_info_ui.build_ui()
 
     def _highlight_tab(self, active_btn):
         """Tab button visual feedback via ZinButton.set_state()"""
         for btn in [
             self._btn_align, self._btn_assets, self._btn_measure,
             self._btn_ref, self._btn_assembly, self._btn_physics,
-            self._btn_explode, self._btn_conveyor, self._btn_cad
+            self._btn_explode, self._btn_conveyor, self._btn_cad, self._btn_dashboard, self._btn_info
         ]:
             btn.set_state("default")
         active_btn.set_state("correct")
@@ -243,6 +271,9 @@ class ToolsBoxExtension(omni.ext.IExt):
         # 清理 Reference UI 引用
         self.tool_reference_ui = None
         self.tool_cad_convert_ui = None
+        if hasattr(self, "tool_info_ui") and self.tool_info_ui:
+            self.tool_info_ui.shutdown()
+            self.tool_info_ui = None
         self.tool_reference = None
         self.tool_assets = None
         

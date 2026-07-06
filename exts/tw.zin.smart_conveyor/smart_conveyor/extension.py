@@ -74,7 +74,7 @@ class PCBConveyorController:
         self.prim = self.stage.GetPrimAtPath(self.prim_path)
 
         if not self.prim.IsValid():
-            carb.log_info(f"[tw.zin.smart_conveyor] 偵測到物件已遺失 ({self.prim_path})，自動將其回收到備用池。")
+            carb.log_info(f"[tw.zin.smart_conveyor] Object missing detected ({self.prim_path}), automatically recycling to backup pool.")
             self.state = "FINISHED"
             self.prim = None
             self.waypoints = config.get("waypoints", [])
@@ -146,7 +146,7 @@ class PCBConveyorController:
         return self.xformable.AddXformOp(op_type, UsdGeom.XformOp.PrecisionDouble)
 
     def _apply_world_transform(self, world_pos, world_rot):
-        """將世界座標 (pos, rot) 轉換為局部座標後套用至 xformOp。"""
+        """Convert world coordinates (pos, rot) to local coordinates and apply to xformOp."""
         if not self.translate_op or not self.rotate_op or not self.prim.IsValid():
             return
 
@@ -960,7 +960,7 @@ class SmartConveyorExtension(omni.ext.IExt):
                     btn_del.set_state("error")
 
     def _defer_slope_rebuild(self):
-        """延遲到下一幀才重建 Slope Wizard UI，避免在按鈕回呼中直接清除 UI 樹造成崩潰。"""
+        """Delay Slope Wizard UI rebuild to next frame, avoiding crash when clearing UI tree during button callback."""
         import asyncio
         import omni.kit.app
         async def _deferred():
@@ -1286,7 +1286,7 @@ class SmartConveyorExtension(omni.ext.IExt):
         asyncio.ensure_future(defer_rebuild())
 
     def _pick_waypoint_from_selection(self, wp_model):
-        """讀取目前選取物件的 World Transform 並填入該列 wp_model"""
+        """Read World Transform of currently selected object and fill into wp_model for that row"""
         paths = omni.usd.get_context().get_selection().get_selected_prim_paths()
         if not paths:
             self._update_status("Pick failed: No object selected!", 0xFFFF4444)
@@ -1310,7 +1310,7 @@ class SmartConveyorExtension(omni.ext.IExt):
         self._update_status(f"Picked transform from {prim_path}", 0xFF44CC44)
 
     def _get_world_transform(self, prim_path: str):
-        """輔助函式：取得相對於目標產線(Template PCB 父層)的局部座標與旋轉角度(Euler XYZ in degrees)"""
+        """Helper: Get local coordinates and rotation angles (Euler XYZ in degrees) relative to target production line (Template PCB parent)"""
         stage = omni.usd.get_context().get_stage()
         if not stage:
             return None, None
@@ -2105,7 +2105,7 @@ class SmartConveyorExtension(omni.ext.IExt):
                     if ctrl.prim_path.startswith(f"/World/Spawned_PCBs/{sp['line_id']}_inst"):
                         # 如果遺失，嘗試執行回收邏輯重建它，確保物件池數量不會永久短缺
                         if not stage.GetPrimAtPath(ctrl.prim_path).IsValid():
-                            carb.log_info(f"[tw.zin.smart_conveyor] 嘗試執行回收邏輯：重建遺失的 Prim {ctrl.prim_path}")
+                            carb.log_info(f"[tw.zin.smart_conveyor] Attempting recycling logic: Rebuilding missing Prim {ctrl.prim_path}")
                             new_prim = stage.DefinePrim(ctrl.prim_path, "Xform")
                             new_prim.GetReferences().AddInternalReference(sp["template_path"])
                             
@@ -2383,7 +2383,7 @@ class SmartConveyorExtension(omni.ext.IExt):
     # JSON Config Export / Import
     # ------------------------------------------------------------------
     def export_config_to_json(self) -> str:
-        """將目前 UI 設定序列化為 JSON 字串。"""
+        """Serialize current UI settings to JSON string."""
         cfg = self._build_config_from_ui()
         cfg["prim_paths"] = self._prim_path_model.get_value_as_string()
         cfg["dispatch_interval"] = self._dispatch_interval_model.get_value_as_float()
@@ -2562,7 +2562,7 @@ class SmartConveyorExtension(omni.ext.IExt):
 
 
     def _usd_auto_load(self):
-        """啟動時嘗試從 USD 場景自動還原設定。若 Prim 不存在則靜默略過。"""
+        """Try to auto-restore settings from USD scene on startup. Silently skip if Prim does not exist."""
         try:
             stage = omni.usd.get_context().get_stage()
             if not stage:

@@ -1,7 +1,7 @@
 import omni.ui as ui
 
 class CategoryItem(ui.AbstractItem):
-    """代表樹狀圖中的單一節點"""
+    """Represents a single node in the tree"""
     def __init__(self, text, path):
         super().__init__()
         # 使用 SimpleStringModel 處理文字顯示
@@ -10,26 +10,26 @@ class CategoryItem(ui.AbstractItem):
         self.children = []
 
 class CategoryModel(ui.AbstractItemModel):
-    """管理樹狀圖資料的核心模型"""
+    """Core model managing tree data"""
     def __init__(self):
         super().__init__()
         self.root_nodes = []
 
     def set_nodes(self, nodes):
-        """設定根節點並通知 UI 全面刷新"""
+        """Set root node and notify UI to refresh completely"""
         self.root_nodes = nodes
         self._item_changed(None) # Rule: 通知根節點變更，觸發重繪
 
     def get_item_children(self, item):
-        """Rule: 回傳子節點列表。若列表非空，UI 會自動顯示展開箭頭"""
+        """Rule: Return child nodes list. If not empty, UI automatically shows expand arrow"""
         return item.children if item else self.root_nodes
 
     def get_item_value_model_count(self, item):
-        """Rule 2: Kit 109 必備！告訴系統每一列有 1 個欄位"""
+        """Rule 2: Essential for Kit 109! Tell system each row has 1 column"""
         return 1
 
     def get_item_value_model(self, item, column_id):
-        """回傳指定欄位的模型"""
+        """Return the model for the specified column"""
         if column_id == 0:
             return item.name_model
         return None
@@ -53,7 +53,7 @@ class SmartAsset:
         self.on_metadata_loaded_callbacks = []
 
     def load_metadata_async(self):
-        """觸發非同步讀取 USD 屬性，防阻多次呼叫"""
+        """Trigger async read of USD properties, preventing multiple calls"""
         if self.metadata_loaded:
             return
         asyncio.ensure_future(self._extract_usd_data_async())

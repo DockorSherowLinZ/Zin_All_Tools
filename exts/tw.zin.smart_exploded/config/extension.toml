@@ -7,12 +7,10 @@ description = "一個專業的 USD 物件爆炸圖與合併工具，支援自定
 authors = ["Zin"]
 
 [dependencies]
-"omni.ext" = {}
 "omni.ui" = {}
 "omni.usd" = {}
-"omni.kit.app" = {}
 "omni.kit.uiapp" = {}
-"carb" = {}
+
 
 [[python.module]]
 name = "smart_exploded"

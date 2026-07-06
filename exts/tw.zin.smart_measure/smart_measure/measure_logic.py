@@ -6,7 +6,7 @@ METERS_PER_UNIT_TO_NAME = {
 }
 
 def format_stage_unit(mpu: float) -> str:
-    """根據 Stage 的 metersPerUnit 轉換為易讀的單位字串"""
+    """Convert metersPerUnit to readable unit string based on Stage"""
     for val, name in METERS_PER_UNIT_TO_NAME.items():
         if math.isclose(mpu, val, rel_tol=1e-5):
             return name
@@ -15,7 +15,7 @@ def format_stage_unit(mpu: float) -> str:
     return f"{mpu:.4f} m"
 
 def get_precision(unit: str) -> int:
-    """根據選擇的單位返回建議的小數點位數"""
+    """Return recommended decimal places based on selected unit"""
     return {"mm": 1, "cm": 2, "m": 4, "inch": 2, "ft": 3}.get(unit, 3)
 
 def calculate_gap(b1_min: Tuple[float, float, float], b1_max: Tuple[float, float, float], 

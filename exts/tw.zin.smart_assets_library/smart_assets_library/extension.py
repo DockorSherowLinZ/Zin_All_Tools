@@ -14,11 +14,12 @@ class SmartAssetsLibraryExtension(omni.ext.IExt):
         self._ext_id = ext_id
 
         self._window = SmartAssetsLibraryWindow("Smart Assets Library", width=1000, height=700)
+        self._window.deferred_dock_in("Property")
 
         
         # 定義 ID
         self._action_id = "EMBridge_window_zintools_smart_assets_library"
-        self._menu_path = "Window/ZinTools/Smart Assets Library"
+        self._menu_path = "Zin_All_Tools/Smart Assets Library"
         
         # 註冊選單
         editor_menu = omni.kit.ui.get_editor_menu()

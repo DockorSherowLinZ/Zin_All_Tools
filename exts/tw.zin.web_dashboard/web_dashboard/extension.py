@@ -227,3 +227,17 @@ class ZinWebDashboardExtension(omni.ext.IExt):
             self._httpd.server_close()
         if self._server_thread:
             self._server_thread.join(timeout=1.0)
+
+    def build_ui_layout(self):
+        import omni.ui as ui
+        with ui.VStack(spacing=5, style={"margin": 5}):
+            ui.Label("Zin Web Dashboard", style={"color": 0xFFFFA500, "font_size": 18})
+            ui.Spacer(height=10)
+            with ui.HStack(height=ui.Pixel(30)):
+                ui.Label("Server Status:", width=ui.Pixel(100), style={"color": 0xFFAAAAAA})
+                ui.Label("Running", style={"color": 0xFF44AA44, "font_weight": "bold"})
+            with ui.HStack(height=ui.Pixel(30)):
+                ui.Label("Access URL:", width=ui.Pixel(100), style={"color": 0xFFAAAAAA})
+                ui.Label(f"http://localhost:{self._port}", style={"color": 0xFFDDDDDD})
+            ui.Spacer(height=10)
+            ui.Label("WebRTC Livestream is enabled for remote viewing.", style={"color": 0xFF888888})

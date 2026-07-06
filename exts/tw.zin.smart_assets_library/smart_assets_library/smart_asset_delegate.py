@@ -35,7 +35,7 @@ class SmartAssetPropertyDelegate:
         self._tag_cloud = tag_cloud
 
     def show_asset(self, asset):
-        """根據 SmartAsset 的 Metadata 動態重繪畫面"""
+        """Dynamically redraw panel based on SmartAsset Metadata"""
         if not asset:
             return
 

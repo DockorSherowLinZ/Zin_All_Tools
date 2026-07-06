@@ -19,10 +19,10 @@ import carb
 
 
 # ========================================================
-#  核心邏輯與 UI Widget
+#  Core Logic and UI Widget
 # ========================================================
 class SmartMeasureWidget:
-    """ 核心邏輯與 UI 元件 """
+    """ Core Logic and UI Components """
     DISPLAY_UNITS = [
         ("mm", 0.001), ("cm", 0.01), ("m", 1.0), ("inch", 0.0254), ("ft", 0.3048),
     ]
@@ -39,16 +39,16 @@ class SmartMeasureWidget:
         self._bbox_cache = None
         self._display_unit_size = "cm"
         self._display_mpu_size = 0.01
-        self._custom_precision_size = ui.SimpleIntModel(2)  # 預設 cm 是 2 位
+        self._custom_precision_size = ui.SimpleIntModel(2)  # Default for cm is 2 decimals
         
         self._display_unit_dist = "cm"
         self._display_mpu_dist = 0.01
-        self._custom_precision_dist = ui.SimpleIntModel(2)  # 預設 cm 是 2 位
+        self._custom_precision_dist = ui.SimpleIntModel(2)  # Default for cm is 2 decimals
         
         self._scene_view = None
         self._scene_frame = None
         self._manipulator = None
-        self._show_viewport_overlay = True  # 預設開啟 viewport overlay
+        self._show_viewport_overlay = True  # Viewport overlay enabled by default
         self._stage_event_sub = None
         self._update_sub = None
 
@@ -413,7 +413,7 @@ class SmartMeasureWidget:
         except: pass
 
     def _on_overlay_toggle(self, model):
-        """使用者切換 viewport overlay 開關"""
+        """User toggles viewport overlay"""
         self._show_viewport_overlay = model.get_value_as_bool()
         if not self._show_viewport_overlay:
             self._destroy_scene_overlay()
@@ -421,7 +421,7 @@ class SmartMeasureWidget:
             self._update_scene_view()
 
     def _update_scene_view(self, clear=False):
-        """使用 omni.ui.scene.SceneView 在 Viewport 上繪製測距線段與標籤"""
+        """Use omni.ui.scene.SceneView to draw distance lines and labels on the Viewport"""
 
         # --- 使用者關閉 overlay 或清除模式 ---
         if not self._show_viewport_overlay or clear or not self._last_dist_data:
@@ -541,7 +541,7 @@ class SmartMeasureWidget:
         carb.log_info("[SmartMeasure] Could not auto-bind camera model — overlay may not align with viewport camera")
 
     def _destroy_scene_overlay(self):
-        """安全清除 Scene overlay 資源"""
+        """Safely clear Scene overlay resources"""
         if hasattr(self, '_scene_view') and self._scene_view:
             try:
                 self._scene_view = None

@@ -177,7 +177,7 @@ class ZinExplodedViewModule:
         # 動態取得當前選取的 prim 路徑
         selection = context.get_selection().get_selected_prim_paths()
         if not selection:
-            print("[ZinExplodedViewModule] 警告: 尚未選取任何物件。")
+            print("[ZinExplodedViewModule] Warning: No objects selected.")
             return
             
         distance = self._distance_model.as_float

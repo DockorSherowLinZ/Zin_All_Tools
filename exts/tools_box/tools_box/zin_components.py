@@ -117,12 +117,12 @@ class ZinButton:
 
     @property
     def state(self) -> str:
-        """返回目前狀態字串。"""
+        """Return the current state string."""
         return self._state
 
     @property
     def widget(self) -> ui.Button:
-        """返回底層 omni.ui.Button 實例，供進階操作使用。"""
+        """Return the underlying omni.ui.Button instance for advanced usage."""
         return self._btn
 
     # ── 轉接常用屬性，方便直接操作 ──────────────

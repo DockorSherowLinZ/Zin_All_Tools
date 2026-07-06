@@ -5,7 +5,6 @@ description = "A comprehensive suite including Smart Assets Library, Measure, an
 authors = ["Zin"]
 changelog = "docs/CHANGELOG.md"
 readme = "README.md"
-readme = "README.md"
 category = "ZinTools"
 
 icon = "data/icon.png"
@@ -26,5 +25,8 @@ preview_image = "data/preview.png"
 "tw.zin.smart_physics_setup" = {}
 "tw.zin.smart_conveyor" = {}
 "tw.zin.smart_cad_convert" = {}
+"tw.zin.smart_exploded" = {}
+"tw.zin.web_dashboard" = {}
+"tw.zin.smart_information" = {}
 [[python.module]]
 name = "tools_box"

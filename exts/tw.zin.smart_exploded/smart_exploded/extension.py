@@ -13,7 +13,7 @@ class ZinSmartExplodedExtension(omni.ext.IExt):
     MENU_PATH = f"Zin_All_Tools/{WINDOW_NAME}"
     
     def on_startup(self, ext_id):
-        print("[Zin Smart Exploded View] 擴充模組已啟動 (Interactive Workflow)")
+        print("[Zin Smart Exploded View] Extension started (Interactive Workflow)")
         self._window = None
         self._menu_added = False
 
@@ -59,8 +59,10 @@ class ZinSmartExplodedExtension(omni.ext.IExt):
         }
 
         # 註冊 USD 選取事件監聽器 (Selection Subscription)
-        self._events = omni.usd.get_context().get_selection().get_selection_event_stream()
-        self._selection_sub = self._events.create_subscription_to_pop(self._on_selection_changed)
+        self._events = omni.usd.get_context().get_stage_event_stream()
+        self._selection_sub = self._events.create_subscription_to_pop(
+            lambda e: self._on_selection_changed(e) if e.type == int(omni.usd.StageEventType.SELECTION_CHANGED) else None
+        )
         
         self._build_menu()
 
@@ -106,7 +108,8 @@ class ZinSmartExplodedExtension(omni.ext.IExt):
         """
         建立互動式位移管理員的 UI 佈局
         """
-        with self._window.frame:
+        context = self._window.frame if getattr(self, "_window", None) else ui.VStack()
+        with context:
             with ui.VStack(style=self._style, spacing=10, padding=15):
                 # --- Header 區塊 ---
                 with ui.VStack(spacing=5):
@@ -116,16 +119,16 @@ class ZinSmartExplodedExtension(omni.ext.IExt):
                 ui.Spacer(height=5)
                 
                 # --- Axis Toggles (軸向切換區塊) ---
-                ui.Label("Axis (方向):")
+                ui.Label("Axis:")
                 with ui.HStack(height=30, spacing=10):
-                    self._btn_x = ui.Button("X 軸", clicked_fn=lambda: self._set_axis(0))
-                    self._btn_y = ui.Button("Y 軸", clicked_fn=lambda: self._set_axis(1))
-                    self._btn_z = ui.Button("Z 軸", clicked_fn=lambda: self._set_axis(2))
+                    self._btn_x = ui.Button("X Axis", clicked_fn=lambda: self._set_axis(0))
+                    self._btn_y = ui.Button("Y Axis", clicked_fn=lambda: self._set_axis(1))
+                    self._btn_z = ui.Button("Z Axis", clicked_fn=lambda: self._set_axis(2))
                 
                 ui.Spacer(height=10)
 
                 # --- Large Displacement Slider (即時拖曳滑桿) ---
-                ui.Label("Displacement (位移量):")
+                ui.Label("Displacement:")
                 
                 # 建立浮點數模型並設定範圍 -500 到 500
                 self._displacement_model = ui.SimpleFloatModel(0.0)
@@ -144,8 +147,8 @@ class ZinSmartExplodedExtension(omni.ext.IExt):
 
                 # --- Action Buttons (底部操作按鈕) ---
                 with ui.HStack(height=40, spacing=10):
-                    ui.Button("Reset All (復原歸位)", clicked_fn=self._reset_all)
-                    ui.Button("Commit (清除紀錄)", clicked_fn=self._clear_history)
+                    ui.Button("Reset All", clicked_fn=self._reset_all)
+                    ui.Button("Commit", clicked_fn=self._clear_history)
 
         # 初始化預設軸向為 X 軸
         self._set_axis(0)
@@ -184,10 +187,12 @@ class ZinSmartExplodedExtension(omni.ext.IExt):
         stage = omni.usd.get_context().get_stage()
         
         if not selection or not stage:
-            self._slider.enabled = False
+            if getattr(self, '_slider', None):
+                self._slider.enabled = False
             return
             
-        self._slider.enabled = True
+        if getattr(self, '_slider', None):
+            self._slider.enabled = True
 
         for path in selection:
             prim = stage.GetPrimAtPath(path)
@@ -226,7 +231,8 @@ class ZinSmartExplodedExtension(omni.ext.IExt):
             
             # 暫時阻擋滑桿改變事件，避免觸發多餘的場景更新
             self._ignore_slider_event = True
-            self._displacement_model.as_float = val
+            if getattr(self, '_displacement_model', None):
+                self._displacement_model.as_float = val
             self._ignore_slider_event = False
 
     def _on_slider_changed(self, model):
@@ -298,7 +304,7 @@ class ZinSmartExplodedExtension(omni.ext.IExt):
         """
         清理資源：關閉視窗、解除事件監聽、清空快取
         """
-        print("[Zin Smart Exploded View] 擴充模組已關閉")
+        print("[Zin Smart Exploded View] Extension shutdown")
         self._remove_menu()
         self._selection_sub = None
         
