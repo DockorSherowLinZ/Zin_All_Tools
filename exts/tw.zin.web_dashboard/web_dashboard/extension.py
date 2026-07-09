@@ -122,10 +122,6 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
                                     except Exception: pass
                                     
                             elif action == "update_all_lines":
-                                speed = data.get("speed")
-                                interval = data.get("interval")
-                                initial_delay = data.get("initial_delay")
-                                
                                 if hasattr(instance, '_multi_line_models'):
                                     for ml in instance._multi_line_models:
                                         ml["override"].set_value(True)
@@ -152,7 +148,6 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
                                         await instance.load_config_from_url_async(url)
                                     asyncio.ensure_future(do_load())
                                     
-                        global MAIN_LOOP
                         if MAIN_LOOP:
                             asyncio.run_coroutine_threadsafe(run_command(), MAIN_LOOP)
             except ImportError:
@@ -209,6 +204,9 @@ class ZinWebDashboardExtension(omni.ext.IExt):
         if not manager.is_extension_enabled(webrtc_ext_name):
             print(f"[tw.zin.web_dashboard] Enabling {webrtc_ext_name}")
             manager.set_extension_enabled_immediate(webrtc_ext_name, True)
+            
+        self._window = None
+        self._build_menu()
 
     def _start_server(self):
         try:
@@ -227,6 +225,43 @@ class ZinWebDashboardExtension(omni.ext.IExt):
             self._httpd.server_close()
         if self._server_thread:
             self._server_thread.join(timeout=1.0)
+            
+        if getattr(self, '_window', None) is not None:
+            self._window.destroy()
+            self._window = None
+        self._remove_menu()
+
+    def _build_menu(self):
+        try:
+            import omni.kit.menu.utils
+            self._menu = omni.kit.menu.utils.add_menu_items([
+                omni.kit.menu.utils.MenuItemDescription(
+                    name="Web Dashboard",
+                    onclick_fn=lambda *args: self._toggle_window(None, True)
+                )
+            ], "Zin_All_Tools")
+        except Exception: pass
+
+    def _remove_menu(self):
+        try:
+            import omni.kit.menu.utils
+            if hasattr(self, '_menu') and self._menu:
+                omni.kit.menu.utils.remove_menu_items(self._menu, "Zin_All_Tools")
+                self._menu = None
+        except Exception: pass
+
+    def _toggle_window(self, menu, value):
+        import omni.ui as ui
+        if value:
+            if getattr(self, '_window', None) is None:
+                self._window = ui.Window("Web Dashboard", width=300, height=150)
+                with self._window.frame:
+                    self.build_ui_layout()
+            else:
+                self._window.visible = True
+        else:
+            if getattr(self, '_window', None) is not None:
+                self._window.visible = False
 
     def build_ui_layout(self):
         import omni.ui as ui
