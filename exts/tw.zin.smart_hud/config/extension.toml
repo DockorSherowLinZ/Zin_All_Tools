@@ -1,0 +1,17 @@
+[package]
+title = "Smart HUD"
+version = "1.0.0"
+description = "Phase 7 Graybox Digital Twin HUD for DSX AI Factory"
+authors = ["Zin"]
+repository = "https://github.com/DockorSherowLinZ/Zin_All_Tools"
+keywords = ["omniverse", "kit", "extension", "tw.zin", "hud"]
+category = "ZinTools"
+
+[dependencies]
+"omni.ui" = {}
+"omni.ui.scene" = {}
+"omni.usd" = {}
+"omni.kit.viewport.utility" = {}
+
+[[python.module]]
+name = "smart_hud"

@@ -28,5 +28,6 @@ preview_image = "data/preview.png"
 "tw.zin.smart_exploded" = {}
 "tw.zin.web_dashboard" = {}
 "tw.zin.smart_information" = {}
+"tw.zin.smart_hud" = {}
 [[python.module]]
 name = "tools_box"

@@ -19,6 +19,7 @@ from smart_physics_setup.extension import SmartPhysicsSetupExtension
 from smart_conveyor.extension import SmartConveyorExtension
 from smart_cad_convert.extension import SmartCadConvertUI
 from smart_information.extension import SmartInformationUI
+from smart_hud.extension import SmartHudUI
 
 class ToolsBoxExtension(omni.ext.IExt):
     WINDOW_NAME = "Zin Tools Box"
@@ -83,6 +84,9 @@ class ToolsBoxExtension(omni.ext.IExt):
         # --- Smart Information tool ---
         self.tool_info_ui = SmartInformationUI()
         self.tool_info_ui.startup()
+        
+        # --- Smart HUD tool ---
+        self.tool_hud_ui = SmartHudUI()
 
         # 記錄當前啟用的 Tab 名稱
         self._current_tab = "Measure" 
@@ -149,6 +153,7 @@ class ToolsBoxExtension(omni.ext.IExt):
                                 self._btn_cad      = ZinButton("CAD",       height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("CAD"))
                                 self._btn_dashboard = ZinButton("Dashboard", height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Dashboard"))
                                 self._btn_info     = ZinButton("Info",      height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Info"))
+                                self._btn_hud      = ZinButton("HUD",       height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("HUD"))
 
                         # --- B. 內容顯示區 (Content Area) ---
                         self._content_frame = ui.Frame(padding=1)
@@ -238,13 +243,18 @@ class ToolsBoxExtension(omni.ext.IExt):
                     self._highlight_tab(self._btn_info)
                     if self.tool_info_ui:
                         self.tool_info_ui.build_ui()
+                        
+                elif self._current_tab == "HUD":
+                    self._highlight_tab(self._btn_hud)
+                    if self.tool_hud_ui:
+                        self.tool_hud_ui.build_ui()
 
     def _highlight_tab(self, active_btn):
         """Tab button visual feedback via ZinButton.set_state()"""
         for btn in [
             self._btn_align, self._btn_assets, self._btn_measure,
             self._btn_ref, self._btn_assembly, self._btn_physics,
-            self._btn_explode, self._btn_conveyor, self._btn_cad, self._btn_dashboard, self._btn_info
+            self._btn_explode, self._btn_conveyor, self._btn_cad, self._btn_dashboard, self._btn_info, self._btn_hud
         ]:
             btn.set_state("default")
         active_btn.set_state("correct")
@@ -274,6 +284,11 @@ class ToolsBoxExtension(omni.ext.IExt):
         if hasattr(self, "tool_info_ui") and self.tool_info_ui:
             self.tool_info_ui.shutdown()
             self.tool_info_ui = None
+            
+        if hasattr(self, "tool_hud_ui") and self.tool_hud_ui:
+            self.tool_hud_ui.shutdown()
+            self.tool_hud_ui = None
+            
         self.tool_reference = None
         self.tool_assets = None
         
