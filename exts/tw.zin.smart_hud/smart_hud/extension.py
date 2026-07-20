@@ -496,22 +496,50 @@ class SmartHudUI:
             attr_cont.Set(content)
 
             # 2. Add smart_info_panel attributes (aif:core and aif:spec)
+            # 遵循 AIF Pipeline Samples 綁定規範 (AIF-MANAGED, Locked)
             aif_attrs = {
-                "aif:core:assetClass": topic,
-                "aif:core:modelNumber": subject,
-                "aif:core:manufacturer": "Inventec",
-                "aif:core:assetDescription": content,
-                "aif:spec:status": "Active"
+                "aif:core:assetClass": {
+                    "value": topic, 
+                    "doc": "Class of AI Factory Equipment"
+                },
+                "aif:core:modelNumber": {
+                    "value": subject, 
+                    "doc": "Equipment model number"
+                },
+                "aif:core:manufacturer": {
+                    "value": "Inventec", 
+                    "doc": "Equipment manufacturer name"
+                },
+                "aif:core:assetDescription": {
+                    "value": content, 
+                    "doc": "Human Readable Description of Asset"
+                },
+                "aif:spec:status": {
+                    "value": "Active", 
+                    "doc": "Current status of the equipment"
+                }
             }
 
-            
-            for attr_name, value in aif_attrs.items():
+            for attr_name, attr_info in aif_attrs.items():
                 attr = prim.GetAttribute(attr_name)
                 if not attr:
                     attr = prim.CreateAttribute(attr_name, Sdf.ValueTypeNames.String)
-                attr.Set(value)
+                attr.Set(attr_info["value"])
                 
-            print(f"[Smart HUD] ✅ Applied HUD and Info Panel attributes to {path}")
+                # 遵循 AIF 規範：加入 [AIF-MANAGED] 標籤與鎖定屬性
+                managed_doc = f"{attr_info['doc']} [AIF-MANAGED]"
+                attr.SetDocumentation(managed_doc)
+                
+                custom_data = {
+                    'omni': {
+                        'kit': {
+                            'locked': True
+                        }
+                    }
+                }
+                attr.SetCustomData(custom_data)
+                
+            print(f"[Smart HUD] ✅ Applied HUD and AIF-MANAGED attributes to {path}")
 
     def _remove_attributes_from_selected(self):
         import omni.usd
