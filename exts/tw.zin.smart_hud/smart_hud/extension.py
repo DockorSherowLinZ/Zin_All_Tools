@@ -321,17 +321,17 @@ class GrayboxHUDEngine:
             
             # Sync Checkbox state from the UI instance to the Engine
             # By passing the state when updating the visibility
-            if "dynamic_hud_vbox" in item:
+            if "dynamic_hud_vbox" in item and item["dynamic_hud_vbox"]:
                 item["dynamic_hud_vbox"].visible = hud_data.get("show_dynamic", True)
-            if "static_hud_frame" in item:
+            if "static_hud_frame" in item and item["static_hud_frame"]:
                 item["static_hud_frame"].visible = hud_data.get("show_static", True)
                 
             # 處理全不勾選時隱藏整個背景框
             if not hud_data.get("show_dynamic", True) and not hud_data.get("show_static", True):
-                if "bg_rect" in item:
+                if "bg_rect" in item and item["bg_rect"]:
                     item["bg_rect"].visible = False
             else:
-                if "bg_rect" in item:
+                if "bg_rect" in item and item["bg_rect"]:
                     item["bg_rect"].visible = True
 
             transform_matrix = [
