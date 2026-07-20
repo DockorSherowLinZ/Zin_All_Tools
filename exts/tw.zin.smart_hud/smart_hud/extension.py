@@ -14,8 +14,9 @@ class UsdSelectionAgent:
     Agent class to handle USD interactions safely and decoupled from UI.
     Listens for stage selection events and queries the machine_type.
     """
-    def __init__(self, callback):
+    def __init__(self, callback, ui_instance):
         self._callback = callback
+        self._ui_instance = ui_instance
         self._context = omni.usd.get_context()
         self._sub = self._context.get_stage_event_stream().create_subscription_to_pop(
             self._on_stage_event, name="DSX_HUD_Selection_Agent"
@@ -94,7 +95,16 @@ class UsdSelectionAgent:
             else:
                 translation = world_transform.ExtractTranslation()
             
-            self._callback({"type": m_type, "sub": sub_title, "content": content}, translation)
+            # Check visibility settings
+            show_dynamic = True
+            show_static = True
+            if self._ui_instance:
+                if hasattr(self._ui_instance, "cb_dynamic"):
+                    show_dynamic = self._ui_instance.cb_dynamic.model.get_value_as_bool()
+                if hasattr(self._ui_instance, "cb_static"):
+                    show_static = self._ui_instance.cb_static.model.get_value_as_bool()
+
+            self._callback({"type": m_type, "sub": sub_title, "content": content, "show_dynamic": show_dynamic, "show_static": show_static}, translation)
         else:
             self._callback(None, None)
 
@@ -124,7 +134,7 @@ class HUDViewModel:
 # HUD Engine
 # ==============================================================================
 class GrayboxHUDEngine:
-    def __init__(self):
+    def __init__(self, ui_instance):
         self.view_model = HUDViewModel()
         self.ui_pool = {} 
         self.scene_view = None
@@ -132,12 +142,13 @@ class GrayboxHUDEngine:
         self._telemetry_task = None
         self._selection_agent = None
         self._color_sub = None
+        self._ui_instance = ui_instance
         
         self._build_ui()
         self._start_telemetry()
         
         # Initialize Kit USD Selection Agent
-        self._selection_agent = UsdSelectionAgent(self.on_selection_changed)
+        self._selection_agent = UsdSelectionAgent(self.on_selection_changed, self._ui_instance)
 
     def _build_ui(self):
         import omni.kit.viewport.utility
@@ -238,7 +249,8 @@ class GrayboxHUDEngine:
                     ui.Spacer(height=10)
                     
                     # ── 動態 HUD 區塊 ──
-                    with ui.VStack(spacing=2, visible=self.cb_dynamic.model.get_value_as_bool()):
+                    self.dynamic_hud_vbox = ui.VStack(spacing=2)
+                    with self.dynamic_hud_vbox:
                         ui.Label("", model=self.view_model.generic_title, style={"color": 0xFFFFFFFF, "font_size": 20, "weight": "bold"})
                         ui.Label("", model=self.view_model.generic_sub, style={"color": 0xFFFFAA00, "font_size": 14})
                         ui.Label("", model=self.view_model.generic_content, style={"color": 0xFFAAAAAA, "font_size": 14})
@@ -248,7 +260,8 @@ class GrayboxHUDEngine:
                         ui.Spacer(height=5)
                     
                     # ── 靜態 AIF Metadata 區塊 (移植自 Smart Info Panel) ──
-                    with ui.CollapsableFrame("Factory Info", collapsed=False, style={"color": 0xFF00AAFF, "font_size": 14}, visible=self.cb_static.model.get_value_as_bool()):
+                    self.static_hud_frame = ui.CollapsableFrame("Factory Info", collapsed=False, style={"color": 0xFF00AAFF, "font_size": 14})
+                    with self.static_hud_frame:
                         with ui.VStack(spacing=2):
                             with ui.HStack(height=16):
                                 ui.Label("Asset Class:", width=90, style={"color": 0xFF888888, "font_size": 12})
@@ -290,6 +303,10 @@ class GrayboxHUDEngine:
 
             # Sync Checkbox state from the UI instance to the Engine
             # By passing the state when updating the visibility
+            if hasattr(self, "dynamic_hud_vbox"):
+                self.dynamic_hud_vbox.visible = hud_data.get("show_dynamic", True)
+            if hasattr(self, "static_hud_frame"):
+                self.static_hud_frame.visible = hud_data.get("show_static", True)
             
             item = self.ui_pool[m_type]
             transform_matrix = [
@@ -613,7 +630,7 @@ class SmartHudUI:
             self.toggle_btn.text = "Turn OFF"
             self.toggle_btn.set_style(self._STYLE_ERROR)
             if not self.engine:
-                self.engine = GrayboxHUDEngine()
+                self.engine = GrayboxHUDEngine(self)
         else:
             self.toggle_btn.text = "Turn ON"
             self.toggle_btn.set_style(self._STYLE_CORRECT)
