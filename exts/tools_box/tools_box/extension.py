@@ -132,7 +132,7 @@ class ToolsBoxExtension(omni.ext.IExt):
         if value:
             if not self._window:
                 # --- 2. 建立主視窗 ---
-                self._window = ui.Window(self.WINDOW_NAME, width=600, height=600)
+                self._window = ui.Window(self.WINDOW_NAME, width=600, height=600, dockPreference=ui.DockPreference.RIGHT_BOTTOM)
                 self._window.deferred_dock_in("Property")
                 self._window.set_visibility_changed_fn(self._on_visibility_changed)
 

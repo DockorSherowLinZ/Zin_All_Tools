@@ -42,41 +42,42 @@ class SmartInformationUI:
         with ui.VStack(spacing=5, padding=12, alignment=ui.Alignment.TOP):
             with ui.VStack(spacing=2, height=0):
                 with ui.HStack(height=18):
-                    ui.Label("Target Prim :", width=ui.Pixel(80), style={"color": 0x888888FF})
+                    ui.Label("Target Prim :", width=ui.Pixel(80), style={"color": 0xFF888888})
                     self._target_label = ui.Label("--", style={"color": 0xFFDDDDDD})
                 with ui.HStack(height=18):
-                    ui.Label("Status     :", width=ui.Pixel(80), style={"color": 0x888888FF})
+                    ui.Label("Status     :", width=ui.Pixel(80), style={"color": 0xFF888888})
                     self._status_label = ui.Label("--", style={"color": 0xFFDDDDDD})
+            
+            ui.Spacer(height=8)
+            
+            # Add / Edit Section
+            with ui.CollapsableFrame("Add / Edit Metadata", collapsed=False, height=0, style={"color": 0xFFFFFFFF}):
+                with ui.Frame(style={"background_color": 0x33000000, "border_radius": 4}):
+                    with ui.VStack(spacing=4, padding=6):
+                        with ui.HStack(height=20, spacing=4):
+                            ui.Label("Topic:", width=60, style={"color": 0xFFDDDDDD})
+                            self._edit_topic = ui.StringField(style={"color": 0xFFDDDDDD})
+                        with ui.HStack(height=20, spacing=4):
+                            ui.Label("Subject:", width=60, style={"color": 0xFFDDDDDD})
+                            self._edit_subject = ui.StringField(style={"color": 0xFFDDDDDD})
+                        with ui.HStack(height=20, spacing=4):
+                            ui.Label("Content:", width=60, style={"color": 0xFFDDDDDD})
+                            self._edit_content = ui.StringField(style={"color": 0xFFDDDDDD})
+                        
+                        with ui.HStack(height=24, spacing=4):
+                            # Zin All Tools global styles
+                            ui.Button("Add / Update", name="Correct", clicked_fn=self._on_add_metadata_clicked)
+                            ui.Button("Remove", name="Error", clicked_fn=self._on_remove_metadata_clicked)
+
+            ui.Spacer(height=4)
+            # Export Section
+            ui.Button("Export to JSON", height=30, clicked_fn=self._on_export_json_clicked)
             
             ui.Spacer(height=8)
             
             # Dynamic Content Area
             with ui.ScrollingFrame(height=ui.Fraction(1), style={"background_color": 0x00000000}):
                 self._dynamic_vbox = ui.VStack(spacing=5)
-            
-            ui.Spacer(height=8)
-            
-            # Add / Edit Section
-            with ui.CollapsableFrame("Add / Edit Metadata", collapsed=False, height=0, style={"color": 0xFF00AAFF}):
-                with ui.Frame(style={"background_color": 0x33000000, "border_radius": 4}):
-                    with ui.VStack(spacing=4, padding=6):
-                        with ui.HStack(height=20, spacing=4):
-                            ui.Label("Topic:", width=60)
-                            self._edit_topic = ui.StringField()
-                        with ui.HStack(height=20, spacing=4):
-                            ui.Label("Subject:", width=60)
-                            self._edit_subject = ui.StringField()
-                        with ui.HStack(height=20, spacing=4):
-                            ui.Label("Content:", width=60)
-                            self._edit_content = ui.StringField()
-                        
-                        with ui.HStack(height=24, spacing=4):
-                            ui.Button("Add / Update", clicked_fn=self._on_add_metadata_clicked, style={"background_color": 0xFF44AA44})
-                            ui.Button("Remove", clicked_fn=self._on_remove_metadata_clicked, style={"background_color": 0xFFAA4444})
-
-            ui.Spacer(height=4)
-            # Export Section
-            ui.Button("Export to JSON", height=30, clicked_fn=self._on_export_json_clicked, style={"background_color": 0xFF888822, "font_weight": "bold"})
             
         self.refresh_data()
 

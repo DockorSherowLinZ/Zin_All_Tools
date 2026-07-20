@@ -44,11 +44,17 @@ class UsdSelectionAgent:
         if attr and attr.IsValid():
             m_type = attr.Get()
             
+            sub_title_attr = prim.GetAttribute("hud_sub_title")
+            sub_title = sub_title_attr.Get() if sub_title_attr and sub_title_attr.IsValid() else ""
+            
+            content_attr = prim.GetAttribute("hud_content")
+            content = content_attr.Get() if content_attr and content_attr.IsValid() else ""
+            
             # Extract world transform
             xform_cache = UsdGeom.XformCache(Usd.TimeCode.Default())
             world_transform = xform_cache.GetLocalToWorldTransform(prim)
             translation = world_transform.ExtractTranslation()
-            self._callback(m_type, translation)
+            self._callback({"type": m_type, "sub": sub_title, "content": content}, translation)
         else:
             self._callback(None, None)
 
@@ -67,6 +73,11 @@ class HUDViewModel:
         self.robot_state = ui.SimpleStringModel("STANDBY")
         self.manual_station_name = ui.SimpleStringModel("Manual Assembly #1")
         self.manual_takt_time_pct = ui.SimpleFloatModel(100.0)
+        
+        # Generic models for custom HUDs
+        self.generic_title = ui.SimpleStringModel("Custom Item")
+        self.generic_sub = ui.SimpleStringModel("Sub Title")
+        self.generic_content = ui.SimpleStringModel("Status: Active")
 
 
 # ==============================================================================
@@ -177,12 +188,41 @@ class GrayboxHUDEngine:
             "border_radius": 3
         }
 
-    def on_selection_changed(self, machine_type, translation):
+    def _build_generic_ui(self):
+        with ui.ZStack():
+            ui.Rectangle(style={"background_color": 0xCC1A1E24, "border_color": 0xCC00FFFF, "border_width": 2, "border_radius": 5})
+            with ui.HStack():
+                ui.Spacer(width=20)
+                with ui.VStack(spacing=5):
+                    ui.Spacer(height=15)
+                    ui.Label("", model=self.view_model.generic_title, style={"color": 0xFFFFFFFF, "font_size": 20, "weight": "bold"})
+                    ui.Label("", model=self.view_model.generic_sub, style={"color": 0xFFFFAA00, "font_size": 14})
+                    ui.Spacer(height=5)
+                    ui.Label("", model=self.view_model.generic_content, style={"color": 0xFFAAAAAA, "font_size": 14})
+                    ui.Spacer(height=15)
+                ui.Spacer(width=20)
+
+    def on_selection_changed(self, hud_data, translation):
         for key, pool_item in self.ui_pool.items():
             pool_item["transform"].visible = False
             
-        if machine_type in self.ui_pool and translation is not None:
-            item = self.ui_pool[machine_type]
+        if hud_data and translation is not None:
+            m_type = hud_data.get("type", "")
+            
+            # Create a generic widget pool item if not a preset
+            if m_type not in self.ui_pool:
+                if self.scene_view and self.scene_view.scene:
+                    with self.scene_view.scene:
+                        self.ui_pool[m_type] = self._create_pooled_widget(m_type, self._build_generic_ui)
+                else:
+                    return # Safe check if scene is destroyed
+                
+            # Update generic models
+            self.view_model.generic_title.set_value(m_type)
+            self.view_model.generic_sub.set_value(hud_data.get("sub", ""))
+            self.view_model.generic_content.set_value(hud_data.get("content", ""))
+
+            item = self.ui_pool[m_type]
             transform_matrix = [
                 1, 0, 0, 0,
                 0, 1, 0, 0,
@@ -241,6 +281,24 @@ class SmartHudUI:
     UI Class managed by Zin Tools Box.
     Handles the toggle logic for the HUD Engine.
     """
+    
+    # Define styles locally to ensure they render correctly even inside nested frames
+    _STYLE_DEFAULT = {
+        "Button": {"background_color": 0xFF343432, "border_radius": 4, "margin": 2},
+        "Button:hovered": {"background_color": 0xFF4A4A48},
+        "Button:pressed": {"background_color": 0xFF5A5A58},
+    }
+    _STYLE_CORRECT = {
+        "Button": {"background_color": 0xFF2A5E2A, "border_radius": 4, "margin": 2},
+        "Button:hovered": {"background_color": 0xFF33703A},
+        "Button:pressed": {"background_color": 0xFF44AA44},
+    }
+    _STYLE_ERROR = {
+        "Button": {"background_color": 0xFF5E2A2A, "border_radius": 4, "margin": 2},
+        "Button:hovered": {"background_color": 0xFF703333},
+        "Button:pressed": {"background_color": 0xFFAA4444},
+    }
+
     def __init__(self):
         self.engine = None
         self.is_enabled = False
@@ -248,35 +306,145 @@ class SmartHudUI:
     def build_ui(self):
         """Builds the control panel inside the Zin Tools Box 'HUD' tab."""
         with ui.VStack(spacing=10):
-            ui.Label("Digital Twin HUD Control", style={"font_size": 18, "color": 0xFFDDDDDD})
             ui.Spacer(height=10)
             
             with ui.HStack(height=30, spacing=10):
-                ui.Label("Enable 3D HUD Overlay:", width=150)
-                
                 # Toggle Button
                 button_text = "Turn OFF" if self.is_enabled else "Turn ON"
-                button_color = 0xFF4444FF if self.is_enabled else 0xFF44AA44
+                button_style = self._STYLE_ERROR if self.is_enabled else self._STYLE_CORRECT
                 
                 self.toggle_btn = ui.Button(
                     button_text, 
-                    style={"background_color": button_color, "border_radius": 4},
+                    style=button_style,
                     clicked_fn=self._on_toggle_clicked
+                )
+                
+                ui.Button(
+                    "Generate Test Graybox Scene",
+                    style=self._STYLE_DEFAULT,
+                    clicked_fn=self._create_test_scene,
+                    tooltip="Creates 3 Graybox test machines with 'machine_type' attributes properly configured."
                 )
             
             ui.Spacer(height=20)
-            ui.Label("Instructions:\n1. Turn ON the HUD.\n2. Click any Graybox Machine in the viewport.\n3. The data panel will float above it.", 
-                     style={"color": 0xFFAAAAAA, "font_size": 14})
+            with ui.CollapsableFrame("Add / Edit HUD Metadata", collapsed=False, style={"font_size": 16, "color": 0xFFFFFFFF}):
+                with ui.VStack(spacing=8):
+                    ui.Spacer(height=5)
+                    ui.Label("Add custom attributes to make selected models compatible with HUD and Info Panel:", 
+                             style={"color": 0xFFAAAAAA, "font_size": 14})
+                    
+                    with ui.HStack(height=24, spacing=10):
+                        ui.Label("Topic (Machine Type):", width=140, style={"color": 0xFFDDDDDD})
+                        self.topic_field = ui.StringField(style={"color": 0xFFDDDDDD})
+                        self.topic_field.model.set_value("Conveyor")
+                        
+                    with ui.HStack(height=24, spacing=10):
+                        ui.Label("Subject (Sub Title):", width=140, style={"color": 0xFFDDDDDD})
+                        self.subject_field = ui.StringField(style={"color": 0xFFDDDDDD})
+                        self.subject_field.model.set_value("Industrial Component")
+                        
+                    with ui.HStack(height=24, spacing=10):
+                        ui.Label("Content:", width=140, style={"color": 0xFFDDDDDD})
+                        self.content_field = ui.StringField(style={"color": 0xFFDDDDDD})
+                        self.content_field.model.set_value("Status: Active")
+                    
+                    ui.Spacer(height=5)
+                    with ui.HStack(spacing=10, height=30):
+                        ui.Button(
+                            "Add / Update",
+                            style=self._STYLE_CORRECT,
+                            clicked_fn=self._apply_attributes_to_selected,
+                            tooltip="Adds or updates HUD and AIF metadata attributes for selected models."
+                        )
+                        ui.Button(
+                            "Remove",
+                            style=self._STYLE_ERROR,
+                            clicked_fn=self._remove_attributes_from_selected,
+                            tooltip="Removes HUD attributes from selected models."
+                        )
+
+            ui.Spacer()
+
+    def _apply_attributes_to_selected(self):
+        import omni.usd
+        from pxr import Sdf
+        
+        context = omni.usd.get_context()
+        stage = context.get_stage()
+        if not stage:
+            print("[Smart HUD] ❌ Error: No USD stage is currently open.")
+            return
+
+        selection = context.get_selection().get_selected_prim_paths()
+        if not selection:
+            print("[Smart HUD] ⚠️ No models selected. Please select a model in the stage first.")
+            return
+
+        topic = self.topic_field.model.get_value_as_string()
+        subject = self.subject_field.model.get_value_as_string()
+        content = self.content_field.model.get_value_as_string()
+
+        for path in selection:
+            prim = stage.GetPrimAtPath(path)
+            if not prim or not prim.IsValid():
+                continue
+
+            # 1. Add smart_hud attributes
+            attr_type = prim.GetAttribute("machine_type")
+            if not attr_type: attr_type = prim.CreateAttribute("machine_type", Sdf.ValueTypeNames.String)
+            attr_type.Set(topic)
             
-            ui.Spacer(height=20)
-            ui.Label("Quick Start Demo", style={"font_size": 16, "color": 0xFFDDDDDD})
-            ui.Button(
-                "Generate Test Graybox Scene",
-                height=30,
-                style={"background_color": 0xFF444444, "border_radius": 4},
-                clicked_fn=self._create_test_scene,
-                tooltip="Creates 3 Graybox test machines with 'machine_type' attributes properly configured."
-            )
+            attr_sub = prim.GetAttribute("hud_sub_title")
+            if not attr_sub: attr_sub = prim.CreateAttribute("hud_sub_title", Sdf.ValueTypeNames.String)
+            attr_sub.Set(subject)
+            
+            attr_cont = prim.GetAttribute("hud_content")
+            if not attr_cont: attr_cont = prim.CreateAttribute("hud_content", Sdf.ValueTypeNames.String)
+            attr_cont.Set(content)
+
+            # 2. Add smart_info_panel attributes (aif:core and aif:spec)
+            aif_attrs = {
+                "aif:core:assetClass": topic,
+                "aif:core:modelNumber": subject,
+                "aif:core:manufacturer": "Inventec",
+                "aif:core:assetDescription": content,
+                "aif:spec:status": "Active"
+            }
+
+            
+            for attr_name, value in aif_attrs.items():
+                attr = prim.GetAttribute(attr_name)
+                if not attr:
+                    attr = prim.CreateAttribute(attr_name, Sdf.ValueTypeNames.String)
+                attr.Set(value)
+                
+            print(f"[Smart HUD] ✅ Applied HUD and Info Panel attributes to {path}")
+
+    def _remove_attributes_from_selected(self):
+        import omni.usd
+        
+        context = omni.usd.get_context()
+        stage = context.get_stage()
+        if not stage: return
+
+        selection = context.get_selection().get_selected_prim_paths()
+        if not selection: return
+
+        attrs_to_remove = [
+            "machine_type", "hud_sub_title", "hud_content",
+            "aif:core:assetClass", "aif:core:modelNumber", 
+            "aif:core:manufacturer", "aif:core:assetDescription", 
+            "aif:spec:status"
+        ]
+
+        for path in selection:
+            prim = stage.GetPrimAtPath(path)
+            if not prim or not prim.IsValid(): continue
+            
+            for attr_name in attrs_to_remove:
+                prim.RemoveProperty(attr_name)
+                
+            print(f"[Smart HUD] 🗑️ Removed HUD and Info Panel attributes from {path}")
 
     def _create_test_scene(self):
         import omni.usd
@@ -322,12 +490,12 @@ class SmartHudUI:
         
         if self.is_enabled:
             self.toggle_btn.text = "Turn OFF"
-            self.toggle_btn.set_style({"background_color": 0xFF4444FF, "border_radius": 4})
+            self.toggle_btn.set_style(self._STYLE_ERROR)
             if not self.engine:
                 self.engine = GrayboxHUDEngine()
         else:
             self.toggle_btn.text = "Turn ON"
-            self.toggle_btn.set_style({"background_color": 0xFF44AA44, "border_radius": 4})
+            self.toggle_btn.set_style(self._STYLE_CORRECT)
             if self.engine:
                 self.engine.destroy()
                 self.engine = None
