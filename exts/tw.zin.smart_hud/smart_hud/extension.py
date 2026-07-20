@@ -270,18 +270,21 @@ class GrayboxHUDEngine:
                                 ui.Spacer(height=5)
                             
                             # ── 靜態 AIF Metadata 區塊 (移植自 Smart Info Panel) ──
-                            pool_item_dict["static_hud_frame"] = ui.CollapsableFrame("Factory Info", collapsed=False, style={"color": 0xFF00AAFF, "font_size": 14})
+                            # 為了避免在 3D 場景中點擊 CollapsableFrame 觸發 Omniverse 預設的射線點擊 (Raycast/Selection) 
+                            # 導致選取焦點亂跑，這裡改用普通的 Frame 或是 Vstack 來代替。
+                            pool_item_dict["static_hud_frame"] = ui.VStack(spacing=2)
                             with pool_item_dict["static_hud_frame"]:
-                                with ui.VStack(spacing=2):
-                                    with ui.HStack(height=16):
-                                        ui.Label("Asset Class:", width=90, style={"color": 0xFF888888, "font_size": 12})
-                                        ui.Label("", model=self.view_model.generic_title, style={"color": 0xFFDDDDDD, "font_size": 12})
-                                    with ui.HStack(height=16):
-                                        ui.Label("Model No:", width=90, style={"color": 0xFF888888, "font_size": 12})
-                                        ui.Label("", model=self.view_model.generic_sub, style={"color": 0xFFDDDDDD, "font_size": 12})
-                                    with ui.HStack(height=16):
-                                        ui.Label("Status:", width=90, style={"color": 0xFF888888, "font_size": 12})
-                                        ui.Label("Active", style={"color": 0xFF44AA44, "font_size": 12})
+                                ui.Label("Factory Info", style={"color": 0xFF00AAFF, "font_size": 14, "weight": "bold"})
+                                ui.Spacer(height=3)
+                                with ui.HStack(height=16):
+                                    ui.Label("Asset Class:", width=90, style={"color": 0xFF888888, "font_size": 12})
+                                    ui.Label("", model=self.view_model.generic_title, style={"color": 0xFFDDDDDD, "font_size": 12})
+                                with ui.HStack(height=16):
+                                    ui.Label("Model No:", width=90, style={"color": 0xFF888888, "font_size": 12})
+                                    ui.Label("", model=self.view_model.generic_sub, style={"color": 0xFFDDDDDD, "font_size": 12})
+                                with ui.HStack(height=16):
+                                    ui.Label("Status:", width=90, style={"color": 0xFF888888, "font_size": 12})
+                                    ui.Label("Active", style={"color": 0xFF44AA44, "font_size": 12})
                             
                             ui.Spacer(height=10)
                         ui.Spacer(width=15)
