@@ -266,6 +266,7 @@ class GrayboxHUDEngine:
                                 ui.Label("", model=self.view_model.generic_content, style={"color": 0xFFAAAAAA, "font_size": 14})
                                 
                                 ui.Spacer(height=5)
+                                # 這裡的 Line 也被包在 dynamic_hud_vbox 裡面，所以當它隱藏時，這條線也會一起隱藏
                                 ui.Line(style={"color": 0xFF444444, "border_width": 1})
                                 ui.Spacer(height=5)
                             
