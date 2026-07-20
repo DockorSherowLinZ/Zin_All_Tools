@@ -432,17 +432,17 @@ class SmartHudUI:
                              style={"color": 0xFFAAAAAA, "font_size": 14})
                     
                     with ui.HStack(height=24, spacing=10):
-                        ui.Label("Topic (Machine Type):", width=140, style={"color": 0xFFDDDDDD})
+                        ui.Label("Topic (Machine Type):", width=140, style={"color": 0xFFDDDDDD}, tooltip="Will be written to 'aif:core:assetClass' and displayed as 'Asset Class' in Factory Info.")
                         self.topic_field = ui.StringField(style={"color": 0xFFDDDDDD})
                         self.topic_field.model.set_value("Conveyor")
                         
                     with ui.HStack(height=24, spacing=10):
-                        ui.Label("Subject (Sub Title):", width=140, style={"color": 0xFFDDDDDD})
+                        ui.Label("Subject (Sub Title):", width=140, style={"color": 0xFFDDDDDD}, tooltip="Will be written to 'aif:core:modelNumber' and displayed as 'Model No' in Factory Info.")
                         self.subject_field = ui.StringField(style={"color": 0xFFDDDDDD})
                         self.subject_field.model.set_value("Industrial Component")
                         
                     with ui.HStack(height=24, spacing=10):
-                        ui.Label("Content:", width=140, style={"color": 0xFFDDDDDD})
+                        ui.Label("Content:", width=140, style={"color": 0xFFDDDDDD}, tooltip="Will be written to 'aif:core:assetDescription'. Status is hardcoded to 'Active' for demo.")
                         self.content_field = ui.StringField(style={"color": 0xFFDDDDDD})
                         self.content_field.model.set_value("Status: Active")
                     
@@ -498,10 +498,9 @@ class SmartHudUI:
                 )
 
     def _on_display_setting_changed(self, model):
-        # Force a refresh of the HUD engine by toggling it off and on
-        if self.is_enabled:
-            self._on_toggle_clicked()
-            self._on_toggle_clicked()
+        # Notify the UsdSelectionAgent to re-evaluate and trigger on_selection_changed
+        if self.is_enabled and self.engine and self.engine._selection_agent:
+             self.engine._selection_agent._handle_selection()
 
     def _apply_attributes_to_selected(self):
         import omni.usd
