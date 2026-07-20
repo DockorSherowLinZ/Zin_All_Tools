@@ -241,40 +241,55 @@ class GrayboxHUDEngine:
         }
 
     def _build_generic_ui(self):
-        with ui.ZStack():
-            ui.Rectangle(style={"background_color": ui.color(0.1, 0.1, 0.15, 0.85), "border_color": 0xCC00FFFF, "border_width": 2, "border_radius": 5})
-            with ui.HStack():
-                ui.Spacer(width=15)
-                with ui.VStack(spacing=5):
-                    ui.Spacer(height=10)
-                    
-                    # ── 動態 HUD 區塊 ──
-                    self.dynamic_hud_vbox = ui.VStack(spacing=2)
-                    with self.dynamic_hud_vbox:
-                        ui.Label("", model=self.view_model.generic_title, style={"color": 0xFFFFFFFF, "font_size": 20, "weight": "bold"})
-                        ui.Label("", model=self.view_model.generic_sub, style={"color": 0xFFFFAA00, "font_size": 14})
-                        ui.Label("", model=self.view_model.generic_content, style={"color": 0xFFAAAAAA, "font_size": 14})
-                        
-                        ui.Spacer(height=5)
-                        ui.Line(style={"color": 0xFF444444, "border_width": 1})
-                        ui.Spacer(height=5)
-                    
-                    # ── 靜態 AIF Metadata 區塊 (移植自 Smart Info Panel) ──
-                    self.static_hud_frame = ui.CollapsableFrame("Factory Info", collapsed=False, style={"color": 0xFF00AAFF, "font_size": 14})
-                    with self.static_hud_frame:
-                        with ui.VStack(spacing=2):
-                            with ui.HStack(height=16):
-                                ui.Label("Asset Class:", width=90, style={"color": 0xFF888888, "font_size": 12})
-                                ui.Label("", model=self.view_model.generic_title, style={"color": 0xFFDDDDDD, "font_size": 12})
-                            with ui.HStack(height=16):
-                                ui.Label("Model No:", width=90, style={"color": 0xFF888888, "font_size": 12})
-                                ui.Label("", model=self.view_model.generic_sub, style={"color": 0xFFDDDDDD, "font_size": 12})
-                            with ui.HStack(height=16):
-                                ui.Label("Status:", width=90, style={"color": 0xFF888888, "font_size": 12})
-                                ui.Label("Active", style={"color": 0xFF44AA44, "font_size": 12})
-                    
-                    ui.Spacer(height=10)
-                ui.Spacer(width=15)
+        pass
+
+    def _create_generic_widget(self, name):
+        transform = sc.Transform(look_at=sc.Transform.LookAt.CAMERA, visible=False)
+        pool_item_dict = {"transform": transform, "dynamic_hud_vbox": None, "static_hud_frame": None, "bg_rect": None}
+        
+        with transform:
+            widget = sc.Widget(width=300, height=240)
+            
+            def build_ui():
+                with ui.ZStack():
+                    pool_item_dict["bg_rect"] = ui.Rectangle(style={"background_color": ui.color(0.1, 0.1, 0.15, 0.85), "border_color": 0xCC00FFFF, "border_width": 2, "border_radius": 5})
+                    with ui.HStack():
+                        ui.Spacer(width=15)
+                        with ui.VStack(spacing=5):
+                            ui.Spacer(height=10)
+                            
+                            # ── 動態 HUD 區塊 ──
+                            pool_item_dict["dynamic_hud_vbox"] = ui.VStack(spacing=2)
+                            with pool_item_dict["dynamic_hud_vbox"]:
+                                ui.Label("", model=self.view_model.generic_title, style={"color": 0xFFFFFFFF, "font_size": 20, "weight": "bold"})
+                                ui.Label("", model=self.view_model.generic_sub, style={"color": 0xFFFFAA00, "font_size": 14})
+                                ui.Label("", model=self.view_model.generic_content, style={"color": 0xFFAAAAAA, "font_size": 14})
+                                
+                                ui.Spacer(height=5)
+                                ui.Line(style={"color": 0xFF444444, "border_width": 1})
+                                ui.Spacer(height=5)
+                            
+                            # ── 靜態 AIF Metadata 區塊 (移植自 Smart Info Panel) ──
+                            pool_item_dict["static_hud_frame"] = ui.CollapsableFrame("Factory Info", collapsed=False, style={"color": 0xFF00AAFF, "font_size": 14})
+                            with pool_item_dict["static_hud_frame"]:
+                                with ui.VStack(spacing=2):
+                                    with ui.HStack(height=16):
+                                        ui.Label("Asset Class:", width=90, style={"color": 0xFF888888, "font_size": 12})
+                                        ui.Label("", model=self.view_model.generic_title, style={"color": 0xFFDDDDDD, "font_size": 12})
+                                    with ui.HStack(height=16):
+                                        ui.Label("Model No:", width=90, style={"color": 0xFF888888, "font_size": 12})
+                                        ui.Label("", model=self.view_model.generic_sub, style={"color": 0xFFDDDDDD, "font_size": 12})
+                                    with ui.HStack(height=16):
+                                        ui.Label("Status:", width=90, style={"color": 0xFF888888, "font_size": 12})
+                                        ui.Label("Active", style={"color": 0xFF44AA44, "font_size": 12})
+                            
+                            ui.Spacer(height=10)
+                        ui.Spacer(width=15)
+            
+            widget.frame.set_build_fn(build_ui)
+            pool_item_dict["widget"] = widget
+            
+        return pool_item_dict
 
     def on_selection_changed(self, hud_data, translation):
         for key, pool_item in self.ui_pool.items():
@@ -291,7 +306,8 @@ class GrayboxHUDEngine:
             if m_type not in self.ui_pool:
                 if self.scene_view and self.scene_view.scene:
                     with self.scene_view.scene:
-                        self.ui_pool[m_type] = self._create_pooled_widget(m_type, self._build_generic_ui)
+                        # 呼叫新的建立函式，它會返回完整的字典
+                        self.ui_pool[m_type] = self._create_generic_widget(m_type)
                 else:
                     return # Safe check if scene is destroyed
                 
@@ -301,14 +317,23 @@ class GrayboxHUDEngine:
                 self.view_model.generic_sub.set_value(hud_data.get("sub", ""))
                 self.view_model.generic_content.set_value(hud_data.get("content", ""))
 
+            item = self.ui_pool[m_type]
+            
             # Sync Checkbox state from the UI instance to the Engine
             # By passing the state when updating the visibility
-            if hasattr(self, "dynamic_hud_vbox"):
-                self.dynamic_hud_vbox.visible = hud_data.get("show_dynamic", True)
-            if hasattr(self, "static_hud_frame"):
-                self.static_hud_frame.visible = hud_data.get("show_static", True)
-            
-            item = self.ui_pool[m_type]
+            if "dynamic_hud_vbox" in item:
+                item["dynamic_hud_vbox"].visible = hud_data.get("show_dynamic", True)
+            if "static_hud_frame" in item:
+                item["static_hud_frame"].visible = hud_data.get("show_static", True)
+                
+            # 處理全不勾選時隱藏整個背景框
+            if not hud_data.get("show_dynamic", True) and not hud_data.get("show_static", True):
+                if "bg_rect" in item:
+                    item["bg_rect"].visible = False
+            else:
+                if "bg_rect" in item:
+                    item["bg_rect"].visible = True
+
             transform_matrix = [
                 1, 0, 0, 0,
                 0, 1, 0, 0,
