@@ -50,10 +50,30 @@ class UsdSelectionAgent:
             content_attr = prim.GetAttribute("hud_content")
             content = content_attr.Get() if content_attr and content_attr.IsValid() else ""
             
-            # Extract world transform
+            # Extract world transform and dimensions
             xform_cache = UsdGeom.XformCache(Usd.TimeCode.Default())
             world_transform = xform_cache.GetLocalToWorldTransform(prim)
-            translation = world_transform.ExtractTranslation()
+            
+            # Use BBox to find top center for better placement
+            purposes = [UsdGeom.Tokens.default_, UsdGeom.Tokens.render]
+            bbox_cache = UsdGeom.BBoxCache(Usd.TimeCode.Default(), purposes)
+            bbox = bbox_cache.ComputeWorldBound(prim)
+            world_box = bbox.ComputeAlignedBox()
+            
+            if not world_box.IsEmpty():
+                min_pt = world_box.GetMin()
+                max_pt = world_box.GetMax()
+                
+                # Z-up environment
+                top_center = (
+                    (min_pt[0] + max_pt[0]) / 2.0,
+                    (min_pt[1] + max_pt[1]) / 2.0,
+                    max_pt[2]
+                )
+                translation = top_center
+            else:
+                translation = world_transform.ExtractTranslation()
+            
             self._callback({"type": m_type, "sub": sub_title, "content": content}, translation)
         else:
             self._callback(None, None)
@@ -120,7 +140,8 @@ class GrayboxHUDEngine:
     def _create_pooled_widget(self, name, ui_builder_func):
         transform = sc.Transform(look_at=sc.Transform.LookAt.CAMERA, visible=False)
         with transform:
-            widget = sc.Widget(width=280, height=160)
+            # 增加 widget 高度以容納整合後的面板
+            widget = sc.Widget(width=300, height=240)
             widget.frame.set_build_fn(ui_builder_func)
         return {"transform": transform, "widget": widget}
 
@@ -190,17 +211,37 @@ class GrayboxHUDEngine:
 
     def _build_generic_ui(self):
         with ui.ZStack():
-            ui.Rectangle(style={"background_color": 0xCC1A1E24, "border_color": 0xCC00FFFF, "border_width": 2, "border_radius": 5})
+            ui.Rectangle(style={"background_color": ui.color(0.1, 0.1, 0.15, 0.85), "border_color": 0xCC00FFFF, "border_width": 2, "border_radius": 5})
             with ui.HStack():
-                ui.Spacer(width=20)
+                ui.Spacer(width=15)
                 with ui.VStack(spacing=5):
-                    ui.Spacer(height=15)
-                    ui.Label("", model=self.view_model.generic_title, style={"color": 0xFFFFFFFF, "font_size": 20, "weight": "bold"})
-                    ui.Label("", model=self.view_model.generic_sub, style={"color": 0xFFFFAA00, "font_size": 14})
-                    ui.Spacer(height=5)
-                    ui.Label("", model=self.view_model.generic_content, style={"color": 0xFFAAAAAA, "font_size": 14})
-                    ui.Spacer(height=15)
-                ui.Spacer(width=20)
+                    ui.Spacer(height=10)
+                    
+                    # ── 動態 HUD 區塊 ──
+                    with ui.VStack(spacing=2, visible=self.cb_dynamic.model.get_value_as_bool()):
+                        ui.Label("", model=self.view_model.generic_title, style={"color": 0xFFFFFFFF, "font_size": 20, "weight": "bold"})
+                        ui.Label("", model=self.view_model.generic_sub, style={"color": 0xFFFFAA00, "font_size": 14})
+                        ui.Label("", model=self.view_model.generic_content, style={"color": 0xFFAAAAAA, "font_size": 14})
+                        
+                        ui.Spacer(height=5)
+                        ui.Line(style={"color": 0xFF444444, "border_width": 1})
+                        ui.Spacer(height=5)
+                    
+                    # ── 靜態 AIF Metadata 區塊 (移植自 Smart Info Panel) ──
+                    with ui.CollapsableFrame("Factory Info", collapsed=False, style={"color": 0xFF00AAFF, "font_size": 14}, visible=self.cb_static.model.get_value_as_bool()):
+                        with ui.VStack(spacing=2):
+                            with ui.HStack(height=16):
+                                ui.Label("Asset Class:", width=90, style={"color": 0xFF888888, "font_size": 12})
+                                ui.Label("", model=self.view_model.generic_title, style={"color": 0xFFDDDDDD, "font_size": 12})
+                            with ui.HStack(height=16):
+                                ui.Label("Model No:", width=90, style={"color": 0xFF888888, "font_size": 12})
+                                ui.Label("", model=self.view_model.generic_sub, style={"color": 0xFFDDDDDD, "font_size": 12})
+                            with ui.HStack(height=16):
+                                ui.Label("Status:", width=90, style={"color": 0xFF888888, "font_size": 12})
+                                ui.Label("Active", style={"color": 0xFF44AA44, "font_size": 12})
+                    
+                    ui.Spacer(height=10)
+                ui.Spacer(width=15)
 
     def on_selection_changed(self, hud_data, translation):
         for key, pool_item in self.ui_pool.items():
@@ -222,12 +263,15 @@ class GrayboxHUDEngine:
             self.view_model.generic_sub.set_value(hud_data.get("sub", ""))
             self.view_model.generic_content.set_value(hud_data.get("content", ""))
 
+            # Sync Checkbox state from the UI instance to the Engine
+            # By passing the state when updating the visibility
+            
             item = self.ui_pool[m_type]
             transform_matrix = [
                 1, 0, 0, 0,
                 0, 1, 0, 0,
                 0, 0, 1, 0,
-                translation[0], translation[1], translation[2] + 150.0, 1
+                translation[0], translation[1], translation[2] + 80.0, 1  # 調整高度偏移
             ]
             item["transform"].transform = transform_matrix
             item["transform"].visible = True
@@ -256,6 +300,9 @@ class GrayboxHUDEngine:
             self._selection_agent = None
         self._telemetry_task = None
         self._color_sub = None
+        
+        # Clear UI Pool completely to ensure no detached widgets remain
+        self.ui_pool.clear()
         
         # Safe cleanup of Viewport Overlay
         if self.viewport_window:
@@ -308,25 +355,6 @@ class SmartHudUI:
         with ui.VStack(spacing=10):
             ui.Spacer(height=10)
             
-            with ui.HStack(height=30, spacing=10):
-                # Toggle Button
-                button_text = "Turn OFF" if self.is_enabled else "Turn ON"
-                button_style = self._STYLE_ERROR if self.is_enabled else self._STYLE_CORRECT
-                
-                self.toggle_btn = ui.Button(
-                    button_text, 
-                    style=button_style,
-                    clicked_fn=self._on_toggle_clicked
-                )
-                
-                ui.Button(
-                    "Generate Test Graybox Scene",
-                    style=self._STYLE_DEFAULT,
-                    clicked_fn=self._create_test_scene,
-                    tooltip="Creates 3 Graybox test machines with 'machine_type' attributes properly configured."
-                )
-            
-            ui.Spacer(height=20)
             with ui.CollapsableFrame("Add / Edit HUD Metadata", collapsed=False, style={"font_size": 16, "color": 0xFFFFFFFF}):
                 with ui.VStack(spacing=8):
                     ui.Spacer(height=5)
@@ -362,8 +390,48 @@ class SmartHudUI:
                             clicked_fn=self._remove_attributes_from_selected,
                             tooltip="Removes HUD attributes from selected models."
                         )
+                        
+            ui.Spacer(height=20)
+            with ui.CollapsableFrame("Display Settings", collapsed=False, style={"font_size": 16, "color": 0xFFFFFFFF}):
+                with ui.VStack(spacing=8, padding=6):
+                    ui.Label("Select information to display on the HUD overlay:", style={"color": 0xFFAAAAAA, "font_size": 13})
+                    
+                    with ui.HStack(height=22, spacing=6):
+                        self.cb_dynamic = ui.CheckBox(width=18, height=18)
+                        self.cb_dynamic.model.set_value(True)
+                        self.cb_dynamic.model.add_value_changed_fn(self._on_display_setting_changed)
+                        ui.Label("⚡ Dynamic HUD Status", style={"color": 0xFFDDDDDD, "font_size": 13})
 
-            ui.Spacer()
+                    with ui.HStack(height=22, spacing=6):
+                        self.cb_static = ui.CheckBox(width=18, height=18)
+                        self.cb_static.model.set_value(True)
+                        self.cb_static.model.add_value_changed_fn(self._on_display_setting_changed)
+                        ui.Label("🏭 Factory Info (Metadata)", style={"color": 0xFFDDDDDD, "font_size": 13})
+
+            ui.Spacer(height=20)
+            with ui.HStack(height=30, spacing=10):
+                # Toggle Button
+                button_text = "Turn OFF" if self.is_enabled else "Turn ON"
+                button_style = self._STYLE_ERROR if self.is_enabled else self._STYLE_CORRECT
+                
+                self.toggle_btn = ui.Button(
+                    button_text, 
+                    style=button_style,
+                    clicked_fn=self._on_toggle_clicked
+                )
+                
+                ui.Button(
+                    "Generate Test Graybox Scene",
+                    style=self._STYLE_DEFAULT,
+                    clicked_fn=self._create_test_scene,
+                    tooltip="Creates 3 Graybox test machines with 'machine_type' attributes properly configured."
+                )
+
+    def _on_display_setting_changed(self, model):
+        # Force a refresh of the HUD engine by toggling it off and on
+        if self.is_enabled:
+            self._on_toggle_clicked()
+            self._on_toggle_clicked()
 
     def _apply_attributes_to_selected(self):
         import omni.usd
