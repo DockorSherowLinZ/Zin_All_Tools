@@ -39,10 +39,12 @@ class UsdSelectionAgent:
         if not prim or not prim.IsValid():
             return
             
-        # Check machine type attribute
+        # Check machine type attribute or aif attributes
         attr = prim.GetAttribute("machine_type")
-        if attr and attr.IsValid():
-            m_type = attr.Get()
+        aif_attr = prim.GetAttribute("aif:core:assetClass")
+        
+        if (attr and attr.IsValid()) or (aif_attr and aif_attr.IsValid()):
+            m_type = attr.Get() if (attr and attr.IsValid()) else ""
             
             sub_title_attr = prim.GetAttribute("hud_sub_title")
             sub_title = sub_title_attr.Get() if sub_title_attr and sub_title_attr.IsValid() else ""
@@ -50,6 +52,24 @@ class UsdSelectionAgent:
             content_attr = prim.GetAttribute("hud_content")
             content = content_attr.Get() if content_attr and content_attr.IsValid() else ""
             
+            # 讀取 aif:core 屬性以相容 smart_info_panel 的資料
+            asset_class_attr = prim.GetAttribute("aif:core:assetClass")
+            if asset_class_attr and asset_class_attr.IsValid() and not m_type:
+                 m_type = asset_class_attr.Get()
+                 
+            model_num_attr = prim.GetAttribute("aif:core:modelNumber")
+            if model_num_attr and model_num_attr.IsValid() and not sub_title:
+                 sub_title = model_num_attr.Get()
+                 
+            desc_attr = prim.GetAttribute("aif:core:assetDescription")
+            if desc_attr and desc_attr.IsValid() and not content:
+                 content = desc_attr.Get()
+
+            # 如果連 aif 屬性都沒有，且又沒有 machine_type，就直接跳出
+            if not m_type:
+                 self._callback(None, None)
+                 return
+
             # Extract world transform and dimensions
             xform_cache = UsdGeom.XformCache(Usd.TimeCode.Default())
             world_transform = xform_cache.GetLocalToWorldTransform(prim)
@@ -250,6 +270,10 @@ class GrayboxHUDEngine:
         if hud_data and translation is not None:
             m_type = hud_data.get("type", "")
             
+            # 檢查是否為預設的 UI，如果不是則使用 generic_ui
+            if m_type not in ["AOI", "Robot", "ManualStation"]:
+                m_type = "Generic"  # 將所有自訂的屬性都歸類為使用 Generic UI
+
             # Create a generic widget pool item if not a preset
             if m_type not in self.ui_pool:
                 if self.scene_view and self.scene_view.scene:
@@ -258,10 +282,11 @@ class GrayboxHUDEngine:
                 else:
                     return # Safe check if scene is destroyed
                 
-            # Update generic models
-            self.view_model.generic_title.set_value(m_type)
-            self.view_model.generic_sub.set_value(hud_data.get("sub", ""))
-            self.view_model.generic_content.set_value(hud_data.get("content", ""))
+            # Update generic models if it's a generic type
+            if m_type == "Generic":
+                self.view_model.generic_title.set_value(hud_data.get("type", ""))
+                self.view_model.generic_sub.set_value(hud_data.get("sub", ""))
+                self.view_model.generic_content.set_value(hud_data.get("content", ""))
 
             # Sync Checkbox state from the UI instance to the Engine
             # By passing the state when updating the visibility
