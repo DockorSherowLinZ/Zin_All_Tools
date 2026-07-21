@@ -259,7 +259,7 @@ class GrayboxHUDEngine:
                             ui.Spacer(height=10)
                             
                             # ── 動態 HUD 區塊 ──
-                            pool_item_dict["dynamic_hud_vbox"] = ui.VStack(spacing=2)
+                            pool_item_dict["dynamic_hud_vbox"] = ui.VStack(spacing=2, height=0)
                             with pool_item_dict["dynamic_hud_vbox"]:
                                 ui.Label("", height=22, model=self.view_model.generic_title, style={"color": 0xFFFFFFFF, "font_size": 20, "weight": "bold"})
                                 ui.Label("", height=16, model=self.view_model.generic_sub, style={"color": 0xFFFFAA00, "font_size": 14})
@@ -273,7 +273,7 @@ class GrayboxHUDEngine:
                             # ── 靜態 AIF Metadata 區塊 (移植自 Smart Info Panel) ──
                             # 為了避免在 3D 場景中點擊 CollapsableFrame 觸發 Omniverse 預設的射線點擊 (Raycast/Selection) 
                             # 導致選取焦點亂跑，這裡改用普通的 Frame 或是 Vstack 來代替。
-                            pool_item_dict["static_hud_frame"] = ui.VStack(spacing=2)
+                            pool_item_dict["static_hud_frame"] = ui.VStack(spacing=2, height=0)
                             with pool_item_dict["static_hud_frame"]:
                                 ui.Label("Factory Info", height=16, style={"color": 0xFF00AAFF, "font_size": 14, "weight": "bold"})
                                 ui.Spacer(height=3)
