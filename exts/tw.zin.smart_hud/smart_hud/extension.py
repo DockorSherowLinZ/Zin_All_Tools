@@ -261,9 +261,9 @@ class GrayboxHUDEngine:
                             # ── 動態 HUD 區塊 ──
                             pool_item_dict["dynamic_hud_vbox"] = ui.VStack(spacing=2)
                             with pool_item_dict["dynamic_hud_vbox"]:
-                                ui.Label("", model=self.view_model.generic_title, style={"color": 0xFFFFFFFF, "font_size": 20, "weight": "bold"})
-                                ui.Label("", model=self.view_model.generic_sub, style={"color": 0xFFFFAA00, "font_size": 14})
-                                ui.Label("", model=self.view_model.generic_content, style={"color": 0xFFAAAAAA, "font_size": 14})
+                                ui.Label("", height=22, model=self.view_model.generic_title, style={"color": 0xFFFFFFFF, "font_size": 20, "weight": "bold"})
+                                ui.Label("", height=16, model=self.view_model.generic_sub, style={"color": 0xFFFFAA00, "font_size": 14})
+                                ui.Label("", height=16, model=self.view_model.generic_content, style={"color": 0xFFAAAAAA, "font_size": 14})
                                 
                                 ui.Spacer(height=5)
                                 # 這裡的 Line 也被包在 dynamic_hud_vbox 裡面，所以當它隱藏時，這條線也會一起隱藏
@@ -275,7 +275,7 @@ class GrayboxHUDEngine:
                             # 導致選取焦點亂跑，這裡改用普通的 Frame 或是 Vstack 來代替。
                             pool_item_dict["static_hud_frame"] = ui.VStack(spacing=2)
                             with pool_item_dict["static_hud_frame"]:
-                                ui.Label("Factory Info", style={"color": 0xFF00AAFF, "font_size": 14, "weight": "bold"})
+                                ui.Label("Factory Info", height=16, style={"color": 0xFF00AAFF, "font_size": 14, "weight": "bold"})
                                 ui.Spacer(height=3)
                                 with ui.HStack(height=16):
                                     ui.Label("Asset Class:", width=90, style={"color": 0xFF888888, "font_size": 12})
