@@ -397,7 +397,7 @@ class GrayboxHUDEngine:
 class SmartHudUI:
     """
     UI Class managed by Zin Tools Box.
-    Handles the toggle logic for the HUD Engine.
+    Handles the toggle logic for the HUD Engine and Metadata configuration.
     """
     
     # Define styles locally to ensure they render correctly even inside nested frames
@@ -422,7 +422,7 @@ class SmartHudUI:
         self.is_enabled = False
 
     def build_ui(self):
-        """Builds the control panel inside the Zin Tools Box 'HUD' tab."""
+        """Builds the 2D control panel inside the Zin Tools Box."""
         with ui.VStack(spacing=10):
             ui.Spacer(height=10)
             
