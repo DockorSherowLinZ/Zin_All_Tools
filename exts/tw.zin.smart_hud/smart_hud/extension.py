@@ -406,7 +406,9 @@ class GrayboxHUDEngine:
             stage = context.get_stage()
             
             if stage:
-                current_time = context.get_time()
+                import omni.timeline
+                timeline = omni.timeline.get_timeline_interface()
+                current_time = timeline.get_current_time() * stage.GetTimeCodesPerSecond()
                 start_time = stage.GetStartTimeCode()
                 
                 # Calculate the exact progress percentage based on the extracted animation cycle length
