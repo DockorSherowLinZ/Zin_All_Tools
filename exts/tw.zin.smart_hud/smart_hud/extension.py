@@ -508,17 +508,17 @@ class SmartHudUI:
                     with ui.HStack(height=24, spacing=10):
                         ui.Label("Topic (Machine Type):", width=140, style={"color": 0xFFDDDDDD}, tooltip="Will be written to 'aif:core:assetClass' and displayed as 'Asset Class' in Factory Info.")
                         self.topic_field = ui.StringField(style={"color": 0xFFDDDDDD})
-                        self.topic_field.model.set_value("Conveyor")
+                        self.topic_field.model.set_value("ManualStation")
                         
                     with ui.HStack(height=24, spacing=10):
                         ui.Label("Subject (Sub Title):", width=140, style={"color": 0xFFDDDDDD}, tooltip="Will be written to 'aif:core:modelNumber' and displayed as 'Model No' in Factory Info.")
                         self.subject_field = ui.StringField(style={"color": 0xFFDDDDDD})
-                        self.subject_field.model.set_value("Industrial Component")
+                        self.subject_field.model.set_value("S01")
                         
                     with ui.HStack(height=24, spacing=10):
                         ui.Label("Content:", width=140, style={"color": 0xFFDDDDDD}, tooltip="Will be written to 'aif:core:assetDescription'. Status is hardcoded to 'Active' for demo.")
                         self.content_field = ui.StringField(style={"color": 0xFFDDDDDD})
-                        self.content_field.model.set_value("Status: Active")
+                        self.content_field.model.set_value("Chassis")
                     
                     ui.Spacer(height=5)
                     with ui.HStack(spacing=10, height=30):
