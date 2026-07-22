@@ -395,11 +395,12 @@ class GrayboxHUDEngine:
                 print(f"[Smart HUD] ⚠️ P1 xformOp bounds [{start}, {end}] = {total_span} frames — "
                       f"too large, likely UE linear bake. Trying autocorrelation...")
 
-        # --- P1.5: Autocorrelation-based cycle detection ---
-        # For UE-baked USDs: the animation is written as thousands of frames linearly,
-        # but the actual motion REPEATS. We find where the first frame's pose recurs.
+        # --- P1.5: Autocorrelation-based cycle detection (FULL MATRIX) ---
+        # For UE-baked USDs: animation is written as thousands of linear frames.
+        # The actual motion REPEATS, but may be purely rotational (zero translation delta).
+        # We compare the FULL 4x4 matrix (Frobenius norm) to detect the true loop.
         if xform_transform_attrs:
-            # Pick the transform attribute with the most keyframes
+            # Pick the transform attribute with the most keyframes (densest sampling)
             best_attr_info = max(xform_transform_attrs, key=lambda x: len(x["samples"]))
             attr = best_attr_info["attr"]
             sample_times = list(best_attr_info["samples"])
@@ -408,60 +409,80 @@ class GrayboxHUDEngine:
             print(f"[Smart HUD]   P1.5 Autocorrelation on '{prim_name}' "
                   f"({len(sample_times)} samples, range [{sample_times[0]}, {sample_times[-1]}])")
 
-            # Read actual transform values (translation component of 4x4 matrix)
-            # Limit scan to first 3000 frames for performance
+            # Find the sample index closest to stage start time (skip pre-roll frames)
+            stage_start = stage.GetStartTimeCode()
+            ref_idx = 0
+            for idx, t in enumerate(sample_times):
+                if t >= stage_start:
+                    ref_idx = idx
+                    break
+            print(f"[Smart HUD]   P1.5 Reference starts at sample index {ref_idx} "
+                  f"(time {sample_times[ref_idx]}, stage start={stage_start})")
+
             check_count = min(len(sample_times), 3000)
-            ref_val = None
             cycle_frame_idx = None
 
             try:
-                # Get reference pose at frame 0
-                val0 = attr.Get(sample_times[0])
-                if val0 is not None and hasattr(val0, 'GetRow'):
-                    row3 = val0.GetRow(3)
-                    ref_val = (float(row3[0]), float(row3[1]), float(row3[2]))
+                # Get reference matrix at the effective playback start
+                ref_matrix = attr.Get(sample_times[ref_idx])
+                ref_next_matrix = attr.Get(sample_times[ref_idx + 1]) if ref_idx + 1 < len(sample_times) else None
 
-                    # Also get frame 1 to ensure the animation actually moves
-                    val1 = attr.Get(sample_times[1])
-                    if val1 is not None:
-                        row3_1 = val1.GetRow(3)
-                        ref1 = (float(row3_1[0]), float(row3_1[1]), float(row3_1[2]))
-                        initial_dist = sum((a - b) ** 2 for a, b in zip(ref_val, ref1)) ** 0.5
-                        print(f"[Smart HUD]   P1.5 Frame 0 translation: {ref_val}")
-                        print(f"[Smart HUD]   P1.5 Frame 1 translation: {ref1} (delta={initial_dist:.4f})")
+                if ref_matrix is not None and hasattr(ref_matrix, 'GetRow'):
+                    # Log what the reference matrix looks like
+                    r3 = ref_matrix.GetRow(3)
+                    r0 = ref_matrix.GetRow(0)
+                    print(f"[Smart HUD]   P1.5 Ref matrix row0 (X-axis): "
+                          f"({r0[0]:.4f}, {r0[1]:.4f}, {r0[2]:.4f})")
+                    print(f"[Smart HUD]   P1.5 Ref matrix row3 (translate): "
+                          f"({r3[0]:.4f}, {r3[1]:.4f}, {r3[2]:.4f})")
 
-                if ref_val is not None:
-                    # Search for where the reference pose repeats
-                    # Start from index 10 to avoid matching the very beginning of a transition
-                    for i in range(10, check_count):
+                    # Search forward for where the FULL matrix recurs
+                    # Start at ref_idx + 15 to skip initial transition frames
+                    min_search_idx = ref_idx + 15
+                    for i in range(min_search_idx, check_count):
                         val = attr.Get(sample_times[i])
-                        if val is not None and hasattr(val, 'GetRow'):
-                            row3 = val.GetRow(3)
-                            v = (float(row3[0]), float(row3[1]), float(row3[2]))
-                            dist = sum((a - b) ** 2 for a, b in zip(ref_val, v)) ** 0.5
-                            if dist < 0.05:  # Within 0.05 units = near-exact match
-                                # Verify the NEXT frame also matches frame 1 (confirms cycle, not just a crossing)
-                                if i + 1 < check_count:
-                                    val_next = attr.Get(sample_times[i + 1])
-                                    if val_next is not None and hasattr(val_next, 'GetRow'):
-                                        row3_next = val_next.GetRow(3)
-                                        v_next = (float(row3_next[0]), float(row3_next[1]), float(row3_next[2]))
-                                        val1_check = attr.Get(sample_times[1])
-                                        if val1_check is not None and hasattr(val1_check, 'GetRow'):
-                                            row3_1c = val1_check.GetRow(3)
-                                            v1c = (float(row3_1c[0]), float(row3_1c[1]), float(row3_1c[2]))
-                                            dist_next = sum((a - b) ** 2 for a, b in zip(v_next, v1c)) ** 0.5
-                                            if dist_next < 0.05:
-                                                cycle_frame_idx = i
-                                                break
-                                else:
-                                    cycle_frame_idx = i
-                                    break
+                        if val is None or not hasattr(val, 'GetRow'):
+                            continue
+
+                        # Frobenius norm of (val - ref_matrix) across all 4 rows × 4 cols
+                        dist_sq = 0.0
+                        for row_idx in range(4):
+                            row_ref = ref_matrix.GetRow(row_idx)
+                            row_val = val.GetRow(row_idx)
+                            for col_idx in range(4):
+                                diff = float(row_val[col_idx]) - float(row_ref[col_idx])
+                                dist_sq += diff * diff
+                        dist = dist_sq ** 0.5
+
+                        if dist < 0.02:  # Near-exact full matrix match
+                            # Double-verify: does the NEXT frame also match ref+1?
+                            verified = False
+                            if ref_next_matrix is not None and i + 1 < check_count:
+                                val_next = attr.Get(sample_times[i + 1])
+                                if val_next is not None and hasattr(val_next, 'GetRow'):
+                                    dist_sq_next = 0.0
+                                    for row_idx in range(4):
+                                        row_r = ref_next_matrix.GetRow(row_idx)
+                                        row_v = val_next.GetRow(row_idx)
+                                        for col_idx in range(4):
+                                            diff = float(row_v[col_idx]) - float(row_r[col_idx])
+                                            dist_sq_next += diff * diff
+                                    if dist_sq_next ** 0.5 < 0.02:
+                                        verified = True
+                            else:
+                                verified = True  # Can't verify, accept single match
+
+                            if verified:
+                                cycle_frame_idx = i
+                                print(f"[Smart HUD]   P1.5 Match at sample {i} "
+                                      f"(time {sample_times[i]}), matrix dist={dist:.6f}")
+                                break
+
             except Exception as e:
                 print(f"[Smart HUD] ⚠️ P1.5 autocorrelation error: {e}")
 
             if cycle_frame_idx is not None:
-                cycle_start = float(sample_times[0])
+                cycle_start = float(sample_times[ref_idx])
                 cycle_end = float(sample_times[cycle_frame_idx])
                 cycle_len = cycle_end - cycle_start
                 fps = stage.GetTimeCodesPerSecond()
