@@ -2,7 +2,8 @@ import omni.ext
 import omni.ui as ui
 import omni.ui.scene as sc
 import omni.usd
-from pxr import Usd, UsdGeom, Gf
+import omni.timeline
+from pxr import Usd, UsdGeom, Gf, Sdf
 import asyncio
 import random
 
@@ -406,7 +407,6 @@ class GrayboxHUDEngine:
             stage = context.get_stage()
             
             if stage:
-                import omni.timeline
                 timeline = omni.timeline.get_timeline_interface()
                 current_time = timeline.get_current_time() * stage.GetTimeCodesPerSecond()
                 start_time = stage.GetStartTimeCode()
