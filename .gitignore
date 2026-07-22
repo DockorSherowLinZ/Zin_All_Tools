@@ -27,3 +27,7 @@ build/
 # Temp files
 *.tmp
 _delete_list.tmp
+
+# Test Files
+/Collected_Line_FA_After_01/
+/Test_Stage/
