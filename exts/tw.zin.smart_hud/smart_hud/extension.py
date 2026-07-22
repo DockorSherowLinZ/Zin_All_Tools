@@ -104,7 +104,14 @@ class UsdSelectionAgent:
                 if hasattr(self._ui_instance, "cb_static"):
                     show_static = self._ui_instance.cb_static.model.get_value_as_bool()
 
-            self._callback({"type": m_type, "sub": sub_title, "content": content, "show_dynamic": show_dynamic, "show_static": show_static}, translation)
+            self._callback({
+                "type": m_type, 
+                "sub": sub_title, 
+                "content": content, 
+                "show_dynamic": show_dynamic, 
+                "show_static": show_static,
+                "path": selected_paths[0]
+            }, translation)
         else:
             self._callback(None, None)
 
@@ -143,6 +150,7 @@ class GrayboxHUDEngine:
         self._selection_agent = None
         self._color_sub = None
         self._ui_instance = ui_instance
+        self._current_cycle_duration = 100.0
         
         self._build_ui()
         self._start_telemetry()
@@ -295,6 +303,26 @@ class GrayboxHUDEngine:
             
         return pool_item_dict
 
+    def _get_anim_duration(self, stage, prim_path):
+        """Finds the maximum time sample of the given prim or its children to determine animation cycle length."""
+        prim = stage.GetPrimAtPath(prim_path)
+        if not prim or not prim.IsValid():
+            return 0.0
+            
+        max_time = 0.0
+        try:
+            # Traverses the tree under the prim to find baked TimeSamples
+            for p in Usd.PrimRange(prim):
+                for attr in p.GetAuthoredAttributes():
+                    samples = attr.GetTimeSamples()
+                    if samples:
+                        # TimeSamples are stored as a tuple of times
+                        max_time = max(max_time, float(samples[-1]))
+        except Exception:
+            pass
+            
+        return max_time
+
     def on_selection_changed(self, hud_data, translation):
         for key, pool_item in self.ui_pool.items():
             pool_item["transform"].visible = False
@@ -302,6 +330,25 @@ class GrayboxHUDEngine:
         if hud_data and translation is not None:
             m_type = hud_data.get("type", "")
             
+            # --- 動態抓取動畫長度 (同步 NPC 動畫) ---
+            if m_type == "ManualStation":
+                stage = omni.usd.get_context().get_stage()
+                target_path = "/World/IMX_Factory_After/ASSET/asset_IMX_Factory_After_v2/ABP_Working_NPC11_4/Scene1"
+                duration = self._get_anim_duration(stage, target_path)
+                
+                # 如果場景中找不到預設的 NPC (可能被隱藏或刪除)，則嘗試讀取當前點選的模型
+                if duration <= 0.0 and hud_data.get("path"):
+                    duration = self._get_anim_duration(stage, hud_data.get("path"))
+                
+                # 若皆無，退回場景全域時間
+                if duration > 0.0:
+                    self._current_cycle_duration = duration
+                else:
+                    self._current_cycle_duration = stage.GetEndTimeCode() - stage.GetStartTimeCode()
+                    if self._current_cycle_duration <= 0.0:
+                        self._current_cycle_duration = 100.0
+            # ------------------------------------
+
             # 檢查是否為預設的 UI，如果不是則使用 generic_ui
             if m_type not in ["AOI", "Robot", "ManualStation"]:
                 m_type = "Generic"  # 將所有自訂的屬性都歸類為使用 Generic UI
@@ -351,18 +398,42 @@ class GrayboxHUDEngine:
         self._telemetry_task = asyncio.ensure_future(self._telemetry_loop())
 
     async def _telemetry_loop(self):
-        takt_timer = 100.0
+        """Async telemetry loop injecting mock data safely into MVVM models.
+           Now synchronizes Manual Station Takt Time with the Exact Animation Loop!
+        """
         while self._running:
+            context = omni.usd.get_context()
+            stage = context.get_stage()
+            
+            if stage:
+                current_time = context.get_time()
+                start_time = stage.GetStartTimeCode()
+                
+                # Calculate the exact progress percentage based on the extracted animation cycle length
+                if hasattr(self, '_current_cycle_duration') and self._current_cycle_duration > 0.0:
+                    # Time offset from the start of the stage
+                    time_offset = max(0.0, current_time - start_time)
+                    # Modulo operator allows perfect looping even if the global stage timeline is extremely long
+                    cycle_time = time_offset % self._current_cycle_duration
+                    ratio = cycle_time / self._current_cycle_duration
+                    
+                    # Invert the ratio so the bar "shrinks" as time goes on
+                    progress_pct = max(0.0, min(100.0, (1.0 - ratio) * 100.0))
+                else:
+                    progress_pct = 100.0
+                    
+                # Bind the true USD timeline data to the ManualStation UI model
+                self.view_model.manual_takt_time_pct.set_value(progress_pct)
+            else:
+                self.view_model.manual_takt_time_pct.set_value(100.0)
+
+            # Keep AOI and Robot mock data for visual demonstration
             self.view_model.aoi_status.set_value(random.choice(["INSPECTING", "PASS", "FAIL"]))
             self.view_model.aoi_defect_rate.set_value(random.uniform(0.0, 5.0))
             self.view_model.robot_state.set_value(random.choice(["MOVING", "WELDING", "IDLE"]))
             
-            takt_timer -= 2.0 
-            if takt_timer <= 0:
-                takt_timer = 100.0
-            self.view_model.manual_takt_time_pct.set_value(takt_timer)
-            
-            await asyncio.sleep(0.1)
+            # Update at a safe frequency (~20 FPS) to minimize CPU load
+            await asyncio.sleep(0.05)
 
     def destroy(self):
         self._running = False
