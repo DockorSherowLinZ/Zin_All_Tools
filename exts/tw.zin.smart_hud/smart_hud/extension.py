@@ -3,9 +3,10 @@ import omni.ui as ui
 import omni.ui.scene as sc
 import omni.usd
 import omni.timeline
-from pxr import Usd, UsdGeom, Gf, Sdf
+from pxr import Usd, UsdGeom, UsdSkel, Gf, Sdf
 import asyncio
 import random
+import statistics
 
 # ==============================================================================
 # Kit USD Agents Integration
@@ -151,7 +152,8 @@ class GrayboxHUDEngine:
         self._selection_agent = None
         self._color_sub = None
         self._ui_instance = ui_instance
-        self._current_cycle_duration = 100.0
+        self._cycle_start_frame = 0.0
+        self._cycle_end_frame = 100.0
         
         self._build_ui()
         self._start_telemetry()
@@ -304,25 +306,205 @@ class GrayboxHUDEngine:
             
         return pool_item_dict
 
-    def _get_anim_duration(self, stage, prim_path):
-        """Finds the maximum time sample of the given prim or its children to determine animation cycle length."""
+    def _get_anim_cycle_frames(self, stage, prim_path):
+        """
+        Detects the actual animation cycle frame range on the subtree rooted at prim_path.
+        Uses a priority-based strategy designed to handle Unreal Engine baked USDs:
+
+          P0:   UsdSkel.Animation prims (proper skeletal animation)
+          P1:   xformOp bounds — only accepted if range is "reasonable" (<2000 frames)
+          P1.5: Autocorrelation on xformOp:transform values — detects the true
+                repeating cycle even when UE bakes thousands of linear frames
+          P2:   All authored TimeSamples with outlier rejection
+
+        Returns (start_frame, end_frame). Falls back to stage time range.
+        """
         prim = stage.GetPrimAtPath(prim_path)
         if not prim or not prim.IsValid():
-            return 0.0
-            
-        max_time = 0.0
+            print(f"[Smart HUD] ⚠️ Prim not found or invalid: {prim_path}")
+            return (stage.GetStartTimeCode(), stage.GetEndTimeCode())
+
+        # --- P0: SkelAnimation prims (highest priority) ---
+        skel_bounds = []
         try:
-            # Traverses the tree under the prim to find baked TimeSamples
+            for p in Usd.PrimRange(prim):
+                if p.IsA(UsdSkel.Animation):
+                    for attr_name in ["rotations", "translations", "scales", "blendShapeWeights"]:
+                        attr = p.GetAttribute(attr_name)
+                        if attr and attr.HasAuthoredValue():
+                            samples = attr.GetTimeSamples()
+                            if samples and len(samples) >= 2:
+                                skel_bounds.append((float(samples[0]), float(samples[-1])))
+                                print(f"[Smart HUD]   P0 found {attr_name} on {p.GetPath()}: "
+                                      f"[{samples[0]}, {samples[-1]}] ({len(samples)} keys)")
+        except Exception as e:
+            print(f"[Smart HUD] ⚠️ SkelAnimation scan error: {e}")
+
+        if skel_bounds:
+            start = min(b[0] for b in skel_bounds)
+            end = max(b[1] for b in skel_bounds)
+            if 0 < (end - start) < 50000:  # Reject if suspiciously large
+                print(f"[Smart HUD] 🎯 P0 SkelAnimation bounds: [{start}, {end}] ({end - start} frames)")
+                return (start, end)
+            else:
+                print(f"[Smart HUD] ⚠️ P0 SkelAnimation bounds [{start}, {end}] look like UE sentinels, skipping")
+
+        # --- Collect all xformOp data (shared between P1 and P1.5) ---
+        xform_bounds = []
+        xform_transform_attrs = []  # For autocorrelation in P1.5
+        try:
+            for p in Usd.PrimRange(prim):
+                xformable = UsdGeom.Xformable(p)
+                if xformable:
+                    for op in xformable.GetOrderedXformOps():
+                        attr = op.GetAttr()
+                        if attr and attr.HasAuthoredValue():
+                            samples = attr.GetTimeSamples()
+                            if samples and len(samples) >= 2:
+                                xform_bounds.append((float(samples[0]), float(samples[-1]), len(samples), attr.GetName()))
+                                # Collect xformOp:transform attrs for autocorrelation
+                                if attr.GetName() == "xformOp:transform":
+                                    xform_transform_attrs.append({
+                                        "prim_path": str(p.GetPath()),
+                                        "attr": attr,
+                                        "samples": samples,
+                                    })
+        except Exception as e:
+            print(f"[Smart HUD] ⚠️ xformOp scan error: {e}")
+
+        # Log what we found
+        if xform_bounds:
+            print(f"[Smart HUD]   P1 found {len(xform_bounds)} xformOp attributes with TimeSamples")
+            # Show the range distribution
+            spans = [b[1] - b[0] for b in xform_bounds]
+            min_span = min(spans)
+            max_span = max(spans)
+            print(f"[Smart HUD]   P1 span range: [{min_span}, {max_span}] frames")
+
+        # --- P1: xformOp bounds — only accept if the range is reasonable ---
+        # UE-baked animations often have bounds of [0, 9999+], which is NOT the true loop length
+        if xform_bounds:
+            start = min(b[0] for b in xform_bounds)
+            end = max(b[1] for b in xform_bounds)
+            total_span = end - start
+            if 0 < total_span <= 2000:
+                # Reasonable range — likely a proper short animation
+                print(f"[Smart HUD] 🎯 P1 xformOp bounds: [{start}, {end}] ({total_span} frames)")
+                return (start, end)
+            else:
+                print(f"[Smart HUD] ⚠️ P1 xformOp bounds [{start}, {end}] = {total_span} frames — "
+                      f"too large, likely UE linear bake. Trying autocorrelation...")
+
+        # --- P1.5: Autocorrelation-based cycle detection ---
+        # For UE-baked USDs: the animation is written as thousands of frames linearly,
+        # but the actual motion REPEATS. We find where the first frame's pose recurs.
+        if xform_transform_attrs:
+            # Pick the transform attribute with the most keyframes
+            best_attr_info = max(xform_transform_attrs, key=lambda x: len(x["samples"]))
+            attr = best_attr_info["attr"]
+            sample_times = list(best_attr_info["samples"])
+            prim_name = best_attr_info["prim_path"].split("/")[-1]
+
+            print(f"[Smart HUD]   P1.5 Autocorrelation on '{prim_name}' "
+                  f"({len(sample_times)} samples, range [{sample_times[0]}, {sample_times[-1]}])")
+
+            # Read actual transform values (translation component of 4x4 matrix)
+            # Limit scan to first 3000 frames for performance
+            check_count = min(len(sample_times), 3000)
+            ref_val = None
+            cycle_frame_idx = None
+
+            try:
+                # Get reference pose at frame 0
+                val0 = attr.Get(sample_times[0])
+                if val0 is not None and hasattr(val0, 'GetRow'):
+                    row3 = val0.GetRow(3)
+                    ref_val = (float(row3[0]), float(row3[1]), float(row3[2]))
+
+                    # Also get frame 1 to ensure the animation actually moves
+                    val1 = attr.Get(sample_times[1])
+                    if val1 is not None:
+                        row3_1 = val1.GetRow(3)
+                        ref1 = (float(row3_1[0]), float(row3_1[1]), float(row3_1[2]))
+                        initial_dist = sum((a - b) ** 2 for a, b in zip(ref_val, ref1)) ** 0.5
+                        print(f"[Smart HUD]   P1.5 Frame 0 translation: {ref_val}")
+                        print(f"[Smart HUD]   P1.5 Frame 1 translation: {ref1} (delta={initial_dist:.4f})")
+
+                if ref_val is not None:
+                    # Search for where the reference pose repeats
+                    # Start from index 10 to avoid matching the very beginning of a transition
+                    for i in range(10, check_count):
+                        val = attr.Get(sample_times[i])
+                        if val is not None and hasattr(val, 'GetRow'):
+                            row3 = val.GetRow(3)
+                            v = (float(row3[0]), float(row3[1]), float(row3[2]))
+                            dist = sum((a - b) ** 2 for a, b in zip(ref_val, v)) ** 0.5
+                            if dist < 0.05:  # Within 0.05 units = near-exact match
+                                # Verify the NEXT frame also matches frame 1 (confirms cycle, not just a crossing)
+                                if i + 1 < check_count:
+                                    val_next = attr.Get(sample_times[i + 1])
+                                    if val_next is not None and hasattr(val_next, 'GetRow'):
+                                        row3_next = val_next.GetRow(3)
+                                        v_next = (float(row3_next[0]), float(row3_next[1]), float(row3_next[2]))
+                                        val1_check = attr.Get(sample_times[1])
+                                        if val1_check is not None and hasattr(val1_check, 'GetRow'):
+                                            row3_1c = val1_check.GetRow(3)
+                                            v1c = (float(row3_1c[0]), float(row3_1c[1]), float(row3_1c[2]))
+                                            dist_next = sum((a - b) ** 2 for a, b in zip(v_next, v1c)) ** 0.5
+                                            if dist_next < 0.05:
+                                                cycle_frame_idx = i
+                                                break
+                                else:
+                                    cycle_frame_idx = i
+                                    break
+            except Exception as e:
+                print(f"[Smart HUD] ⚠️ P1.5 autocorrelation error: {e}")
+
+            if cycle_frame_idx is not None:
+                cycle_start = float(sample_times[0])
+                cycle_end = float(sample_times[cycle_frame_idx])
+                cycle_len = cycle_end - cycle_start
+                fps = stage.GetTimeCodesPerSecond()
+                print(f"[Smart HUD] 🎯 P1.5 Autocorrelation DETECTED cycle!")
+                print(f"[Smart HUD]   Cycle: [{cycle_start}, {cycle_end}] = {cycle_len} frames "
+                      f"({cycle_len / fps:.2f}s at {fps}fps)")
+                print(f"[Smart HUD]   Pattern repeats at sample index {cycle_frame_idx} of {len(sample_times)}")
+                return (cycle_start, cycle_end)
+            else:
+                print(f"[Smart HUD] ⚠️ P1.5 No repeating pattern found in first {check_count} samples")
+
+        # --- P2: All authored attributes with outlier rejection ---
+        all_starts = []
+        all_ends = []
+        try:
             for p in Usd.PrimRange(prim):
                 for attr in p.GetAuthoredAttributes():
                     samples = attr.GetTimeSamples()
-                    if samples:
-                        # TimeSamples are stored as a tuple of times
-                        max_time = max(max_time, float(samples[-1]))
-        except Exception:
-            pass
-            
-        return max_time
+                    if samples and len(samples) >= 2:
+                        all_starts.append(float(samples[0]))
+                        all_ends.append(float(samples[-1]))
+        except Exception as e:
+            print(f"[Smart HUD] ⚠️ TimeSamples scan error: {e}")
+
+        if all_ends:
+            median_end = statistics.median(all_ends)
+            threshold = max(median_end * 10.0, 1000.0)
+            filtered_ends = [e for e in all_ends if e <= threshold]
+            filtered_starts = [s for s in all_starts if s <= threshold]
+
+            if filtered_ends:
+                start = min(filtered_starts) if filtered_starts else 0.0
+                end = max(filtered_ends)
+                if (end - start) > 0:
+                    print(f"[Smart HUD] 🎯 P2 Filtered TimeSamples bounds: [{start}, {end}] "
+                          f"({end - start} frames, rejected {len(all_ends) - len(filtered_ends)} outliers)")
+                    return (start, end)
+
+        # --- Final fallback: stage global time range ---
+        fallback_start = stage.GetStartTimeCode()
+        fallback_end = stage.GetEndTimeCode()
+        print(f"[Smart HUD] ⚠️ No animation data found, using stage range: [{fallback_start}, {fallback_end}]")
+        return (fallback_start, fallback_end)
 
     def on_selection_changed(self, hud_data, translation):
         for key, pool_item in self.ui_pool.items():
@@ -331,23 +513,37 @@ class GrayboxHUDEngine:
         if hud_data and translation is not None:
             m_type = hud_data.get("type", "")
             
-            # --- 動態抓取動畫長度 (同步 NPC 動畫) ---
+            # --- Dynamically detect animation cycle from the selected prim's subtree ---
             if m_type == "ManualStation":
                 stage = omni.usd.get_context().get_stage()
-                target_path = "/World/IMX_Factory_After/ASSET/asset_IMX_Factory_After_v2/ABP_Working_NPC11_4/Scene1"
-                duration = self._get_anim_duration(stage, target_path)
+                scan_path = hud_data.get("path", "")
                 
-                # 如果場景中找不到預設的 NPC (可能被隱藏或刪除)，則嘗試讀取當前點選的模型
-                if duration <= 0.0 and hud_data.get("path"):
-                    duration = self._get_anim_duration(stage, hud_data.get("path"))
+                # Check if the prim has an explicit animation target override
+                if scan_path and stage:
+                    scan_prim = stage.GetPrimAtPath(scan_path)
+                    if scan_prim and scan_prim.IsValid():
+                        anim_target_attr = scan_prim.GetAttribute("aif:core:animationTarget")
+                        if anim_target_attr and anim_target_attr.IsValid():
+                            explicit_target = anim_target_attr.Get()
+                            if explicit_target:
+                                scan_path = str(explicit_target)
+                                print(f"[Smart HUD] 🔗 Using explicit animationTarget: {scan_path}")
                 
-                # 若皆無，退回場景全域時間
-                if duration > 0.0:
-                    self._current_cycle_duration = duration
-                else:
-                    self._current_cycle_duration = stage.GetEndTimeCode() - stage.GetStartTimeCode()
-                    if self._current_cycle_duration <= 0.0:
-                        self._current_cycle_duration = 100.0
+                if scan_path and stage:
+                    start_f, end_f = self._get_anim_cycle_frames(stage, scan_path)
+                    cycle_len = end_f - start_f
+                    
+                    if cycle_len > 0:
+                        self._cycle_start_frame = start_f
+                        self._cycle_end_frame = end_f
+                        print(f"[Smart HUD] ✅ Animation cycle: [{start_f}, {end_f}] = {cycle_len} frames")
+                    else:
+                        # Fallback to safe defaults
+                        self._cycle_start_frame = stage.GetStartTimeCode()
+                        self._cycle_end_frame = stage.GetEndTimeCode()
+                        if (self._cycle_end_frame - self._cycle_start_frame) <= 0:
+                            self._cycle_end_frame = self._cycle_start_frame + 100.0
+                        print(f"[Smart HUD] ⚠️ No valid cycle detected, using stage range")
             # ------------------------------------
 
             # 檢查是否為預設的 UI，如果不是則使用 generic_ui
@@ -400,7 +596,8 @@ class GrayboxHUDEngine:
 
     async def _telemetry_loop(self):
         """Async telemetry loop injecting mock data safely into MVVM models.
-           Now synchronizes Manual Station Takt Time with the Exact Animation Loop!
+           Synchronizes Manual Station Takt Time with the local animation cycle
+           using frame-range-based modulo for continuous looping.
         """
         while self._running:
             context = omni.usd.get_context()
@@ -408,23 +605,28 @@ class GrayboxHUDEngine:
             
             if stage:
                 timeline = omni.timeline.get_timeline_interface()
-                current_time = timeline.get_current_time() * stage.GetTimeCodesPerSecond()
-                start_time = stage.GetStartTimeCode()
+                fps = stage.GetTimeCodesPerSecond()
                 
-                # Calculate the exact progress percentage based on the extracted animation cycle length
-                if hasattr(self, '_current_cycle_duration') and self._current_cycle_duration > 0.0:
-                    # Time offset from the start of the stage
-                    time_offset = max(0.0, current_time - start_time)
-                    # Modulo operator allows perfect looping even if the global stage timeline is extremely long
-                    cycle_time = time_offset % self._current_cycle_duration
-                    ratio = cycle_time / self._current_cycle_duration
+                # Convert current playback time (seconds) to frame number
+                current_frame = timeline.get_current_time() * fps
+                
+                # Calculate progress using the detected animation cycle bounds
+                cycle_start = self._cycle_start_frame
+                cycle_end = self._cycle_end_frame
+                cycle_len = cycle_end - cycle_start
+                
+                if cycle_len > 0.0:
+                    # Map global frame into local cycle's [0, cycle_len) range
+                    # Subtract cycle_start to handle animations that don't begin at frame 0
+                    local_frame = (current_frame - cycle_start) % cycle_len
+                    ratio = local_frame / cycle_len  # 0.0 → 1.0 over one cycle
                     
-                    # Invert the ratio so the bar "shrinks" as time goes on
+                    # Invert: bar shrinks from 100% (cycle start) to 0% (cycle end)
                     progress_pct = max(0.0, min(100.0, (1.0 - ratio) * 100.0))
                 else:
                     progress_pct = 100.0
                     
-                # Bind the true USD timeline data to the ManualStation UI model
+                # Bind the computed progress to the ManualStation UI model
                 self.view_model.manual_takt_time_pct.set_value(progress_pct)
             else:
                 self.view_model.manual_takt_time_pct.set_value(100.0)
@@ -434,7 +636,7 @@ class GrayboxHUDEngine:
             self.view_model.aoi_defect_rate.set_value(random.uniform(0.0, 5.0))
             self.view_model.robot_state.set_value(random.choice(["MOVING", "WELDING", "IDLE"]))
             
-            # Update at a safe frequency (~20 FPS) to minimize CPU load
+            # Update at ~20 FPS — no blocking calls, safe for the Omniverse UI thread
             await asyncio.sleep(0.05)
 
     def destroy(self):
@@ -551,6 +753,22 @@ class SmartHudUI:
                         self.cb_static.model.set_value(True)
                         self.cb_static.model.add_value_changed_fn(self._on_display_setting_changed)
                         ui.Label("🏭 Factory Info (Metadata)", style={"color": 0xFFDDDDDD, "font_size": 13})
+                        
+            ui.Spacer(height=20)
+            with ui.CollapsableFrame("Animation Binding", collapsed=False, style={"font_size": 16, "color": 0xFFFFFFFF}):
+                with ui.VStack(spacing=8, padding=6):
+                    ui.Label("Bind HUD progress to a specific animated character (optional):", style={"color": 0xFFAAAAAA, "font_size": 13})
+                    with ui.HStack(height=24, spacing=10):
+                        ui.Label("Anim Target:", width=90, style={"color": 0xFFDDDDDD}, tooltip="Absolute path to the animated prim. Used to sync the progress bar.")
+                        self.anim_target_field = ui.StringField(style={"color": 0xFFDDDDDD})
+                        self.anim_target_field.model.set_value("/World/IMX_Factory_After/ASSET/asset_IMX_Factory_After_v2/Lifting_4/Scene1")
+                    ui.Button(
+                        "Bind to Selected",
+                        height=24,
+                        style=self._STYLE_DEFAULT,
+                        clicked_fn=self._bind_animation_target,
+                        tooltip="Writes 'aif:core:animationTarget' to the selected prims."
+                    )
 
             ui.Spacer(height=20)
             with ui.HStack(height=30, spacing=10):
@@ -575,6 +793,27 @@ class SmartHudUI:
         # Notify the UsdSelectionAgent to re-evaluate and trigger on_selection_changed
         if self.is_enabled and self.engine and self.engine._selection_agent:
              self.engine._selection_agent._handle_selection()
+
+    def _bind_animation_target(self):
+        context = omni.usd.get_context()
+        stage = context.get_stage()
+        if not stage: return
+        selection = context.get_selection().get_selected_prim_paths()
+        if not selection: return
+        
+        target_path = self.anim_target_field.model.get_value_as_string()
+        if not target_path: return
+        
+        for path in selection:
+            prim = stage.GetPrimAtPath(path)
+            if prim and prim.IsValid():
+                attr = prim.GetAttribute("aif:core:animationTarget")
+                if not attr:
+                    attr = prim.CreateAttribute("aif:core:animationTarget", Sdf.ValueTypeNames.String)
+                attr.Set(target_path)
+                attr.SetDocumentation("Path to the animated character driving this station's progress [AIF-MANAGED]")
+                attr.SetCustomData({'omni': {'kit': {'locked': True}}})
+                print(f"[Smart HUD] 🔗 Bound animation target {target_path} to {path}")
 
     def _apply_attributes_to_selected(self):
         import omni.usd
