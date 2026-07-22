@@ -634,6 +634,12 @@ class GrayboxHUDEngine:
                 # Calculate progress using the detected animation cycle bounds
                 cycle_start = self._cycle_start_frame
                 cycle_end = self._cycle_end_frame
+                
+                # Fallback to stage bounds if no valid cycle is set
+                if cycle_end <= cycle_start:
+                    cycle_start = stage.GetStartTimeCode()
+                    cycle_end = stage.GetEndTimeCode()
+                    
                 cycle_len = cycle_end - cycle_start
                 
                 if cycle_len > 0.0:
