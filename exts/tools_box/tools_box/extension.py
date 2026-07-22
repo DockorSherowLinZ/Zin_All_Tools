@@ -148,12 +148,12 @@ class ToolsBoxExtension(omni.ext.IExt):
                                 self._btn_align    = ZinButton("Align",     height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Align"))
                                 self._btn_assembly = ZinButton("Assembly",  height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Assembly"))
                                 self._btn_physics  = ZinButton("Physics",   height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Physics"))
+                                self._btn_hud      = ZinButton("HUD",       height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("HUD"))
                                 self._btn_explode  = ZinButton("Explode",   height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Explode"))
                                 self._btn_conveyor = ZinButton("Conveyor",  height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Conveyor"))
                                 self._btn_cad      = ZinButton("CAD",       height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("CAD"))
                                 self._btn_dashboard = ZinButton("Dashboard", height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Dashboard"))
                                 self._btn_info     = ZinButton("Info",      height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("Info"))
-                                self._btn_hud      = ZinButton("HUD",       height=ui.Pixel(30), clicked_fn=lambda: self._change_tab("HUD"))
 
                         # --- B. 內容顯示區 (Content Area) ---
                         self._content_frame = ui.Frame(padding=1)
