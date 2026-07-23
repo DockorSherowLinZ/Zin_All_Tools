@@ -538,6 +538,7 @@ class GrayboxHUDEngine:
             if m_type == "ManualStation":
                 stage = omni.usd.get_context().get_stage()
                 scan_path = hud_data.get("path", "")
+                print(f"[Smart HUD] 🔍 ManualStation selected: {scan_path}")
                 
                 # Check if the prim has an explicit animation target override
                 if scan_path and stage:
@@ -546,10 +547,20 @@ class GrayboxHUDEngine:
                         anim_target_attr = scan_prim.GetAttribute("aif:core:animationTarget")
                         if anim_target_attr and anim_target_attr.IsValid():
                             explicit_target = anim_target_attr.Get()
-                            if explicit_target:
-                                scan_path = str(explicit_target)
-                                print(f"[Smart HUD] 🔗 Using explicit animationTarget: {scan_path}")
+                            print(f"[Smart HUD] 🔍 Found animationTarget attr, value={repr(explicit_target)}")
+                            if explicit_target and str(explicit_target).strip():
+                                redirect_path = str(explicit_target).strip()
+                                # Verify the target prim actually exists in the stage
+                                target_prim = stage.GetPrimAtPath(redirect_path)
+                                if target_prim and target_prim.IsValid():
+                                    scan_path = redirect_path
+                                    print(f"[Smart HUD] 🔗 Redirected to animationTarget: {scan_path}")
+                                else:
+                                    print(f"[Smart HUD] ⚠️ animationTarget prim not found: {redirect_path}")
+                        else:
+                            print(f"[Smart HUD] 🔍 No 'aif:core:animationTarget' attribute on {scan_path}")
                 
+                print(f"[Smart HUD] 🔍 Scanning for animation data at: {scan_path}")
                 if scan_path and stage:
                     start_f, end_f = self._get_anim_cycle_frames(stage, scan_path)
                     cycle_len = end_f - start_f
@@ -725,12 +736,30 @@ class SmartHudUI:
 
     def build_ui(self):
         """Builds the 2D control panel inside the Zin Tools Box."""
-        with ui.VStack(spacing=10):
+        with ui.VStack(spacing=2):
+            
+            with ui.HStack(height=30, spacing=10):
+                # Toggle Button
+                button_text = "Turn OFF" if self.is_enabled else "Turn ON"
+                button_style = self._STYLE_ERROR if self.is_enabled else self._STYLE_CORRECT
+                
+                self.toggle_btn = ui.Button(
+                    button_text, 
+                    style=button_style,
+                    clicked_fn=self._on_toggle_clicked
+                )
+                
+                ui.Button(
+                    "Generate Test Graybox Scene",
+                    style=self._STYLE_DEFAULT,
+                    clicked_fn=self._create_test_scene,
+                    tooltip="Creates 3 Graybox test machines with 'machine_type' attributes properly configured."
+                )
+
             ui.Spacer(height=10)
             
             with ui.CollapsableFrame("Add / Edit HUD Metadata", collapsed=False, style={"font_size": 16, "color": 0xFFFFFFFF}):
-                with ui.VStack(spacing=8):
-                    ui.Spacer(height=5)
+                with ui.VStack(spacing=2, padding=6):
                     ui.Label("Add custom attributes to make selected models compatible with HUD and Info Panel:", 
                              style={"color": 0xFFAAAAAA, "font_size": 14})
                     
@@ -764,26 +793,9 @@ class SmartHudUI:
                             tooltip="Removes HUD attributes from selected models."
                         )
                         
-            ui.Spacer(height=20)
-            with ui.CollapsableFrame("Display Settings", collapsed=False, style={"font_size": 16, "color": 0xFFFFFFFF}):
-                with ui.VStack(spacing=8, padding=6):
-                    ui.Label("Select information to display on the HUD overlay:", style={"color": 0xFFAAAAAA, "font_size": 13})
-                    
-                    with ui.HStack(height=22, spacing=6):
-                        self.cb_dynamic = ui.CheckBox(width=18, height=18)
-                        self.cb_dynamic.model.set_value(True)
-                        self.cb_dynamic.model.add_value_changed_fn(self._on_display_setting_changed)
-                        ui.Label("⚡ Dynamic HUD Status", style={"color": 0xFFDDDDDD, "font_size": 13})
-
-                    with ui.HStack(height=22, spacing=6):
-                        self.cb_static = ui.CheckBox(width=18, height=18)
-                        self.cb_static.model.set_value(True)
-                        self.cb_static.model.add_value_changed_fn(self._on_display_setting_changed)
-                        ui.Label("🏭 Factory Info (Metadata)", style={"color": 0xFFDDDDDD, "font_size": 13})
-                        
-            ui.Spacer(height=20)
+            ui.Spacer(height=10)
             with ui.CollapsableFrame("Animation Binding", collapsed=False, style={"font_size": 16, "color": 0xFFFFFFFF}):
-                with ui.VStack(spacing=8, padding=6):
+                with ui.VStack(spacing=2, padding=6):
                     ui.Label("Bind HUD progress to a specific animated character (optional):", style={"color": 0xFFAAAAAA, "font_size": 13})
                     with ui.HStack(height=24, spacing=10):
                         ui.Label("Anim Target:", width=90, style={"color": 0xFFDDDDDD}, tooltip="Absolute path to the animated prim. Used to sync the progress bar.")
@@ -797,26 +809,24 @@ class SmartHudUI:
                         tooltip="Writes 'aif:core:animationTarget' to the selected prims."
                     )
 
-            ui.Spacer(height=20)
-            with ui.HStack(height=30, spacing=10):
-                # Toggle Button
-                button_text = "Turn OFF" if self.is_enabled else "Turn ON"
-                button_style = self._STYLE_ERROR if self.is_enabled else self._STYLE_CORRECT
-                
-                self.toggle_btn = ui.Button(
-                    button_text, 
-                    style=button_style,
-                    clicked_fn=self._on_toggle_clicked
-                )
-                
-                ui.Button(
-                    "Generate Test Graybox Scene",
-                    style=self._STYLE_DEFAULT,
-                    clicked_fn=self._create_test_scene,
-                    tooltip="Creates 3 Graybox test machines with 'machine_type' attributes properly configured."
-                )
+            ui.Spacer(height=10)
+            with ui.CollapsableFrame("Display Settings", collapsed=False, style={"font_size": 16, "color": 0xFFFFFFFF}):
+                with ui.VStack(spacing=2, padding=6):
+                    ui.Label("Select information to display on the HUD overlay:", style={"color": 0xFFAAAAAA, "font_size": 13})
+                    
+                    with ui.HStack(height=22, spacing=6):
+                        self.cb_dynamic = ui.CheckBox(width=18, height=18)
+                        self.cb_dynamic.model.set_value(True)
+                        self.cb_dynamic.model.add_value_changed_fn(self._on_display_setting_changed)
+                        ui.Label("Dynamic HUD Status", style={"color": 0xFFDDDDDD, "font_size": 13})
 
-    def _on_display_setting_changed(self, model):
+                    with ui.HStack(height=22, spacing=6):
+                        self.cb_static = ui.CheckBox(width=18, height=18)
+                        self.cb_static.model.set_value(True)
+                        self.cb_static.model.add_value_changed_fn(self._on_display_setting_changed)
+                        ui.Label("Factory Info (Metadata)", style={"color": 0xFFDDDDDD, "font_size": 13})
+
+            ui.Spacer()
         # Notify the UsdSelectionAgent to re-evaluate and trigger on_selection_changed
         if self.is_enabled and self.engine and self.engine._selection_agent:
              self.engine._selection_agent._handle_selection()
