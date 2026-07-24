@@ -31,3 +31,14 @@ _delete_list.tmp
 # Test Files
 /Collected_Line_FA_After_01/
 /Test_Stage/
+
+# AI Agent & Local Configs
+.agents/
+mcp.json
+install_mcp_servers.ps1
+
+# Old Extension Backups
+exts/tw.hud/
+
+# Diagnostic Scripts
+exts/tw.zin.smart_hud/smart_hud/diag_anim_dump.py

@@ -9,119 +9,6 @@ import random
 import statistics
 
 # ==============================================================================
-# Kit USD Agents Integration
-# ==============================================================================
-class UsdSelectionAgent:
-    """
-    Agent class to handle USD interactions safely and decoupled from UI.
-    Listens for stage selection events and queries the machine_type.
-    """
-    def __init__(self, callback, ui_instance):
-        self._callback = callback
-        self._ui_instance = ui_instance
-        self._context = omni.usd.get_context()
-        self._sub = self._context.get_stage_event_stream().create_subscription_to_pop(
-            self._on_stage_event, name="DSX_HUD_Selection_Agent"
-        )
-    
-    def _on_stage_event(self, event):
-        if event.type == int(omni.usd.StageEventType.SELECTION_CHANGED):
-            self._handle_selection()
-            
-    def _handle_selection(self):
-        selected_paths = self._context.get_selection().get_selected_prim_paths()
-        if not selected_paths:
-            self._callback(None, None)
-            return
-            
-        stage = self._context.get_stage()
-        if not stage:
-            return
-            
-        prim = stage.GetPrimAtPath(selected_paths[0])
-        if not prim or not prim.IsValid():
-            return
-            
-        # Check machine type attribute or aif attributes
-        attr = prim.GetAttribute("machine_type")
-        aif_attr = prim.GetAttribute("aif:core:assetClass")
-        
-        if (attr and attr.IsValid()) or (aif_attr and aif_attr.IsValid()):
-            m_type = attr.Get() if (attr and attr.IsValid()) else ""
-            
-            sub_title_attr = prim.GetAttribute("hud_sub_title")
-            sub_title = sub_title_attr.Get() if sub_title_attr and sub_title_attr.IsValid() else ""
-            
-            content_attr = prim.GetAttribute("hud_content")
-            content = content_attr.Get() if content_attr and content_attr.IsValid() else ""
-            
-            # 讀取 aif:core 屬性以相容 smart_info_panel 的資料
-            asset_class_attr = prim.GetAttribute("aif:core:assetClass")
-            if asset_class_attr and asset_class_attr.IsValid() and not m_type:
-                 m_type = asset_class_attr.Get()
-                 
-            model_num_attr = prim.GetAttribute("aif:core:modelNumber")
-            if model_num_attr and model_num_attr.IsValid() and not sub_title:
-                 sub_title = model_num_attr.Get()
-                 
-            desc_attr = prim.GetAttribute("aif:core:assetDescription")
-            if desc_attr and desc_attr.IsValid() and not content:
-                 content = desc_attr.Get()
-
-            # 如果連 aif 屬性都沒有，且又沒有 machine_type，就直接跳出
-            if not m_type:
-                 self._callback(None, None)
-                 return
-
-            # Extract world transform and dimensions
-            xform_cache = UsdGeom.XformCache(Usd.TimeCode.Default())
-            world_transform = xform_cache.GetLocalToWorldTransform(prim)
-            
-            # Use BBox to find top center for better placement
-            purposes = [UsdGeom.Tokens.default_, UsdGeom.Tokens.render]
-            bbox_cache = UsdGeom.BBoxCache(Usd.TimeCode.Default(), purposes)
-            bbox = bbox_cache.ComputeWorldBound(prim)
-            world_box = bbox.ComputeAlignedBox()
-            
-            if not world_box.IsEmpty():
-                min_pt = world_box.GetMin()
-                max_pt = world_box.GetMax()
-                
-                # Z-up environment
-                top_center = (
-                    (min_pt[0] + max_pt[0]) / 2.0,
-                    (min_pt[1] + max_pt[1]) / 2.0,
-                    max_pt[2]
-                )
-                translation = top_center
-            else:
-                translation = world_transform.ExtractTranslation()
-            
-            # Check visibility settings
-            show_dynamic = True
-            show_static = True
-            if self._ui_instance:
-                if hasattr(self._ui_instance, "cb_dynamic"):
-                    show_dynamic = self._ui_instance.cb_dynamic.model.get_value_as_bool()
-                if hasattr(self._ui_instance, "cb_static"):
-                    show_static = self._ui_instance.cb_static.model.get_value_as_bool()
-
-            self._callback({
-                "type": m_type, 
-                "sub": sub_title, 
-                "content": content, 
-                "show_dynamic": show_dynamic, 
-                "show_static": show_static,
-                "path": selected_paths[0]
-            }, translation)
-        else:
-            self._callback(None, None)
-
-    def destroy(self):
-        self._sub = None
-
-
-# ==============================================================================
 # MVVM View Model
 # ==============================================================================
 class HUDViewModel:
@@ -129,9 +16,13 @@ class HUDViewModel:
     def __init__(self):
         self.aoi_status = ui.SimpleStringModel("IDLE")
         self.aoi_defect_rate = ui.SimpleFloatModel(0.0)
+        self.aoi_title = ui.SimpleStringModel("AOI Inspection")
         self.robot_state = ui.SimpleStringModel("STANDBY")
+        self.robot_title = ui.SimpleStringModel("Robot Arm")
         self.manual_station_name = ui.SimpleStringModel("Manual Assembly #1")
-        self.manual_takt_time_pct = ui.SimpleFloatModel(100.0)
+        self.manual_station_sub = ui.SimpleStringModel("Sub Title")
+        self.manual_station_content = ui.SimpleStringModel("Content")
+        self.manual_takt_label = ui.SimpleStringModel("Takt Time Remaining:")
         
         # Generic models for custom HUDs
         self.generic_title = ui.SimpleStringModel("Custom Item")
@@ -144,25 +35,20 @@ class HUDViewModel:
 # ==============================================================================
 class GrayboxHUDEngine:
     def __init__(self, ui_instance):
-        self.view_model = HUDViewModel()
-        self.ui_pool = {} 
+        self._hud_instances = {} 
         self.scene_view = None
         self._running = True
-        self._telemetry_task = None
-        self._selection_agent = None
-        self._color_sub = None
+        self._update_sub = None
         self._ui_instance = ui_instance
-        self._cycle_start_frame = 0.0
-        self._cycle_end_frame = 100.0
         
         self._build_ui()
+        self._scan_stage_and_build_huds()
         self._start_telemetry()
-        
-        # Initialize Kit USD Selection Agent
-        self._selection_agent = UsdSelectionAgent(self.on_selection_changed, self._ui_instance)
 
     def _build_ui(self):
         import omni.kit.viewport.utility
+        import omni.ui.scene as sc
+        import omni.ui as ui
         self.viewport_window = omni.kit.viewport.utility.get_active_viewport_window()
         
         if not self.viewport_window:
@@ -170,188 +56,340 @@ class GrayboxHUDEngine:
 
         with self.viewport_window.get_frame("DSX_Phase7_HUD_Overlay"):
             self.scene_view = sc.SceneView()
-            
             if hasattr(self.viewport_window, "viewport_api"):
                 self.viewport_window.viewport_api.add_scene_view(self.scene_view)
+
+    def _scan_stage_and_build_huds(self):
+        import omni.usd
+        from pxr import UsdGeom, Usd
+        
+        stage = omni.usd.get_context().get_stage()
+        if not stage:
+            return
+            
+        with self.scene_view.scene:
+            for prim in stage.Traverse():
+                attr = prim.GetAttribute("machine_type")
+                if attr and attr.IsValid():
+                    m_type = attr.Get()
+                    if m_type:
+                        self._create_hud_for_prim(prim, str(m_type))
+                        
+    def rebuild_huds(self):
+        if self.scene_view and self.scene_view.scene:
+            self.scene_view.scene.clear()
+        self._hud_instances.clear()
+        self._scan_stage_and_build_huds()
+
+    def _create_hud_for_prim(self, prim, m_type):
+        import omni.ui as ui
+        import omni.ui.scene as sc
+        from pxr import UsdGeom, Usd
+        
+        prim_path = str(prim.GetPath())
+        world_transform = UsdGeom.Xformable(prim).ComputeLocalToWorldTransform(Usd.TimeCode.Default())
+        purposes = [UsdGeom.Tokens.default_, UsdGeom.Tokens.render]
+        bbox_cache = UsdGeom.BBoxCache(Usd.TimeCode.Default(), purposes)
+        bbox = bbox_cache.ComputeWorldBound(prim)
+        world_box = bbox.ComputeAlignedBox()
+        
+        if not world_box.IsEmpty():
+            min_pt = world_box.GetMin()
+            max_pt = world_box.GetMax()
+            top_center = ((min_pt[0] + max_pt[0]) / 2.0, (min_pt[1] + max_pt[1]) / 2.0, max_pt[2])
+            translation = list(top_center)
+        else:
+            translation = list(world_transform.ExtractTranslation())
+            
+        translation[2] += 80.0  # Z offset
+        
+        transform_matrix = [
+            1, 0, 0, 0,
+            0, 1, 0, 0,
+            0, 0, 1, 0,
+            translation[0], translation[1], translation[2], 1
+        ]
+        
+        view_model = HUDViewModel()
+        
+        sub_title = ""
+        content = ""
+        takt_label = "Takt Time Remaining:"
+        sub_attr = prim.GetAttribute("hud_sub_title")
+        content_attr = prim.GetAttribute("hud_content")
+        takt_label_attr = prim.GetAttribute("hud_takt_label")
+        
+        if sub_attr and sub_attr.IsValid():
+            sub_title = str(sub_attr.Get())
+        if content_attr and content_attr.IsValid():
+            content = str(content_attr.Get())
+        if takt_label_attr and takt_label_attr.IsValid():
+            takt_label = str(takt_label_attr.Get())
+            
+        display_title = sub_title or m_type
+        
+        cycle_start, cycle_end = self._get_anim_cycle_frames(prim.GetStage(), prim_path)
+        fps = prim.GetStage().GetTimeCodesPerSecond()
+        cycle_len = cycle_end - cycle_start
+        cycle_len_seconds = cycle_len / fps if cycle_len > 0.0 else 3.0
+        
+        if m_type == "AOI":
+            view_model.aoi_title.set_value(display_title)
+        elif m_type == "Robot":
+            view_model.robot_title.set_value(display_title)
+        elif m_type == "ManualStation":
+            view_model.manual_station_name.set_value(m_type)
+            view_model.manual_station_sub.set_value(sub_title)
+            view_model.manual_station_content.set_value(content)
+            view_model.manual_takt_label.set_value(takt_label)
+        else:
+            view_model.generic_title.set_value(m_type)
+            view_model.generic_sub.set_value(sub_title)
+            view_model.generic_content.set_value(content)
+            
+        show_dynamic = True
+        show_static = True
+        if self._ui_instance:
+            if hasattr(self._ui_instance, "cb_dynamic"):
+                show_dynamic = self._ui_instance.cb_dynamic.model.get_value_as_bool()
+            if hasattr(self._ui_instance, "cb_static"):
+                show_static = self._ui_instance.cb_static.model.get_value_as_bool()
                 
-            with self.scene_view.scene:
-                self.ui_pool["AOI"] = self._create_pooled_widget("AOI", self._build_aoi_ui)
-                self.ui_pool["Robot"] = self._create_pooled_widget("Robot", self._build_robot_ui)
-                self.ui_pool["ManualStation"] = self._create_pooled_widget("ManualStation", self._build_manual_station_ui)
+        collapsed_transform = sc.Transform(transform=transform_matrix, look_at=sc.Transform.LookAt.CAMERA, visible=True)
+        with collapsed_transform:
+            collapsed_widget = sc.Widget(width=150, height=35)
+            def build_collapsed(title=display_title, path=prim_path):
+                def on_click(x, y, button, modifier, p=path):
+                    if button == 0:
+                        self.toggle_hud_state(p, expand=True)
+                f = ui.Frame()
+                f.set_mouse_pressed_fn(on_click)
+                with f:
+                    _stack = ui.ZStack()
+                with _stack:
+                        ui.Rectangle(style={"background_color": 0xCC1A1E24, "border_color": 0x8800FFFF, "border_width": 1})
+                        ui.Label(title, style={"color": ui.color(0.0, 0.88, 1.0), "font_size": 16, "alignment": ui.Alignment.CENTER})
+            collapsed_widget.frame.set_build_fn(build_collapsed)
+            
+        expanded_transform = sc.Transform(transform=transform_matrix, look_at=sc.Transform.LookAt.CAMERA, visible=False)
+        with expanded_transform:
+            expanded_widget = sc.Widget(width=300, height=240)
+            
+            if m_type == "AOI":
+                builder = lambda vm=view_model, p=prim_path: self._build_aoi_ui(vm, p)
+            elif m_type == "Robot":
+                builder = lambda vm=view_model, p=prim_path: self._build_robot_ui(vm, p)
+            elif m_type == "ManualStation":
+                builder = lambda vm=view_model, p=prim_path: self._build_manual_station_ui(vm, p)
+            else:
+                builder = lambda vm=view_model, p=prim_path, sd=show_dynamic, ss=show_static: self._build_generic_ui(vm, p, sd, ss)
+                
+            expanded_widget.frame.set_build_fn(builder)
 
-    def _create_pooled_widget(self, name, ui_builder_func):
-        transform = sc.Transform(look_at=sc.Transform.LookAt.CAMERA, visible=False)
-        with transform:
-            # 增加 widget 高度以容納整合後的面板
-            widget = sc.Widget(width=300, height=240)
-            widget.frame.set_build_fn(ui_builder_func)
-        return {"transform": transform, "widget": widget}
+        self._hud_instances[prim_path] = {
+            "view_model": view_model,
+            "machine_type": m_type,
+            "collapsed_transform": collapsed_transform,
+            "expanded_transform": expanded_transform,
+            "expanded_widget": expanded_widget,
+            "cycle_start": cycle_start,
+            "cycle_end": cycle_end,
+            "cycle_len_seconds": cycle_len_seconds,
+            "time_remaining": cycle_len_seconds,
+            "is_expanded": False
+        }
 
-    def _build_aoi_ui(self):
-        with ui.ZStack():
+    def toggle_hud_state(self, prim_path, expand):
+        if prim_path in self._hud_instances:
+            instance = self._hud_instances[prim_path]
+            instance["is_expanded"] = expand
+            instance["collapsed_transform"].visible = not expand
+            instance["expanded_transform"].visible = expand
+
+    def _build_aoi_ui(self, view_model, prim_path):
+        import omni.ui as ui
+        def on_click(x, y, button, modifier, p=prim_path):
+            if button == 0:
+                self.toggle_hud_state(p, expand=False)
+        f = ui.Frame()
+        f.set_mouse_pressed_fn(on_click)
+        with f:
+            _stack = ui.ZStack()
+        with _stack:
             ui.Rectangle(style={"background_color": 0xCC1A1E24, "border_color": 0xCC00FFFF, "border_width": 2, "border_radius": 5})
             with ui.HStack():
                 ui.Spacer(width=25)
                 with ui.VStack(spacing=5):
                     ui.Spacer(height=15)
-                    ui.Label("AOI Inspection", style={"color": 0xFFFFFFFF, "font_size": 20})
+                    ui.Label(view_model.aoi_title.get_value_as_string(), model=view_model.aoi_title, style={"color": 0xFF00FFFF, "font_size": 20, "alignment": ui.Alignment.CENTER})
+                    with ui.HStack(height=1):
+                        ui.Spacer(width=5)
+                        ui.Rectangle(height=1, style={"background_color": ui.color(0.0, 0.8, 1.0, 0.30)})
+                        ui.Spacer(width=5)
+                    ui.Spacer(height=5)
                     with ui.HStack():
                         ui.Label("Status:", width=80, style={"color": 0xFFAAAAAA})
-                        ui.Label("", model=self.view_model.aoi_status, style={"color": 0xFFFFFFFF})
+                        ui.Label(view_model.aoi_status.get_value_as_string(), model=view_model.aoi_status, style={"color": 0xFFFFFFFF})
                     with ui.HStack():
                         ui.Label("Defect %:", width=80, style={"color": 0xFFAAAAAA})
-                        ui.FloatField(model=self.view_model.aoi_defect_rate, read_only=True, style={"color": 0xFFFFFFFF})
+                        ui.FloatField(model=view_model.aoi_defect_rate, read_only=True, style={"color": 0xFFFFFFFF})
                     ui.Spacer(height=15)
                 ui.Spacer(width=25)
 
-    def _build_robot_ui(self):
-        with ui.ZStack():
+    def _build_robot_ui(self, view_model, prim_path):
+        import omni.ui as ui
+        def on_click(x, y, button, modifier, p=prim_path):
+            if button == 0:
+                self.toggle_hud_state(p, expand=False)
+        f = ui.Frame()
+        f.set_mouse_pressed_fn(on_click)
+        with f:
+            _stack = ui.ZStack()
+        with _stack:
             ui.Rectangle(style={"background_color": 0xCC1A1E24, "border_color": 0xCC00FFFF, "border_width": 2, "border_radius": 5})
             with ui.HStack():
                 ui.Spacer(width=25)
                 with ui.VStack(spacing=5):
                     ui.Spacer(height=15)
-                    ui.Label("Robot Arm", style={"color": 0xFFFFFFFF, "font_size": 20})
+                    ui.Label(view_model.robot_title.get_value_as_string(), model=view_model.robot_title, style={"color": 0xFF00FFFF, "font_size": 20, "alignment": ui.Alignment.CENTER})
+                    with ui.HStack(height=1):
+                        ui.Spacer(width=5)
+                        ui.Rectangle(height=1, style={"background_color": ui.color(0.0, 0.8, 1.0, 0.30)})
+                        ui.Spacer(width=5)
+                    ui.Spacer(height=5)
                     with ui.HStack():
                         ui.Label("State:", width=80, style={"color": 0xFFAAAAAA})
-                        ui.Label("", model=self.view_model.robot_state, style={"color": 0xFFFFFFFF})
+                        ui.Label(view_model.robot_state.get_value_as_string(), model=view_model.robot_state, style={"color": 0xFFFFFFFF})
                     ui.Spacer(height=15)
                 ui.Spacer(width=25)
 
-    def _build_manual_station_ui(self):
-        with ui.ZStack():
+    def _build_manual_station_ui(self, view_model, prim_path):
+        import omni.ui as ui
+        def on_click(x, y, button, modifier, p=prim_path):
+            if button == 0:
+                self.toggle_hud_state(p, expand=False)
+        f = ui.Frame()
+        f.set_mouse_pressed_fn(on_click)
+        with f:
+            _stack = ui.ZStack()
+        with _stack:
             ui.Rectangle(style={"background_color": ui.color(0.05, 0.05, 0.12, 0.85), "border_color": 0xCC00FFFF, "border_width": 2, "border_radius": 5})
             with ui.HStack():
                 ui.Spacer(width=25)
-                with ui.VStack(spacing=10):
+                with ui.VStack(spacing=5):
                     ui.Spacer(height=15)
-                    ui.Label("", model=self.view_model.manual_station_name, style={"color": 0xFFFFFFFF, "font_size": 22, "alignment": ui.Alignment.CENTER})
-                    ui.Label("Takt Time Remaining:", style={"color": 0xFFAAAAAA, "font_size": 14})
-                    with ui.ZStack(height=20):
-                        ui.Rectangle(style={"background_color": 0x44000000, "border_radius": 3})
-                        self.progress_fill = ui.Rectangle(
-                            style={"background_color": ui.color(0.0, 1.0, 0.0, 1.0), "border_radius": 3},
-                            width=ui.Percent(100) 
-                        )
+                    ui.Label(view_model.manual_station_name.get_value_as_string(), model=view_model.manual_station_name, style={"color": 0xFF00FFFF, "font_size": 22, "alignment": ui.Alignment.CENTER})
+                    with ui.HStack(height=1):
+                        ui.Spacer(width=5)
+                        ui.Rectangle(height=1, style={"background_color": ui.color(0.0, 0.8, 1.0, 0.30)})
+                        ui.Spacer(width=5)
+                    ui.Label(view_model.manual_station_sub.get_value_as_string(), height=16, model=view_model.manual_station_sub, style={"color": 0xFFFFAA00, "font_size": 14, "alignment": ui.Alignment.CENTER})
+                    ui.Label(view_model.manual_station_content.get_value_as_string(), height=16, model=view_model.manual_station_content, style={"color": 0xFFAAAAAA, "font_size": 14, "alignment": ui.Alignment.CENTER})
+                    ui.Spacer(height=5)
+                    ui.Label(view_model.manual_takt_label.get_value_as_string(), model=view_model.manual_takt_label, style={"color": 0xFFAAAAAA, "font_size": 14})
+                    
+                    view_model.current_progress_pct = 100.0
+                    view_model.current_r = 0.0
+                    view_model.current_g = 1.0
+                    
+                    view_model.progress_frame = ui.Frame()
+                    
+                    def build_progress_bar():
+                        with ui.ZStack(height=20):
+                            # 1. Background track
+                            ui.Rectangle(style={"background_color": 0x44000000, "border_radius": 3})
+                            
+                            # 2. Animated Color Fill
+                            with ui.HStack():
+                                ui.Rectangle(
+                                    width=ui.Percent(view_model.current_progress_pct),
+                                    style={
+                                        "background_color": ui.color(view_model.current_r, view_model.current_g, 0.0, 1.0),
+                                        "border_radius": 3
+                                    }
+                                )
+                                ui.Spacer(width=ui.Percent(100.0 - view_model.current_progress_pct))
+                                
+                            # 3. White Text Overlay
+                            with ui.HStack():
+                                ui.Spacer()
+                                ui.Label(
+                                    f"{view_model.current_progress_pct:.1f}%", 
+                                    width=0,
+                                    style={"color": 0xFFFFFFFF, "font_size": 14},
+                                    alignment=ui.Alignment.RIGHT_CENTER
+                                )
+                                ui.Spacer(width=5)
+                                
+                    view_model.progress_frame.set_build_fn(build_progress_bar)
+                    ui.Spacer(height=15)
                     ui.Spacer(height=15)
                 ui.Spacer(width=25)
 
-        self._color_sub = self.view_model.manual_takt_time_pct.add_value_changed_fn(self._on_takt_time_changed)
-
-    def _on_takt_time_changed(self, model):
-        pct = model.as_float
-        pct = max(0.0, min(100.0, pct))
-        self.progress_fill.width = ui.Percent(pct)
-        ratio = pct / 100.0
-        r = 1.0 - ratio
-        g = ratio
-        b = 0.0
-        self.progress_fill.style = {
-            "background_color": ui.color(r, g, b, 1.0),
-            "border_radius": 3
-        }
-
-    def _build_generic_ui(self):
-        pass
-
-    def _create_generic_widget(self, name):
-        transform = sc.Transform(look_at=sc.Transform.LookAt.CAMERA, visible=False)
-        pool_item_dict = {"transform": transform, "dynamic_hud_vbox": None, "static_hud_frame": None, "bg_rect": None}
-        
-        with transform:
-            widget = sc.Widget(width=300, height=240)
-            
-            def build_ui():
-                with ui.ZStack():
-                    pool_item_dict["bg_rect"] = ui.Rectangle(style={"background_color": ui.color(0.1, 0.1, 0.15, 0.85), "border_color": 0xCC00FFFF, "border_width": 2, "border_radius": 5})
-                    with ui.HStack():
-                        ui.Spacer(width=15)
-                        with ui.VStack(spacing=5):
-                            ui.Spacer(height=10)
-                            
-                            # ── 動態 HUD 區塊 ──
-                            pool_item_dict["dynamic_hud_vbox"] = ui.VStack(spacing=2, height=0)
-                            with pool_item_dict["dynamic_hud_vbox"]:
-                                ui.Label("", height=22, model=self.view_model.generic_title, style={"color": 0xFFFFFFFF, "font_size": 20, "weight": "bold"})
-                                ui.Label("", height=16, model=self.view_model.generic_sub, style={"color": 0xFFFFAA00, "font_size": 14})
-                                ui.Label("", height=16, model=self.view_model.generic_content, style={"color": 0xFFAAAAAA, "font_size": 14})
-                                
-                                ui.Spacer(height=5)
-                                # 這裡的 Line 也被包在 dynamic_hud_vbox 裡面，所以當它隱藏時，這條線也會一起隱藏
-                                ui.Line(style={"color": 0xFF444444, "border_width": 1})
-                                ui.Spacer(height=5)
-                            
-                            # ── 靜態 AIF Metadata 區塊 (移植自 Smart Info Panel) ──
-                            # 為了避免在 3D 場景中點擊 CollapsableFrame 觸發 Omniverse 預設的射線點擊 (Raycast/Selection) 
-                            # 導致選取焦點亂跑，這裡改用普通的 Frame 或是 Vstack 來代替。
-                            pool_item_dict["static_hud_frame"] = ui.VStack(spacing=2, height=0)
-                            with pool_item_dict["static_hud_frame"]:
-                                ui.Label("Factory Info", height=16, style={"color": 0xFF00AAFF, "font_size": 14, "weight": "bold"})
-                                ui.Spacer(height=3)
-                                with ui.HStack(height=16):
-                                    ui.Label("Asset Class:", width=90, style={"color": 0xFF888888, "font_size": 12})
-                                    ui.Label("", model=self.view_model.generic_title, style={"color": 0xFFDDDDDD, "font_size": 12})
-                                with ui.HStack(height=16):
-                                    ui.Label("Model No:", width=90, style={"color": 0xFF888888, "font_size": 12})
-                                    ui.Label("", model=self.view_model.generic_sub, style={"color": 0xFFDDDDDD, "font_size": 12})
-                                with ui.HStack(height=16):
-                                    ui.Label("Status:", width=90, style={"color": 0xFF888888, "font_size": 12})
-                                    ui.Label("Active", style={"color": 0xFF44AA44, "font_size": 12})
-                            
-                            ui.Spacer(height=10)
-                        ui.Spacer(width=15)
-            
-            widget.frame.set_build_fn(build_ui)
-            pool_item_dict["widget"] = widget
-            
-        return pool_item_dict
+    def _build_generic_ui(self, view_model, prim_path, show_dynamic, show_static):
+        import omni.ui as ui
+        def on_click(x, y, button, modifier, p=prim_path):
+            if button == 0:
+                self.toggle_hud_state(p, expand=False)
+        f = ui.Frame()
+        f.set_mouse_pressed_fn(on_click)
+        with f:
+            _stack = ui.ZStack()
+        with _stack:
+            if show_dynamic or show_static:
+                ui.Rectangle(style={"background_color": ui.color(0.1, 0.1, 0.15, 0.85), "border_color": 0xCC00FFFF, "border_width": 2, "border_radius": 5})
+            with ui.HStack():
+                ui.Spacer(width=15)
+                with ui.VStack(spacing=5):
+                    ui.Spacer(height=10)
+                    if show_dynamic:
+                        with ui.VStack(spacing=2):
+                            ui.Label(view_model.generic_title.get_value_as_string(), height=22, model=view_model.generic_title, style={"color": 0xFF00FFFF, "font_size": 20, "weight": "bold"})
+                            with ui.HStack(height=1):
+                                ui.Spacer(width=5)
+                                ui.Rectangle(height=1, style={"background_color": ui.color(0.0, 0.8, 1.0, 0.30)})
+                                ui.Spacer(width=5)
+                            ui.Spacer(height=3)
+                            ui.Label(view_model.generic_sub.get_value_as_string(), height=16, model=view_model.generic_sub, style={"color": 0xFFFFAA00, "font_size": 14})
+                            ui.Label(view_model.generic_content.get_value_as_string(), height=16, model=view_model.generic_content, style={"color": 0xFFAAAAAA, "font_size": 14})
+                            ui.Spacer(height=5)
+                            ui.Line(style={"color": 0xFF444444, "border_width": 1})
+                            ui.Spacer(height=5)
+                    if show_static:
+                        with ui.VStack(spacing=2):
+                            ui.Label("Factory Info", height=16, style={"color": 0xFF00AAFF, "font_size": 14, "weight": "bold"})
+                            ui.Spacer(height=3)
+                            with ui.HStack(height=16):
+                                ui.Label("Asset Class:", width=90, style={"color": 0xFF888888, "font_size": 12})
+                                ui.Label(view_model.generic_title.get_value_as_string(), model=view_model.generic_title, style={"color": 0xFFDDDDDD, "font_size": 12})
+                            with ui.HStack(height=16):
+                                ui.Label("Model No:", width=90, style={"color": 0xFF888888, "font_size": 12})
+                                ui.Label(view_model.generic_sub.get_value_as_string(), model=view_model.generic_sub, style={"color": 0xFFDDDDDD, "font_size": 12})
+                            with ui.HStack(height=16):
+                                ui.Label("Status:", width=90, style={"color": 0xFF888888, "font_size": 12})
+                                ui.Label("Active", style={"color": 0xFF44AA44, "font_size": 12})
+                    ui.Spacer(height=10)
+                ui.Spacer(width=15)
 
     def _get_anim_cycle_frames(self, stage, prim_path):
-        """
-        Detects the actual animation cycle frame range on the subtree rooted at prim_path.
-        Uses a priority-based strategy designed to handle Unreal Engine baked USDs:
-
-          P0:   UsdSkel.Animation prims (proper skeletal animation)
-          P1:   xformOp bounds — only accepted if range is "reasonable" (<2000 frames)
-          P1.5: Autocorrelation on xformOp:transform values — detects the true
-                repeating cycle even when UE bakes thousands of linear frames
-          P2:   All authored TimeSamples with outlier rejection
-
-        Returns (start_frame, end_frame). Falls back to stage time range.
-        """
+        import omni.usd
+        from pxr import Usd, UsdGeom, Gf
+        
         prim = stage.GetPrimAtPath(prim_path)
         if not prim or not prim.IsValid():
-            print(f"[Smart HUD] ⚠️ Prim not found or invalid: {prim_path}")
-            return (stage.GetStartTimeCode(), stage.GetEndTimeCode())
+            return (0.0, 3.0 * stage.GetTimeCodesPerSecond())
 
-        # --- P0: SkelAnimation prims (highest priority) ---
-        skel_bounds = []
-        try:
-            for p in Usd.PrimRange(prim):
-                if p.IsA(UsdSkel.Animation):
-                    for attr_name in ["rotations", "translations", "scales", "blendShapeWeights"]:
-                        attr = p.GetAttribute(attr_name)
-                        if attr and attr.HasAuthoredValue():
-                            samples = attr.GetTimeSamples()
-                            if samples and len(samples) >= 2:
-                                skel_bounds.append((float(samples[0]), float(samples[-1])))
-                                print(f"[Smart HUD]   P0 found {attr_name} on {p.GetPath()}: "
-                                      f"[{samples[0]}, {samples[-1]}] ({len(samples)} keys)")
-        except Exception as e:
-            print(f"[Smart HUD] ⚠️ SkelAnimation scan error: {e}")
+        anim_target_attr = prim.GetAttribute("aif:core:animationTarget")
+        if anim_target_attr and anim_target_attr.IsValid():
+            explicit_target = anim_target_attr.Get()
+            if explicit_target and str(explicit_target).strip():
+                redirect_path = str(explicit_target).strip()
+                target_prim = stage.GetPrimAtPath(redirect_path)
+                if target_prim and target_prim.IsValid():
+                    prim = target_prim
 
-        if skel_bounds:
-            start = min(b[0] for b in skel_bounds)
-            end = max(b[1] for b in skel_bounds)
-            if 0 < (end - start) < 50000:  # Reject if suspiciously large
-                print(f"[Smart HUD] 🎯 P0 SkelAnimation bounds: [{start}, {end}] ({end - start} frames)")
-                return (start, end)
-            else:
-                print(f"[Smart HUD] ⚠️ P0 SkelAnimation bounds [{start}, {end}] look like UE sentinels, skipping")
-
-        # --- Collect all xformOp data (shared between P1 and P1.5) ---
         xform_bounds = []
-        xform_transform_attrs = []  # For autocorrelation in P1.5
+        xform_transform_attrs = []
         try:
             for p in Usd.PrimRange(prim):
                 xformable = UsdGeom.Xformable(p)
@@ -362,7 +400,6 @@ class GrayboxHUDEngine:
                             samples = attr.GetTimeSamples()
                             if samples and len(samples) >= 2:
                                 xform_bounds.append((float(samples[0]), float(samples[-1]), len(samples), attr.GetName()))
-                                # Collect xformOp:transform attrs for autocorrelation
                                 if attr.GetName() == "xformOp:transform":
                                     xform_transform_attrs.append({
                                         "prim_path": str(p.GetPath()),
@@ -370,338 +407,147 @@ class GrayboxHUDEngine:
                                         "samples": samples,
                                     })
         except Exception as e:
-            print(f"[Smart HUD] ⚠️ xformOp scan error: {e}")
+            pass
 
-        # Log what we found
-        if xform_bounds:
-            print(f"[Smart HUD]   P1 found {len(xform_bounds)} xformOp attributes with TimeSamples")
-            # Show the range distribution
-            spans = [b[1] - b[0] for b in xform_bounds]
-            min_span = min(spans)
-            max_span = max(spans)
-            print(f"[Smart HUD]   P1 span range: [{min_span}, {max_span}] frames")
-
-        # --- P1: xformOp bounds — only accept if the range is reasonable ---
-        # UE-baked animations often have bounds of [0, 9999+], which is NOT the true loop length
         if xform_bounds:
             start = min(b[0] for b in xform_bounds)
             end = max(b[1] for b in xform_bounds)
             total_span = end - start
             if 0 < total_span <= 2000:
-                # Reasonable range — likely a proper short animation
-                print(f"[Smart HUD] 🎯 P1 xformOp bounds: [{start}, {end}] ({total_span} frames)")
                 return (start, end)
-            else:
-                print(f"[Smart HUD] ⚠️ P1 xformOp bounds [{start}, {end}] = {total_span} frames — "
-                      f"too large, likely UE linear bake. Trying autocorrelation...")
 
-        # --- P1.5: Autocorrelation-based cycle detection (FULL MATRIX) ---
-        # For UE-baked USDs: animation is written as thousands of linear frames.
-        # The actual motion REPEATS, but may be purely rotational (zero translation delta).
-        # We compare the FULL 4x4 matrix (Frobenius norm) to detect the true loop.
         if xform_transform_attrs:
-            # Pick the transform attribute with the most keyframes (densest sampling)
             best_attr_info = max(xform_transform_attrs, key=lambda x: len(x["samples"]))
             attr = best_attr_info["attr"]
             sample_times = list(best_attr_info["samples"])
-            prim_name = best_attr_info["prim_path"].split("/")[-1]
 
-            print(f"[Smart HUD]   P1.5 Autocorrelation on '{prim_name}' "
-                  f"({len(sample_times)} samples, range [{sample_times[0]}, {sample_times[-1]}])")
-
-            # Find the sample index closest to stage start time (skip pre-roll frames)
             stage_start = stage.GetStartTimeCode()
             ref_idx = 0
             for idx, t in enumerate(sample_times):
                 if t >= stage_start:
                     ref_idx = idx
                     break
-            print(f"[Smart HUD]   P1.5 Reference starts at sample index {ref_idx} "
-                  f"(time {sample_times[ref_idx]}, stage start={stage_start})")
 
             check_count = min(len(sample_times), 3000)
             cycle_frame_idx = None
 
             try:
-                # Get reference matrix at the effective playback start
                 ref_matrix = attr.Get(sample_times[ref_idx])
-                ref_next_matrix = attr.Get(sample_times[ref_idx + 1]) if ref_idx + 1 < len(sample_times) else None
-
                 if ref_matrix is not None and hasattr(ref_matrix, 'GetRow'):
-                    # Log what the reference matrix looks like
-                    r3 = ref_matrix.GetRow(3)
-                    r0 = ref_matrix.GetRow(0)
-                    print(f"[Smart HUD]   P1.5 Ref matrix row0 (X-axis): "
-                          f"({r0[0]:.4f}, {r0[1]:.4f}, {r0[2]:.4f})")
-                    print(f"[Smart HUD]   P1.5 Ref matrix row3 (translate): "
-                          f"({r3[0]:.4f}, {r3[1]:.4f}, {r3[2]:.4f})")
-
-                    # Search forward for where the FULL matrix recurs
-                    # Start at ref_idx + 15 to skip initial transition frames
                     min_search_idx = ref_idx + 15
                     for i in range(min_search_idx, check_count):
-                        val = attr.Get(sample_times[i])
-                        if val is None or not hasattr(val, 'GetRow'):
-                            continue
-
-                        # Frobenius norm of (val - ref_matrix) across all 4 rows × 4 cols
-                        dist_sq = 0.0
-                        for row_idx in range(4):
-                            row_ref = ref_matrix.GetRow(row_idx)
-                            row_val = val.GetRow(row_idx)
-                            for col_idx in range(4):
-                                diff = float(row_val[col_idx]) - float(row_ref[col_idx])
-                                dist_sq += diff * diff
-                        dist = dist_sq ** 0.5
-
-                        if dist < 0.02:  # Near-exact full matrix match
-                            # Double-verify: does the NEXT frame also match ref+1?
-                            verified = False
-                            if ref_next_matrix is not None and i + 1 < check_count:
-                                val_next = attr.Get(sample_times[i + 1])
-                                if val_next is not None and hasattr(val_next, 'GetRow'):
-                                    dist_sq_next = 0.0
-                                    for row_idx in range(4):
-                                        row_r = ref_next_matrix.GetRow(row_idx)
-                                        row_v = val_next.GetRow(row_idx)
-                                        for col_idx in range(4):
-                                            diff = float(row_v[col_idx]) - float(row_r[col_idx])
-                                            dist_sq_next += diff * diff
-                                    if dist_sq_next ** 0.5 < 0.02:
-                                        verified = True
-                            else:
-                                verified = True  # Can't verify, accept single match
-
-                            if verified:
+                        test_matrix = attr.Get(sample_times[i])
+                        if test_matrix is not None:
+                            diff = 0.0
+                            for r in range(4):
+                                row1 = ref_matrix.GetRow(r)
+                                row2 = test_matrix.GetRow(r)
+                                for c in range(4):
+                                    diff += abs(row1[c] - row2[c])
+                            if diff < 1e-4:
                                 cycle_frame_idx = i
-                                print(f"[Smart HUD]   P1.5 Match at sample {i} "
-                                      f"(time {sample_times[i]}), matrix dist={dist:.6f}")
                                 break
-
             except Exception as e:
-                print(f"[Smart HUD] ⚠️ P1.5 autocorrelation error: {e}")
+                pass
 
-            if cycle_frame_idx is not None:
-                cycle_start = float(sample_times[ref_idx])
-                cycle_end = float(sample_times[cycle_frame_idx])
-                cycle_len = cycle_end - cycle_start
-                fps = stage.GetTimeCodesPerSecond()
-                print(f"[Smart HUD] 🎯 P1.5 Autocorrelation DETECTED cycle!")
-                print(f"[Smart HUD]   Cycle: [{cycle_start}, {cycle_end}] = {cycle_len} frames "
-                      f"({cycle_len / fps:.2f}s at {fps}fps)")
-                print(f"[Smart HUD]   Pattern repeats at sample index {cycle_frame_idx} of {len(sample_times)}")
-                return (cycle_start, cycle_end)
-            else:
-                print(f"[Smart HUD] ⚠️ P1.5 No repeating pattern found in first {check_count} samples")
-
-        # --- P2: All authored attributes with outlier rejection ---
-        all_starts = []
-        all_ends = []
-        try:
-            for p in Usd.PrimRange(prim):
-                for attr in p.GetAuthoredAttributes():
-                    samples = attr.GetTimeSamples()
-                    if samples and len(samples) >= 2:
-                        all_starts.append(float(samples[0]))
-                        all_ends.append(float(samples[-1]))
-        except Exception as e:
-            print(f"[Smart HUD] ⚠️ TimeSamples scan error: {e}")
-
-        if all_ends:
-            median_end = statistics.median(all_ends)
-            threshold = max(median_end * 10.0, 1000.0)
-            filtered_ends = [e for e in all_ends if e <= threshold]
-            filtered_starts = [s for s in all_starts if s <= threshold]
-
-            if filtered_ends:
-                start = min(filtered_starts) if filtered_starts else 0.0
-                end = max(filtered_ends)
-                if (end - start) > 0:
-                    print(f"[Smart HUD] 🎯 P2 Filtered TimeSamples bounds: [{start}, {end}] "
-                          f"({end - start} frames, rejected {len(all_ends) - len(filtered_ends)} outliers)")
+            if cycle_frame_idx:
+                start = sample_times[ref_idx]
+                end = sample_times[cycle_frame_idx]
+                if end > start:
                     return (start, end)
 
-        # --- Final fallback: stage global time range ---
-        fallback_start = stage.GetStartTimeCode()
-        fallback_end = stage.GetEndTimeCode()
-        print(f"[Smart HUD] ⚠️ No animation data found, using stage range: [{fallback_start}, {fallback_end}]")
+        fallback_start = 0.0
+        fallback_end = 3.0 * stage.GetTimeCodesPerSecond()
         return (fallback_start, fallback_end)
 
-    def on_selection_changed(self, hud_data, translation):
-        for key, pool_item in self.ui_pool.items():
-            pool_item["transform"].visible = False
-            
-        if hud_data and translation is not None:
-            m_type = hud_data.get("type", "")
-            
-            # --- Dynamically detect animation cycle from the selected prim's subtree ---
-            if m_type == "ManualStation":
-                stage = omni.usd.get_context().get_stage()
-                scan_path = hud_data.get("path", "")
-                print(f"[Smart HUD] 🔍 ManualStation selected: {scan_path}")
-                
-                # Check if the prim has an explicit animation target override
-                if scan_path and stage:
-                    scan_prim = stage.GetPrimAtPath(scan_path)
-                    if scan_prim and scan_prim.IsValid():
-                        anim_target_attr = scan_prim.GetAttribute("aif:core:animationTarget")
-                        if anim_target_attr and anim_target_attr.IsValid():
-                            explicit_target = anim_target_attr.Get()
-                            print(f"[Smart HUD] 🔍 Found animationTarget attr, value={repr(explicit_target)}")
-                            if explicit_target and str(explicit_target).strip():
-                                redirect_path = str(explicit_target).strip()
-                                # Verify the target prim actually exists in the stage
-                                target_prim = stage.GetPrimAtPath(redirect_path)
-                                if target_prim and target_prim.IsValid():
-                                    scan_path = redirect_path
-                                    print(f"[Smart HUD] 🔗 Redirected to animationTarget: {scan_path}")
-                                else:
-                                    print(f"[Smart HUD] ⚠️ animationTarget prim not found: {redirect_path}")
-                        else:
-                            print(f"[Smart HUD] 🔍 No 'aif:core:animationTarget' attribute on {scan_path}")
-                
-                print(f"[Smart HUD] 🔍 Scanning for animation data at: {scan_path}")
-                if scan_path and stage:
-                    start_f, end_f = self._get_anim_cycle_frames(stage, scan_path)
-                    cycle_len = end_f - start_f
-                    
-                    if cycle_len > 0:
-                        self._cycle_start_frame = start_f
-                        self._cycle_end_frame = end_f
-                        print(f"[Smart HUD] ✅ Animation cycle: [{start_f}, {end_f}] = {cycle_len} frames")
-                    else:
-                        # Fallback to safe defaults
-                        self._cycle_start_frame = stage.GetStartTimeCode()
-                        self._cycle_end_frame = stage.GetEndTimeCode()
-                        if (self._cycle_end_frame - self._cycle_start_frame) <= 0:
-                            self._cycle_end_frame = self._cycle_start_frame + 100.0
-                        print(f"[Smart HUD] ⚠️ No valid cycle detected, using stage range")
-            # ------------------------------------
-
-            # 檢查是否為預設的 UI，如果不是則使用 generic_ui
-            if m_type not in ["AOI", "Robot", "ManualStation"]:
-                m_type = "Generic"  # 將所有自訂的屬性都歸類為使用 Generic UI
-
-            # Create a generic widget pool item if not a preset
-            if m_type not in self.ui_pool:
-                if self.scene_view and self.scene_view.scene:
-                    with self.scene_view.scene:
-                        # 呼叫新的建立函式，它會返回完整的字典
-                        self.ui_pool[m_type] = self._create_generic_widget(m_type)
-                else:
-                    return # Safe check if scene is destroyed
-                
-            # Update generic models if it's a generic type
-            if m_type == "Generic":
-                self.view_model.generic_title.set_value(hud_data.get("type", ""))
-                self.view_model.generic_sub.set_value(hud_data.get("sub", ""))
-                self.view_model.generic_content.set_value(hud_data.get("content", ""))
-
-            item = self.ui_pool[m_type]
-            
-            # Sync Checkbox state from the UI instance to the Engine
-            # By passing the state when updating the visibility
-            if "dynamic_hud_vbox" in item and item["dynamic_hud_vbox"]:
-                item["dynamic_hud_vbox"].visible = hud_data.get("show_dynamic", True)
-            if "static_hud_frame" in item and item["static_hud_frame"]:
-                item["static_hud_frame"].visible = hud_data.get("show_static", True)
-                
-            # 處理全不勾選時隱藏整個背景框
-            if not hud_data.get("show_dynamic", True) and not hud_data.get("show_static", True):
-                if "bg_rect" in item and item["bg_rect"]:
-                    item["bg_rect"].visible = False
-            else:
-                if "bg_rect" in item and item["bg_rect"]:
-                    item["bg_rect"].visible = True
-
-            transform_matrix = [
-                1, 0, 0, 0,
-                0, 1, 0, 0,
-                0, 0, 1, 0,
-                translation[0], translation[1], translation[2] + 80.0, 1  # 調整高度偏移
-            ]
-            item["transform"].transform = transform_matrix
-            item["transform"].visible = True
-
     def _start_telemetry(self):
-        self._telemetry_task = asyncio.ensure_future(self._telemetry_loop())
+        import omni.kit.app
+        self._update_sub = omni.kit.app.get_app().get_update_event_stream().create_subscription_to_pop(self._on_update)
 
-    async def _telemetry_loop(self):
-        """Async telemetry loop injecting mock data safely into MVVM models.
-           Synchronizes Manual Station Takt Time with the local animation cycle
-           using frame-range-based modulo for continuous looping.
-        """
-        while self._running:
-            context = omni.usd.get_context()
-            stage = context.get_stage()
-            
-            if stage:
-                timeline = omni.timeline.get_timeline_interface()
-                fps = stage.GetTimeCodesPerSecond()
-                
-                # Convert current playback time (seconds) to frame number
-                current_frame = timeline.get_current_time() * fps
-                
-                # Calculate progress using the detected animation cycle bounds
-                cycle_start = self._cycle_start_frame
-                cycle_end = self._cycle_end_frame
-                
-                # Fallback to stage bounds if no valid cycle is set
-                if cycle_end <= cycle_start:
-                    cycle_start = stage.GetStartTimeCode()
-                    cycle_end = stage.GetEndTimeCode()
-                    
-                cycle_len = cycle_end - cycle_start
-                
-                if cycle_len > 0.0:
-                    # Map global frame into local cycle's [0, cycle_len) range
-                    # Subtract cycle_start to handle animations that don't begin at frame 0
-                    local_frame = (current_frame - cycle_start) % cycle_len
-                    ratio = local_frame / cycle_len  # 0.0 → 1.0 over one cycle
-                    
-                    # Invert: bar shrinks from 100% (cycle start) to 0% (cycle end)
-                    progress_pct = max(0.0, min(100.0, (1.0 - ratio) * 100.0))
-                else:
-                    progress_pct = 100.0
-                    
-                # Bind the computed progress to the ManualStation UI model
-                self.view_model.manual_takt_time_pct.set_value(progress_pct)
-            else:
-                self.view_model.manual_takt_time_pct.set_value(100.0)
+    def _on_update(self, event):
+        import random
+        import omni.usd
+        import omni.timeline
+        
+        if not self._running:
+            return
 
-            # Keep AOI and Robot mock data for visual demonstration
-            self.view_model.aoi_status.set_value(random.choice(["INSPECTING", "PASS", "FAIL"]))
-            self.view_model.aoi_defect_rate.set_value(random.uniform(0.0, 5.0))
-            self.view_model.robot_state.set_value(random.choice(["MOVING", "WELDING", "IDLE"]))
+        dt = event.payload.get("dt", 0.0)
+
+        context = omni.usd.get_context()
+        stage = context.get_stage()
+        
+        if stage:
+            timeline = omni.timeline.get_timeline_interface()
+            fps = stage.GetTimeCodesPerSecond()
+            current_frame = timeline.get_current_time() * fps
             
-            # Update at ~20 FPS — no blocking calls, safe for the Omniverse UI thread
-            await asyncio.sleep(0.05)
+            for prim_path, instance in self._hud_instances.items():
+                vm = instance["view_model"]
+                m_type = instance["machine_type"]
+                
+                if m_type == "ManualStation":
+                    cycle_len_sec = instance.get("cycle_len_seconds", 3.0)
+                    time_rem = instance.get("time_remaining", cycle_len_sec)
+                    
+                    # 1. Delta Time Countdown
+                    time_rem -= dt
+                    if time_rem <= 0.0:
+                        time_rem = cycle_len_sec
+                        
+                    instance["time_remaining"] = time_rem
+                    progress_pct = max(0.0, min(100.0, (time_rem / cycle_len_sec) * 100.0))
+                        
+                    # Color logic: Green(100) -> Yellow(50) -> Red(0)
+                    if progress_pct > 50:
+                        r = max(0.0, min(1.0, (100.0 - progress_pct) / 50.0))
+                        g = 1.0
+                    else:
+                        r = 1.0
+                        g = max(0.0, min(1.0, progress_pct / 50.0))
+                        
+                    # Store values and forcefully rebuild the UI frame
+                    vm.current_progress_pct = progress_pct
+                    vm.current_r = r
+                    vm.current_g = g
+                    
+                    if hasattr(vm, "progress_frame") and vm.progress_frame:
+                        vm.progress_frame.rebuild()
+                        
+                elif m_type == "AOI":
+                    # Update these less frequently to avoid flickering, e.g. based on frame count or time, but keeping random logic for now
+                    vm.aoi_status.set_value(random.choice(["INSPECTING", "PASS", "FAIL"]))
+                    vm.aoi_defect_rate.set_value(random.uniform(0.0, 5.0))
+                        
+                elif m_type == "Robot":
+                    vm.robot_state.set_value(random.choice(["MOVING", "WELDING", "IDLE"]))
+
+            # Force UI engine to wake up and redraw sc.Widget texture
+            try:
+                import omni.appwindow
+                app_win = omni.appwindow.get_default_app_window()
+                if app_win:
+                    pos = app_win.get_mouse_position()
+                    app_win.post_mouse_move_event(pos[0], pos[1])
+            except Exception:
+                pass
 
     def destroy(self):
         self._running = False
-        if self._selection_agent:
-            self._selection_agent.destroy()
-            self._selection_agent = None
-        self._telemetry_task = None
-        self._color_sub = None
+        self._update_sub = None
+        self._hud_instances.clear()
         
-        # Clear UI Pool completely to ensure no detached widgets remain
-        self.ui_pool.clear()
-        
-        # Safe cleanup of Viewport Overlay
-        if self.viewport_window:
-            if hasattr(self.viewport_window, "viewport_api") and self.scene_view:
-                try:
-                    self.viewport_window.viewport_api.remove_scene_view(self.scene_view)
-                except:
-                    pass
-            # Clear the frame to destroy the UI elements
-            frame = self.viewport_window.get_frame("DSX_Phase7_HUD_Overlay")
-            if frame:
-                frame.clear()
-        
+        if self.scene_view:
+            if self.scene_view.scene:
+                self.scene_view.scene.clear()
+            
+            if self.viewport_window:
+                if hasattr(self.viewport_window, "viewport_api"):
+                    try:
+                        self.viewport_window.viewport_api.remove_scene_view(self.scene_view)
+                    except Exception:
+                        pass
         self.scene_view = None
-        self.viewport_window = None
 
 
 # ==============================================================================
@@ -733,6 +579,30 @@ class SmartHudUI:
     def __init__(self):
         self.engine = None
         self.is_enabled = False
+        
+        # Subscribe to stage events to auto-disable HUD on stage change
+        import omni.usd
+        event_stream = omni.usd.get_context().get_stage_event_stream()
+        self._stage_event_subs = [
+            event_stream.create_subscription_to_pop_by_type(int(omni.usd.StageEventType.CLOSING), self._on_stage_event),
+            event_stream.create_subscription_to_pop_by_type(int(omni.usd.StageEventType.CLOSED), self._on_stage_event),
+            event_stream.create_subscription_to_pop_by_type(int(omni.usd.StageEventType.OPENED), self._on_stage_event)
+        ]
+
+    def _on_stage_event(self, event):
+        """Safely shuts down the HUD engine if the stage changes to prevent orphaned viewports/overlays."""
+        if self.is_enabled:
+            print(f"[Smart HUD] Stage event detected (type {event.type}). Disabling HUD.")
+            self.is_enabled = False
+            if self.engine:
+                self.engine.destroy()
+                self.engine = None
+            if hasattr(self, "toggle_btn") and self.toggle_btn:
+                try:
+                    self.toggle_btn.text = "Turn ON"
+                    self.toggle_btn.set_style(self._STYLE_CORRECT)
+                except Exception:
+                    pass
 
     def build_ui(self):
         """Builds the 2D control panel inside the Zin Tools Box."""
@@ -765,8 +635,8 @@ class SmartHudUI:
                     
                     with ui.HStack(height=24, spacing=10):
                         ui.Label("Topic (Machine Type):", width=140, style={"color": 0xFFDDDDDD}, tooltip="Will be written to 'aif:core:assetClass' and displayed as 'Asset Class' in Factory Info.")
-                        self.topic_field = ui.StringField(style={"color": 0xFFDDDDDD})
-                        self.topic_field.model.set_value("ManualStation")
+                        self._topic_options = ["ManualStation", "AOI", "Robot"]
+                        self.topic_combo = ui.ComboBox(0, *self._topic_options, style={"color": 0xFFDDDDDD})
                         
                     with ui.HStack(height=24, spacing=10):
                         ui.Label("Subject (Sub Title):", width=140, style={"color": 0xFFDDDDDD}, tooltip="Will be written to 'aif:core:modelNumber' and displayed as 'Model No' in Factory Info.")
@@ -777,6 +647,11 @@ class SmartHudUI:
                         ui.Label("Content:", width=140, style={"color": 0xFFDDDDDD}, tooltip="Will be written to 'aif:core:assetDescription'. Status is hardcoded to 'Active' for demo.")
                         self.content_field = ui.StringField(style={"color": 0xFFDDDDDD})
                         self.content_field.model.set_value("Chassis")
+                        
+                    with ui.HStack(height=24, spacing=10):
+                        ui.Label("Takt Label:", width=140, style={"color": 0xFFDDDDDD}, tooltip="Will be written to 'hud_takt_label'.")
+                        self.takt_label_field = ui.StringField(style={"color": 0xFFDDDDDD})
+                        self.takt_label_field.model.set_value("Takt Time Remaining:")
                     
                     ui.Spacer(height=5)
                     with ui.HStack(spacing=10, height=30):
@@ -827,30 +702,43 @@ class SmartHudUI:
                         ui.Label("Factory Info (Metadata)", style={"color": 0xFFDDDDDD, "font_size": 13})
 
             ui.Spacer()
-        # Notify the UsdSelectionAgent to re-evaluate and trigger on_selection_changed
-        if self.is_enabled and self.engine and self.engine._selection_agent:
-             self.engine._selection_agent._handle_selection()
+
+    def _on_display_setting_changed(self, model):
+        # Notify the engine to rebuild HUDs to reflect the new display settings
+        if self.is_enabled and self.engine:
+            self.engine.rebuild_huds()
 
     def _bind_animation_target(self):
+        """Writes 'aif:core:animationTarget' to selected prims."""
+        import omni.usd
+        from pxr import Sdf
+        
         context = omni.usd.get_context()
         stage = context.get_stage()
-        if not stage: return
+        if not stage:
+            print("[Smart HUD] ❌ Error: No USD stage is currently open.")
+            return
+
         selection = context.get_selection().get_selected_prim_paths()
-        if not selection: return
-        
-        target_path = self.anim_target_field.model.get_value_as_string()
-        if not target_path: return
-        
+        if not selection:
+            print("[Smart HUD] ⚠️ No models selected. Please select a model in the stage first.")
+            return
+
+        target_path = self.anim_target_field.model.get_value_as_string().strip()
+        if not target_path:
+            print("[Smart HUD] ⚠️ Anim Target field is empty.")
+            return
+
         for path in selection:
             prim = stage.GetPrimAtPath(path)
-            if prim and prim.IsValid():
-                attr = prim.GetAttribute("aif:core:animationTarget")
-                if not attr:
-                    attr = prim.CreateAttribute("aif:core:animationTarget", Sdf.ValueTypeNames.String)
-                attr.Set(target_path)
-                attr.SetDocumentation("Path to the animated character driving this station's progress [AIF-MANAGED]")
-                attr.SetCustomData({'omni': {'kit': {'locked': True}}})
-                print(f"[Smart HUD] 🔗 Bound animation target {target_path} to {path}")
+            if not prim or not prim.IsValid():
+                continue
+
+            attr = prim.GetAttribute("aif:core:animationTarget")
+            if not attr:
+                attr = prim.CreateAttribute("aif:core:animationTarget", Sdf.ValueTypeNames.String)
+            attr.Set(target_path)
+            print(f"[Smart HUD] ✅ Bound animationTarget = '{target_path}' on {path}")
 
     def _apply_attributes_to_selected(self):
         import omni.usd
@@ -867,9 +755,11 @@ class SmartHudUI:
             print("[Smart HUD] ⚠️ No models selected. Please select a model in the stage first.")
             return
 
-        topic = self.topic_field.model.get_value_as_string()
+        idx = self.topic_combo.model.get_item_value_model().get_value_as_int()
+        topic = self._topic_options[idx] if 0 <= idx < len(self._topic_options) else "ManualStation"
         subject = self.subject_field.model.get_value_as_string()
         content = self.content_field.model.get_value_as_string()
+        takt_label = self.takt_label_field.model.get_value_as_string()
 
         for path in selection:
             prim = stage.GetPrimAtPath(path)
@@ -888,6 +778,10 @@ class SmartHudUI:
             attr_cont = prim.GetAttribute("hud_content")
             if not attr_cont: attr_cont = prim.CreateAttribute("hud_content", Sdf.ValueTypeNames.String)
             attr_cont.Set(content)
+            
+            attr_takt = prim.GetAttribute("hud_takt_label")
+            if not attr_takt: attr_takt = prim.CreateAttribute("hud_takt_label", Sdf.ValueTypeNames.String)
+            attr_takt.Set(takt_label)
 
             # 2. Add smart_info_panel attributes (aif:core and aif:spec)
             # 遵循 AIF Pipeline Samples 綁定規範 (AIF-MANAGED, Locked)
@@ -916,11 +810,22 @@ class SmartHudUI:
 
             for attr_name, attr_info in aif_attrs.items():
                 attr = prim.GetAttribute(attr_name)
-                if not attr:
+                
+                # Unlock existing locked attribute before writing
+                if attr and attr.IsValid():
+                    existing_cd = attr.GetCustomData()
+                    if existing_cd.get('omni', {}).get('kit', {}).get('locked', False):
+                        unlocked_cd = dict(existing_cd)
+                        unlocked_cd['omni'] = dict(unlocked_cd.get('omni', {}))
+                        unlocked_cd['omni']['kit'] = dict(unlocked_cd['omni'].get('kit', {}))
+                        unlocked_cd['omni']['kit']['locked'] = False
+                        attr.SetCustomData(unlocked_cd)
+                
+                if not attr or not attr.IsValid():
                     attr = prim.CreateAttribute(attr_name, Sdf.ValueTypeNames.String)
                 attr.Set(attr_info["value"])
                 
-                # 遵循 AIF 規範：加入 [AIF-MANAGED] 標籤與鎖定屬性
+                # AIF 規範：加入 [AIF-MANAGED] 標籤與鎖定屬性
                 managed_doc = f"{attr_info['doc']} [AIF-MANAGED]"
                 attr.SetDocumentation(managed_doc)
                 
@@ -934,6 +839,9 @@ class SmartHudUI:
                 attr.SetCustomData(custom_data)
                 
             print(f"[Smart HUD] ✅ Applied HUD and AIF-MANAGED attributes to {path}")
+            
+        if self.is_enabled and self.engine:
+            self.engine.rebuild_huds()
 
     def _remove_attributes_from_selected(self):
         import omni.usd
@@ -946,7 +854,7 @@ class SmartHudUI:
         if not selection: return
 
         attrs_to_remove = [
-            "machine_type", "hud_sub_title", "hud_content",
+            "machine_type", "hud_sub_title", "hud_content", "hud_takt_label",
             "aif:core:assetClass", "aif:core:modelNumber", 
             "aif:core:manufacturer", "aif:core:assetDescription", 
             "aif:spec:status"
@@ -1021,3 +929,6 @@ class SmartHudUI:
             self.engine.destroy()
             self.engine = None
         self.is_enabled = False
+        
+        # Clear stage event subscriptions
+        self._stage_event_subs = []
