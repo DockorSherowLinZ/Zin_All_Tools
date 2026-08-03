@@ -42,3 +42,6 @@ exts/tw.hud/
 
 # Diagnostic Scripts
 exts/tw.zin.smart_hud/smart_hud/diag_anim_dump.py
+
+# Max MCR
+AI_MaterialAssigner/config.ini
