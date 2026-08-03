@@ -1,0 +1,175 @@
+# =============================================================
+# Material Dictionary for DictMaterialAssigner
+# =============================================================
+# Format:  KEYWORD=MATERIAL_NAME
+# Rules:
+#   - Lines starting with # are comments
+#   - Keywords are matched CASE-INSENSITIVELY
+#   - Keywords are matched with WORD BOUNDARIES
+#     (separators: - _ space)
+#   - Longer keywords are automatically prioritized
+#   - MATERIAL_NAME must exactly match a material in the .mat library
+#
+# To add new entries, simply add a line:  YOUR-KEYWORD=MaterialName
+# =============================================================
+
+# ===== Metal Fasteners =====
+SCREW=Zinc
+BOLT=Zinc
+NUT=Zinc
+WASHER=Washer
+RIVET=Zinc
+STANDOFF=Brass
+STUD=Zinc
+SPACER=Zinc
+INSERT=Brass
+CLAMP=CaseMetal
+LOCKWASHER=Washer
+LOCK-WASHER=Washer
+THUMBSCREW=Zinc
+THUMB-SCREW=Zinc
+CAPTIVE-SCREW=Zinc
+
+# ===== Metal Structural =====
+BRACKET=CaseMetal
+RAIL=CaseMetal
+SLIDE=CaseMetal
+HINGE=CaseMetal
+SPRING=CaseMetal
+PLATE=CaseMetal
+FRAME=CaseMetal
+CHASSIS=CaseMetal
+SHIELD=CaseMetal
+CAGE=CaseMetal
+TRAY=CaseMetal
+PANEL=CaseWhiteMetal
+DOOR=CaseWhiteMetal
+LID=CaseMetal
+ARM=CaseMetal
+LEVER=CaseMetal
+TAB=CaseMetal
+HOOK=CaseMetal
+RETAINING-RING=CaseMetal
+E-RING=CaseMetal
+
+# ===== Heatsink / Thermal =====
+HEATSINK=Die
+HEAT-SINK=Die
+THERMAL-PAD=Rubber
+FIN=Die
+HEAT-SPREADER=Die
+COLD-PLATE=Die
+
+# ===== Plastic Housing =====
+FAN-HOLDER=BlackPlastic
+HOUSING=GrayPlastic
+COVER=GrayPlastic
+BEZEL=BlackPlastic
+SHROUD=BlackPlastic
+ENCLOSURE=GrayPlastic
+FILLER=BlackPlastic
+CLIP=BlackPlastic
+LATCH=BlackPlastic
+HANDLE=BlackPlastic
+KNOB=BlackPlastic
+BUTTON=GrayPlastic
+PLUG=BlackPlastic
+GROMMET=Rubber
+GASKET=Rubber
+BUMPER=Rubber
+O-RING=Rubber
+RETAINER=BlackPlastic
+SPACER-PLASTIC=BlackPlastic
+GUIDE=BlackPlastic
+DIVIDER=BlackPlastic
+DUCT=BlackPlastic
+AIR-DUCT=BlackPlastic
+AIR-BAFFLE=BlackPlastic
+BAFFLE=BlackPlastic
+CARRIER=BlackPlastic
+
+# ===== Fan =====
+FAN=BlackPlastic
+BLOWER=BlackPlastic
+IMPELLER=BlackPlastic
+
+# ===== Electronics / PCB =====
+PCB=PCBGreenPLastic
+BOARD=PCBGreenPLastic
+MAIN-BOARD=PCBGreenPLastic
+MOTHERBOARD=PCBGreenPLastic
+RISER=PCBGreenPLastic
+RISER-CARD=PCBGreenPLastic
+CONNECTOR=BlackPlastic
+CAPACITOR=Capacitor
+CAP=Capacitor
+CHIP=Chip
+RESISTOR=Chip
+INDUCTOR=Chip
+SENSOR=BlackPlastic
+SWITCH=BlackPlastic
+RELAY=BlackPlastic
+FUSE=BlackPlastic
+SOCKET=BlackPlastic
+DIMM=PCBGreenPLastic
+SSD=BlackMetal
+HDD=CaseMetal
+HARD-DRIVE=CaseMetal
+
+# ===== LED / Light =====
+LED-GREEN=GreenLight
+LED-RED=RedLight
+LED-AMBER=OrangeLight
+LED-ORANGE=OrangeLight
+LED=GreenLight
+LIGHT-PIPE=ClearPlastic
+LIGHT-GUIDE=ClearPlastic
+INDICATOR=GreenLight
+
+# ===== Labels / Stickers =====
+LABEL=Paper
+STICKER=BlackSticker
+NAMEPLATE=GraySticker
+BADGE=GraySticker
+DECAL=BlackSticker
+TAG=Paper
+
+# ===== Optical / Transparent =====
+LENS=ClearPlastic
+WINDOW=ClearPlastic
+DIFFUSER=ClearPlastic
+LIGHT-BAR=ClearPlastic
+
+# ===== Wire / Cable =====
+CABLE=Rubber
+WIRE=Rubber
+HARNESS=Rubber
+CORD=Rubber
+JUMPER=Rubber
+RIBBON=Rubber
+
+# ===== Die Cast =====
+DIE-CAST=Die
+DIECAST=Die
+CASTING=Die
+
+# ===== Specific Material Names (Exact Match Fallback) =====
+GOLD=Gold
+BRASS=Brass
+COPPER=Gold
+ZINC=Zinc
+ALUMINUM=CaseMetal
+ALUMINIUM=CaseMetal
+STEEL=CaseMetal
+RUBBER=Rubber
+PLASTIC=GrayPlastic
+METAL=CaseMetal
+
+# ===== Scanner-Specific =====
+SCAN-WINDOW=ClearPlastic
+SCAN-HEAD=BlackPlastic
+TRIGGER=BlackPlastic
+GRIP=Rubber
+BOOT=Rubber
+CRADLE=BlackPlastic
+HOLSTER=BlackPlastic
