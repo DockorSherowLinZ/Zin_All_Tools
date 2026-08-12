@@ -1,25 +1,31 @@
+macroScript ZinAllTools_Utility
+category:"ZinAllTools"
+tooltip:"Zin All Tools Integration"
+(
+-- ============================================================================
 -- Zin All Tools: Utilities Integration v1.0
--- 包含: Reset Model v1.2 & Batch GLB Exporter v1.2.0
+-- Includes: Reset Model v1.2 & Batch GLB Exporter v1.2.0 launcher
+-- ============================================================================
 
-utility ZinAllTools "Zin All Tools"
+try(destroyDialog ZinAllTools) catch()
+
+rollout ZinAllTools "Zin All Tools Integration" width:180
 (
 	-- ==========================================
-	-- UI 介面設定 (寬度適配側邊欄)
+	-- UI Setup
 	-- ==========================================
 	
-	group "Reset Model v1.2" (
-		button btn_clean "Clean & Align (Selected)" width:140 height:40
-		label lbl_reset_status "Ready..." align:#left
-		progressBar pb_reset_progress "" width:140 height:10 value:0
-	)
+	groupBox grp_reset "Reset Model v1.2" pos:[10, 5] width:160 height:90
+	button btn_clean "Clean & Align (Selected)" width:140 height:30 pos:[20, 25]
+	label lbl_reset_status "Ready..." align:#left pos:[20, 60]
+	progressBar pb_reset_progress "" width:140 height:10 value:0 pos:[20, 75]
 	
-	group "Batch GLB Exporter" (
-		button btn_open_glb "Open GLB Export Panel" width:140 height:30
-		label lbl_glb_info "Version: 1.2.0" align:#center
-	)
+	groupBox grp_glb "Batch GLB Exporter" pos:[10, 105] width:160 height:70
+	button btn_open_glb "Open GLB Export Panel" width:140 height:30 pos:[20, 125]
+	label lbl_glb_info "Version: 1.2.0" align:#center pos:[20, 158]
 
 	-- ==========================================
-	-- [模組 1] Reset Model 核心邏輯
+	-- [Module 1] Reset Model Core Logic
 	-- ==========================================
 	local totalNodesCount = 0
 	local processedNodesCount = 0
@@ -36,7 +42,7 @@ utility ZinAllTools "Zin All Tools"
 		for c in childrenArr do processHierarchy c
 		
 		processedNodesCount += 1
-		lbl_reset_status.text = "Proc: " + (substring node.name 1 15) -- 截短名稱避免 UI 溢出
+		lbl_reset_status.text = "Proc: " + (substring node.name 1 15)
 		pb_reset_progress.value = ((processedNodesCount as float) / totalNodesCount) * 100.0
 		windows.processPostedMessages() 
 
@@ -71,7 +77,7 @@ utility ZinAllTools "Zin All Tools"
 	)
 
 	-- ==========================================
-	-- 事件處理 (Event Handlers)
+	-- Event Handlers
 	-- ==========================================
 
 	on btn_clean pressed do (
@@ -87,7 +93,7 @@ utility ZinAllTools "Zin All Tools"
 		)
 
 		if rootNodes.count == 0 then (
-			messageBox "請選擇至少一個根節點！" title:"ZinTools"
+			messageBox "Please select at least one root node!" title:"ZinAllTools"
 		) else (
 			totalNodesCount = 0
 			for rNode in rootNodes do totalNodesCount += getNodesCount rNode
@@ -99,12 +105,14 @@ utility ZinAllTools "Zin All Tools"
 			)
 			lbl_reset_status.text = "Done!"
 			pb_reset_progress.value = 100
-			messageBox "所有物件處理完成！" title:"ZinTools"
+			messageBox "All objects processed successfully!" title:"ZinAllTools"
 		)
 	)
 
-	-- GLB Exporter 因為 UI 較大，建議維持彈出視窗
 	on btn_open_glb pressed do (
 		macros.run "ZinAllTools" "BatchGLBExporter"
 	)
+)
+
+createDialog ZinAllTools
 )

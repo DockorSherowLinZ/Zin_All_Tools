@@ -1,29 +1,94 @@
-macroScript ResetModel_v1_16
+macroScript ResetModel_v1_21
 category:"ZinAllTools"
-tooltip:"ResetModel v1.16: Batch STEP Import, Transform Preprocess, Prefix, Full-Path Attach Identical, Full Auto"
+tooltip:"ResetModel v1.21"
 (
-    rollout ResetModel_UI "ResetModel v1.16" width:420 height:390
+    rollout ResetModel_UI "ResetModel v1.21" width:420 height:630
     (
+    fn getPolyElementVolume polyObj elemFaces =
+    (
+        local minPt = [1e9, 1e9, 1e9]
+        local maxPt = [-1e9, -1e9, -1e9]
+        for f in elemFaces do
+        (
+            local faceVerts = polyOp.getFaceVerts polyObj f
+            for v in faceVerts do
+            (
+                local pt = polyOp.getVert polyObj v
+                if pt.x < minPt.x do minPt.x = pt.x
+                if pt.y < minPt.y do minPt.y = pt.y
+                if pt.z < minPt.z do minPt.z = pt.z
+                if pt.x > maxPt.x do maxPt.x = pt.x
+                if pt.y > maxPt.y do maxPt.y = pt.y
+                if pt.z > maxPt.z do maxPt.z = pt.z
+            )
+        )
+        local centerPt = (minPt + maxPt) / 2.0
+        local dims = maxPt - minPt
+        local maxDim = amax #(dims.x, dims.y, dims.z)
+        local bboxVol = maxDim * maxDim * maxDim
+        if bboxVol < 1e-12 do bboxVol = 1e-12
+        local vol = 0.0
+        for f in elemFaces do
+        (
+            local faceVerts = polyOp.getFaceVerts polyObj f
+            local v1 = (polyOp.getVert polyObj faceVerts[1]) - centerPt
+            for i = 2 to (faceVerts.count - 1) do
+            (
+                local v2 = (polyOp.getVert polyObj faceVerts[i]) - centerPt
+                local v3 = (polyOp.getVert polyObj faceVerts[i+1]) - centerPt
+                vol += dot v1 (cross v2 v3) / 6.0
+            )
+        )
+        return (vol / bboxVol)
+    )
+
         -- ========== UI 元素 ==========
-        label lbl_srcFolder "Source Folder (STEP):" pos:[10,10]
-        edittext edt_srcFolder "" pos:[10,28] width:320
-        button btn_browseSrc "Browse" pos:[340,26] width:70 height:24
+        
+        -- [Group 1: File Paths]
+        groupBox grp_files "1. Batch Processing Paths (Leave Source empty for Manual)" pos:[10, 10] width:400 height:95
+        label lbl_srcFolder "Source (STEP):" pos:[20,32]
+        edittext edt_srcFolder "" pos:[100,30] width:230
+        button btn_browseSrc "Browse" pos:[335,28] width:65 height:24
 
-        label lbl_outFolder "Output Folder:" pos:[10,58]
-        edittext edt_outFolder "" pos:[10,76] width:320
-        button btn_browseOut "Browse" pos:[340,74] width:70 height:24
+        label lbl_outFolder "Output (.MAX):" pos:[20,62]
+        edittext edt_outFolder "" pos:[100,60] width:230
+        button btn_browseOut "Browse" pos:[335,58] width:65 height:24
 
-        checkbox chk_createMarker "Create Bottom Center Marker" checked:false pos:[10,110]
-        checkbox chk_detachByMatID "Auto Detach by Material ID" checked:true pos:[10,130]
-        checkbox chk_removeDuplicates "Step 1: Auto Remove Duplicate Meshes" checked:true pos:[10,150]
-        checkbox chk_attachIdentical "Step 2: Auto Attach Identical (Different Pos/Rot)" checked:false pos:[10,170]
-        checkbox chk_addPrefix "Add Prefix to Numeric Group Names" checked:true pos:[10,190]
-        edittext edt_prefix "Prefix:" text:"P_" labelOnTop:false pos:[30,210] fieldWidth:80
+        -- [Group 2: Preprocess Transform]
+        groupBox grp_preprocess "2. Preprocess Transform (Batch Mode Only)" pos:[10, 115] width:400 height:105
+        checkbox chk_doPreprocess "Enable" checked:true pos:[20, 135]
+        radiobuttons rdo_upAxis "Output Target:" labels:#("Z-Up", "Y-Up") default:1 pos:[180, 135] columns:2
 
-        button btn_clean "Clean && Align" width:400 height:50 pos:[10,240]
-        label lbl_status "Ready..." pos:[10,298] width:400
-        progressBar pb_progress "" pos:[10,318] width:400 height:20 value:0
-        button btn_openLog "Open Log File" width:400 height:30 pos:[10,348]
+        label lbl_pos "Pos:" pos:[20, 165]
+        spinner spn_posX "X:" range:[-999999,999999,0] pos:[50, 165] width:65 type:#float
+        spinner spn_posY "Y:" range:[-999999,999999,0] pos:[135, 165] width:65 type:#float
+        spinner spn_posZ "Z:" range:[-999999,999999,0] pos:[220, 165] width:65 type:#float
+
+        label lbl_rot "Rot:" pos:[20, 190]
+        spinner spn_rotX "X:" range:[-360,360,90] pos:[50, 190] width:65 type:#float
+        spinner spn_rotY "Y:" range:[-360,360,0] pos:[135, 190] width:65 type:#float
+        spinner spn_rotZ "Z:" range:[-360,360,90] pos:[220, 190] width:65 type:#float
+
+        -- [Group 3: Geometry Cleanup & Optimization]
+        groupBox grp_geometry "3. Geometry Cleanup & Optimization" pos:[10, 230] width:400 height:150
+        checkbox chk_detachByMatID "Auto Detach by Material ID" checked:true pos:[20,250]
+        checkbox chk_removeDuplicates "Step 1: Auto Remove Duplicate Meshes" checked:true pos:[20,270]
+        checkbox chk_attachIdentical "Step 2: Auto Attach Identical (Different Pos/Rot)" checked:false pos:[20,290]
+        checkbox chk_attachIgnoreHidden "  L Ignore Hidden Models when Attaching" checked:true pos:[20,310]
+        checkbox chk_createMarker "Create Bottom Center Marker (Point Helper)" checked:false pos:[20,330]
+        checkbox chk_autoFlip "Auto Repair Inverted CAD Normals" checked:true pos:[20,350]
+        spinner spn_weld "Weld Dist:" range:[0.0001, 10.0, 0.001] type:#float pos:[300, 350] width:90
+
+        -- [Group 4: Naming & Hierarchy]
+        groupBox grp_naming "4. Naming & Hierarchy" pos:[10, 390] width:400 height:50
+        checkbox chk_addPrefix "Add Prefix to Numeric Group Names" checked:true pos:[20,412]
+        edittext edt_prefix "Prefix:" text:"iec_" labelOnTop:false pos:[280, 410] fieldWidth:90
+
+        -- [Execution & Status]
+        button btn_clean "Clean && Align (Execute)" width:400 height:50 pos:[10, 455]
+        label lbl_status "Ready..." pos:[10, 515] width:400
+        progressBar pb_progress "" pos:[10, 535] width:400 height:20 value:0
+        button btn_openLog "Open Log File" width:400 height:30 pos:[10, 565]
 
         -- ========== 變數區 ==========
         local totalNodesCount = 0
@@ -283,19 +348,31 @@ tooltip:"ResetModel v1.16: Batch STEP Import, Transform Preprocess, Prefix, Full
         )
 
         -- [新增] 執行 Attach Identical
-        fn attachIdenticalMeshes rootNodesArr =
+        fn attachIdenticalMeshes rootNodesArr ignoreHidden =
         (
             local geoArr = #()
             for rNode in rootNodesArr do collectGeometries rNode &geoArr
 
-            if geoArr.count < 2 do return #(0, 0)
+            -- [v1.17] 如果有勾選忽略隱藏，則過濾清單
+            local filteredGeoArr = #()
+            if ignoreHidden then
+            (
+                for n in geoArr do
+                    if not n.isHiddenInVpt do append filteredGeoArr n
+            )
+            else
+            (
+                filteredGeoArr = geoArr
+            )
+
+            if filteredGeoArr.count < 2 do return #(0, 0)
 
             local groupKeys = #()
             local groupNodes = #()
             local groupBaseNames = #()
 
             -- 建立分組
-            for n in geoArr do
+            for n in filteredGeoArr do
             (
                 local bName = getBaseName n.name
                 local gKey = getIdenticalGroupKey n bName
@@ -493,17 +570,60 @@ tooltip:"ResetModel v1.16: Batch STEP Import, Transform Preprocess, Prefix, Full
                         node.pivot = [(bMin.x + bMax.x) / 2.0, (bMin.y + bMax.y) / 2.0, bMin.z]
 
                         ResetXForm node
-                        convertToMesh node
+                        convertTo node Editable_Poly
+
+                        if chk_autoFlip.checked do
+                        (
+                            polyOp.setVertSelection node #{1..(polyOp.getNumVerts node)}
+                            node.weldThreshold = spn_weld.value
+                            node.buttonOp #WeldSelected
+
+                            local numFaces = polyOp.getNumFaces node
+                            local processedFaces = #{}
+                            local facesToFlip = #{}
+
+                            for i = 1 to numFaces do
+                            (
+                                if not processedFaces[i] do
+                                (
+                                    local elemFaces = polyOp.getElementsUsingFace node #{i}
+                                    local normVol = getPolyElementVolume node elemFaces
+                                    
+                                    if normVol < -0.001 do
+                                    (
+                                        facesToFlip += elemFaces
+                                    )
+                                    
+                                    processedFaces += elemFaces
+                                )
+                            )
+
+                            if not facesToFlip.isEmpty do
+                            (
+                                local tempName = uniqueName "TempFlipped_"
+                                polyOp.detachFaces node facesToFlip asNode:true name:tempName
+                                local tempObj = getNodeByName tempName
+                                
+                                if isValidNode tempObj do
+                                (
+                                    local normMod = Normalmodifier flip:true
+                                    addModifier tempObj normMod
+                                    collapseStack tempObj
+                                    
+                                    polyOp.attach node tempObj
+                                )
+                            )
+                        )
 
                         try (
                             local wn = Weighted_Normals()
-                            if hasProperty wn "useSmoothingGroups" do wn.useSmoothingGroups = on
-                            if hasProperty wn "hardEdgeAngle" do wn.hardEdgeAngle = on
-                            if hasProperty wn "useHardEdgeAngle" do wn.useHardEdgeAngle = on
+                            if hasProperty wn "useSmoothingGroups" do wn.useSmoothingGroups = false
+                            if hasProperty wn "useHardEdgeAngle" do wn.useHardEdgeAngle = true
+                            if hasProperty wn "hardEdgeAngle" do wn.hardEdgeAngle = 30.0
                             addModifier node wn
                         ) catch ()
 
-                        local uvw = Uvwmap maptype:4 length:1.0 width:1.0 height:1.0
+                        local uvw = Uvwmap maptype:4 length:0.1 width:0.1 height:0.1
                         addModifier node uvw
 
                         convertToMesh node
@@ -537,17 +657,60 @@ tooltip:"ResetModel v1.16: Batch STEP Import, Transform Preprocess, Prefix, Full
                             partNode.pivot = [(pMin.x + pMax.x) / 2.0, (pMin.y + pMax.y) / 2.0, pMin.z]
 
                             ResetXForm partNode
-                            convertToMesh partNode
+                            convertTo partNode Editable_Poly
+
+                            if chk_autoFlip.checked do
+                            (
+                                polyOp.setVertSelection partNode #{1..(polyOp.getNumVerts partNode)}
+                                partNode.weldThreshold = spn_weld.value
+                                partNode.buttonOp #WeldSelected
+
+                                local numFaces = polyOp.getNumFaces partNode
+                                local processedFaces = #{}
+                                local facesToFlip = #{}
+
+                                for i = 1 to numFaces do
+                                (
+                                    if not processedFaces[i] do
+                                    (
+                                        local elemFaces = polyOp.getElementsUsingFace partNode #{i}
+                                        local normVol = getPolyElementVolume partNode elemFaces
+                                        
+                                        if normVol < -0.001 do
+                                        (
+                                            facesToFlip += elemFaces
+                                        )
+                                        
+                                        processedFaces += elemFaces
+                                    )
+                                )
+
+                                if not facesToFlip.isEmpty do
+                                (
+                                    local tempName = uniqueName "TempFlipped_"
+                                    polyOp.detachFaces partNode facesToFlip asNode:true name:tempName
+                                    local tempObj = getNodeByName tempName
+                                    
+                                    if isValidNode tempObj do
+                                    (
+                                        local normMod = Normalmodifier flip:true
+                                        addModifier tempObj normMod
+                                        collapseStack tempObj
+                                        
+                                        polyOp.attach partNode tempObj
+                                    )
+                                )
+                            )
 
                             try (
                                 local wn = Weighted_Normals()
-                                if hasProperty wn "useSmoothingGroups" do wn.useSmoothingGroups = on
-                                if hasProperty wn "hardEdgeAngle" do wn.hardEdgeAngle = on
-                                if hasProperty wn "useHardEdgeAngle" do wn.useHardEdgeAngle = on
+                                if hasProperty wn "useSmoothingGroups" do wn.useSmoothingGroups = false
+                                if hasProperty wn "useHardEdgeAngle" do wn.useHardEdgeAngle = true
+                                if hasProperty wn "hardEdgeAngle" do wn.hardEdgeAngle = 30.0
                                 addModifier partNode wn
                             ) catch ()
 
-                            local uvw = Uvwmap maptype:4 length:1.0 width:1.0 height:1.0
+                            local uvw = Uvwmap maptype:4 length:0.1 width:0.1 height:0.1
                             addModifier partNode uvw
                             convertToMesh partNode
                         )
@@ -617,29 +780,36 @@ tooltip:"ResetModel v1.16: Batch STEP Import, Transform Preprocess, Prefix, Full
 
         -- ========== v1.13 新增函式 ==========
 
-        -- [v1.13] 前處理：旋轉 + 歸零
+        -- [v1.18] 前處理：依據 UI 數值旋轉與位移
         fn preprocessTransform allRoots =
         (
-            -- 1. 對所有頂層物件旋轉 (90, 0, -90)，以世界原點為旋轉中心
-            local rotMat = (eulerAngles 90 0 -90) as matrix3
+            if not chk_doPreprocess.checked do return ()
+
+            -- 1. 對所有頂層物件旋轉
+            local rx = spn_rotX.value
+            local ry = spn_rotY.value
+            local rz = spn_rotZ.value
+            local rotMat = (eulerAngles rx ry rz) as matrix3
             for rNode in allRoots do
                 rNode.transform = rNode.transform * rotMat
 
-            writeLog "Preprocess: Applied rotation (90, 0, -90) around world origin."
+            writeLog ("Preprocess: Applied rotation (" + (rx as string) + ", " + (ry as string) + ", " + (rz as string) + ")")
 
             -- 2. 計算旋轉後的整體嚴格幾何邊界
             local gMinPt = undefined
             local gMaxPt = undefined
             getStrictGeomBounds allRoots &gMinPt &gMaxPt
 
-            -- 3. 移動模型使 BBox 底部中心 (center, center, min) 對齊世界原點
+            -- 3. 移動模型使 BBox 底部中心對齊目標座標
             if gMinPt != undefined and gMaxPt != undefined do
             (
+                local targetPos = [spn_posX.value, spn_posY.value, spn_posZ.value]
                 local bottomCenter = [(gMinPt.x + gMaxPt.x) / 2.0, (gMinPt.y + gMaxPt.y) / 2.0, gMinPt.z]
+                local offset = targetPos - bottomCenter
                 for rNode in allRoots do
-                    rNode.pos -= bottomCenter
+                    rNode.pos += offset
 
-                writeLog ("Preprocess: Moved BBox bottom center to origin. Offset: " + (-bottomCenter) as string)
+                writeLog ("Preprocess: Moved BBox bottom center to " + (targetPos as string) + " Offset: " + (offset as string))
             )
         )
 
@@ -665,6 +835,22 @@ tooltip:"ResetModel v1.16: Batch STEP Import, Transform Preprocess, Prefix, Full
         )
 
         -- ========== UI 瀏覽按鈕事件 ==========
+
+        on rdo_upAxis changed state do
+        (
+            if state == 1 then -- Z-Up
+            (
+                spn_rotX.value = 90
+                spn_rotY.value = 0
+                spn_rotZ.value = 90
+            )
+            else -- Y-Up
+            (
+                spn_rotX.value = 0
+                spn_rotY.value = 0
+                spn_rotZ.value = 0
+            )
+        )
 
         on btn_browseSrc pressed do
         (
@@ -724,7 +910,7 @@ tooltip:"ResetModel v1.16: Batch STEP Import, Transform Preprocess, Prefix, Full
                 -- Log 初始化到輸出資料夾
                 logFilePath = outPath + "\\ResetModel_Log.txt"
                 writeLog "============================================"
-                writeLog "=== ResetModel Batch Processing Started (v1.16) ==="
+                writeLog "=== ResetModel Batch Processing Started (v1.20) ==="
                 writeLog ("Source: " + srcPath)
                 writeLog ("Output: " + outPath)
                 writeLog ("Files to process: " + stepFiles.count as string)
@@ -735,6 +921,7 @@ tooltip:"ResetModel v1.16: Batch STEP Import, Transform Preprocess, Prefix, Full
                 local doDetach = chk_detachByMatID.checked
                 local doRemoveDup = chk_removeDuplicates.checked
                 local doAttachIdentical = chk_attachIdentical.checked
+                local doAttachIgnoreHidden = chk_attachIgnoreHidden.checked
                 local doPrefix = chk_addPrefix.checked
                 local prefixStr = edt_prefix.text
 
@@ -819,7 +1006,7 @@ tooltip:"ResetModel v1.16: Batch STEP Import, Transform Preprocess, Prefix, Full
                             (
                                 writeLog "--- Scanning for Identical Meshes to Attach (Scope-based) ---"
                                 allRoots = for obj in objects where obj.parent == undefined collect obj
-                                local attachResult = attachIdenticalMeshes allRoots
+                                local attachResult = attachIdenticalMeshes allRoots doAttachIgnoreHidden
                                 if attachResult[1] > 0 do
                                     writeLog ("Attach identical complete. " + attachResult[1] as string + " groups attached (" + attachResult[2] as string + " meshes merged).")
                             )
@@ -888,7 +1075,7 @@ tooltip:"ResetModel v1.16: Batch STEP Import, Transform Preprocess, Prefix, Full
                 windows.processPostedMessages()
 
                 initLogFile()
-                writeLog "=== ResetModel Manual Clean Started (v1.16) ==="
+                writeLog "=== ResetModel Manual Clean Started (v1.20) ==="
 
                 with redraw off
                 (
@@ -927,7 +1114,7 @@ tooltip:"ResetModel v1.16: Batch STEP Import, Transform Preprocess, Prefix, Full
                             writeLog "--- Scanning for Identical Meshes to Attach (Scope-based) ---"
                             local validRoots = #()
                             for rNode in rootNodes do if isValidNode rNode do append validRoots rNode
-                            local attachResult = attachIdenticalMeshes validRoots
+                            local attachResult = attachIdenticalMeshes validRoots chk_attachIgnoreHidden.checked
                             if attachResult[1] > 0 do
                             (
                                 totalNodesCount = 0
