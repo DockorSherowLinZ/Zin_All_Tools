@@ -1,0 +1,65 @@
+{
+  "USD_Material_Library": "D:/Inventec/DigitalTwin/Library/Material_Collects.usd",
+  "MaterialMappings": {
+    "Sticker": {
+      "material_prim_path": "",
+      "description": "Auto-generated from 3ds Max CAD Select Similar"
+    },
+    "Yellow Sticker": {
+      "material_prim_path": "",
+      "description": "Auto-generated from 3ds Max CAD Select Similar"
+    },
+    "Paper": {
+      "material_prim_path": "/World/Looks/Paper/Paper",
+      "description": "Auto-generated from 3ds Max CAD Select Similar"
+    },
+    "Aluminum_Anodized": {
+      "material_prim_path": "/World/Looks/Metal/Aluminum_Anodized",
+      "description": "Auto-generated from 3ds Max CAD Select Similar"
+    },
+    "Steel_Galvanized": {
+      "material_prim_path": "/World/Looks/Metal/Steel_Galvanized",
+      "description": "Auto-generated from 3ds Max CAD Select Similar"
+    },
+    "Gold_Brushed": {
+      "material_prim_path": "/World/Looks/Metal/Gold_Brushed",
+      "description": "Auto-generated from 3ds Max CAD Select Similar"
+    },
+    "Washer": {
+      "material_prim_path": "",
+      "description": "Auto-generated from 3ds Max CAD Select Similar"
+    },
+    "Pristine_Plastic_Grain_Fine_Point_Matte": {
+      "material_prim_path": "/World/Looks/Plastic/Pristine_Plastic_Grain_Fine_Point_Matte",
+      "description": "Auto-generated from 3ds Max CAD Select Similar"
+    },
+    "Nickel_Sheet_Matte_Imperfections": {
+      "material_prim_path": "/World/Looks/Metal/Nickel_Sheet_Matte_Imperfections",
+      "description": "Auto-generated from 3ds Max CAD Select Similar"
+    },
+    "Plastic_Blue": {
+      "material_prim_path": "/World/Looks/Plastic/Plastic_Blue",
+      "description": "Auto-generated from 3ds Max CAD Select Similar"
+    },
+    "Plastic_Black": {
+      "material_prim_path": "/World/Looks/Plastic/Plastic_Black",
+      "description": "Auto-generated from 3ds Max CAD Select Similar"
+    },
+    "PCB_Solder_Mask": {
+      "material_prim_path": "/World/Looks/PCB/PCB_Solder_Mask",
+      "description": "Auto-generated from 3ds Max CAD Select Similar"
+    },
+    "PCB_Prepreg": {
+      "material_prim_path": "/World/Looks/PCB/PCB_Prepreg",
+      "description": "Auto-generated from 3ds Max CAD Select Similar"
+    },
+    "PCB_Solder_Mask_Black_Fast": {
+      "material_prim_path": "/World/Looks/PCB/PCB_Solder_Mask_Black_Fast",
+      "description": "Auto-generated from 3ds Max CAD Select Similar"
+    },
+    "PCB_Goldfinger": {
+      "material_prim_path": "/World/Looks/PCB/PCB_Goldfinger",
+      "description": "Auto-generated from 3ds Max CAD Select Similar"
+    }
+  }
+}

@@ -6,6 +6,7 @@ import fnmatch
 import traceback
 import posixpath
 import shutil
+import json
 import asyncio
 from typing import List, Tuple
 
@@ -13,13 +14,14 @@ import omni.ext
 import omni.ui as ui
 import omni.kit.app
 import omni.kit.ui
-from pxr import Usd, UsdGeom, Sdf, Gf
+from pxr import Usd, UsdGeom, Sdf, Gf, UsdShade
 
 # Optional Nucleus support
 try:
     import omni.client
+    has_omni_client = True
 except Exception:
-    omni = None
+    has_omni_client = False
 
 
 # ============================== Path / IO Utilities ============================
@@ -49,7 +51,7 @@ def _ensure_dir_local(path: str) -> None:
     os.makedirs(path, exist_ok=True)
 
 def _ensure_dir_ov(url: str) -> None:
-    if omni is None:
+    if not has_omni_client:
         return
     u = url.rstrip("/")
     if "://" in u:
@@ -70,7 +72,7 @@ def _ensure_dir_ov(url: str) -> None:
 
 def _exists(p: str) -> bool:
     if _is_ov_url(p):
-        if omni is None:
+        if not has_omni_client:
             return False
         rc, info = omni.client.stat(p)
         return rc == omni.client.Result.OK and not (info.flags & int(omni.client.ItemFlags.CAN_HAVE_CHILDREN))
@@ -105,12 +107,15 @@ def _dotify_rel(rel_path: str) -> str:
         return rel_path
     if rel_path.startswith(("omniverse://", "omni://", "/", "../", "./")):
         return rel_path
+    # Check for Windows absolute paths (e.g., C:/ or D:\)
+    if len(rel_path) >= 2 and rel_path[1] == ':' and rel_path[0].isalpha():
+        return rel_path.replace("\\", "/")
     return f"./{rel_path}"
 
 # ======================= File IO =======================
 def _read_bytes(path_or_url: str):
     if _is_ov_url(path_or_url):
-        if omni is None: return None
+        if not has_omni_client: return None
         rc, content = omni.client.read_file(path_or_url)
         return bytes(content) if rc == omni.client.Result.OK else None
     else:
@@ -120,7 +125,7 @@ def _read_bytes(path_or_url: str):
 
 def _write_bytes(path_or_url: str, data: bytes) -> bool:
     if _is_ov_url(path_or_url):
-        if omni is None: return False
+        if not has_omni_client: return False
         _ensure_dir_ov(_dirname(path_or_url))
         rc = omni.client.write_file(path_or_url, data)
         return rc == omni.client.Result.OK
@@ -152,7 +157,7 @@ def _copy_materials_any_scheme(src_core_dir: str, out_core_dir: str, overwrite: 
     src_mat = _join(src_core_dir, "Materials")
     dst_mat = _join(out_core_dir, "Materials")
     if _is_ov_url(src_mat):
-        if omni is None: return False
+        if not has_omni_client: return False
         rc, info = omni.client.stat(src_mat)
         if rc != omni.client.Result.OK or not (info.flags & int(omni.client.ItemFlags.CAN_HAVE_CHILDREN)): return False
     else:
@@ -211,7 +216,7 @@ def _list_local(folder: str, pattern: str, recurse: bool) -> List[str]:
     return sorted(out)
 
 def _list_nucleus(url: str, pattern: str, recurse: bool) -> List[str]:
-    if omni is None: return []
+    if not has_omni_client: return []
     res = []
     def walk(u):
         rc, entries = omni.client.list(u.rstrip("/"))
@@ -230,27 +235,36 @@ def _list_nucleus(url: str, pattern: str, recurse: bool) -> List[str]:
 # ========================================================
 #  SmartAssetsBuilder Widget
 # ========================================================
+
+BUILDER_STYLE = {
+    "Label::Header": {"font_size": 18, "color": ui.color.system_label},
+    "Label::Subtext": {"color": 0xFFAAAAAA},
+    "Button.Label": {"color": 0xFFDDDDDD},
+    "Button::Start": {"background_color": 0xFF225522},
+    "Button::Start:hover": {"background_color": 0xFF337733},
+    "Button::Cancel": {"background_color": 0xFF882222},
+    "Button::Cancel:hover": {"background_color": 0xFFAA3333},
+    "ProgressBar": {"background_color": 0xFF333333},
+    "ProgressBar::Active": {"color": 0xFF44AA44},
+    "ProgressBar::Error": {"color": 0xFF884444},
+}
+
 class SmartAssetsBuilderWidget:
     def __init__(self):
         self._found = []
-        self._STYLE_HEAD  = {"font_size": 18, "color": 0xFFDDDDDD}
-        self._STYLE_LABEL = {"color": 0xFFAAAAAA}
         self._build_task = None
+        self._cancel_requested = False
+        self._is_building = False
 
-    def startup(self): self._found = []
+    def startup(self): 
+        self._found = []
+        self._cancel_requested = False
+        self._is_building = False
+        
     def shutdown(self):
-        if self._build_task: self._build_task.cancel()
-
-    def _setup_hover(self, btn, base_color):
-        if not btn: return
-        a = (base_color >> 24) & 0xFF
-        b = (base_color >> 16) & 0xFF
-        g = (base_color >> 8) & 0xFF
-        r = base_color & 0xFF
-        b = min(255, int(b * 1.4)); g = min(255, int(g * 1.4)); r = min(255, int(r * 1.4))
-        hover_color = (a << 24) | (b << 16) | (g << 8) | r
-        def _on_hover(hovered): btn.style = {"background_color": hover_color if hovered else base_color}
-        btn.set_mouse_hovered_fn(_on_hover)
+        self._cancel_requested = True
+        if self._build_task: 
+            self._build_task.cancel()
 
     def build_ui_layout(self):
         CARD_BG = 0x33000000
@@ -261,9 +275,9 @@ class SmartAssetsBuilderWidget:
             vertical_scrollbar_policy=ui.ScrollBarPolicy.SCROLLBAR_AS_NEEDED
         )
         with scroll_frame:
-            with ui.VStack(spacing=5, padding=10, alignment=ui.Alignment.TOP):
+            with ui.VStack(spacing=5, padding=10, alignment=ui.Alignment.TOP, style=BUILDER_STYLE):
                 # Title
-                ui.Label("Smart Assets Builder", style=self._STYLE_HEAD)
+                ui.Label("Smart Assets Builder", name="Header")
                 ui.Spacer(height=5)
 
                 # ── Source Configuration ──
@@ -271,30 +285,30 @@ class SmartAssetsBuilderWidget:
                     with ui.ZStack():
                         ui.Rectangle(style={"background_color": CARD_BG, "border_radius": CARD_RADIUS})
                         with ui.VStack(spacing=6, padding=10):
-                            ui.Label("Source Folder URL", style=self._STYLE_LABEL)
+                            ui.Label("Source Folder URL", name="Subtext")
                             self._folder_field = ui.StringField(height=24)
 
                             with ui.HStack(spacing=10, height=24):
-                                ui.Label("Filter:", width=ui.Pixel(50), style=self._STYLE_LABEL)
+                                ui.Label("Filter:", width=ui.Pixel(50), name="Subtext")
                                 self._filter_field = ui.StringField(width=ui.Fraction(1))
                                 self._filter_field.model.set_value("max_*.usd")
 
                             with ui.HStack(height=22, spacing=5):
                                 self._recurse_cb = ui.CheckBox(width=20)
                                 self._recurse_cb.model.set_value(True)
-                                ui.Label("Recurse Sub-folders", style=self._STYLE_LABEL)
+                                ui.Label("Recurse Sub-folders", name="Subtext")
 
                             with ui.HStack(spacing=10, height=24):
-                                ui.Label("ID Suffix:", width=ui.Pixel(65), style=self._STYLE_LABEL)
-                                self._id_field = ui.StringField(width=ui.Fraction(1))
+                                ui.Label("ID Suffix:", width=ui.Pixel(65), name="Subtext")
+                                self._id_field = ui.StringField(width=ui.Fraction(1), tooltip="Optional suffix for ID file, e.g., _v2")
                                 ui.Spacer(width=15)
                                 self._overwrite_cb = ui.CheckBox(width=20)
                                 self._overwrite_cb.model.set_value(False)
-                                ui.Label("Overwrite Existing", style=self._STYLE_LABEL)
+                                ui.Label("Overwrite Existing", name="Subtext")
 
                             ui.Spacer(height=2)
                             with ui.HStack(height=30, spacing=10):
-                                ui.Button("Scan Source", clicked_fn=self._on_scan, width=ui.Pixel(120))
+                                self._scan_btn = ui.Button("Scan Source", clicked_fn=self._on_scan, width=ui.Pixel(120))
                                 self._count_label = ui.Label("Ready to scan...", style={"color": 0xFF888888})
 
                 ui.Spacer(height=5)
@@ -304,33 +318,45 @@ class SmartAssetsBuilderWidget:
                     with ui.ZStack():
                         ui.Rectangle(style={"background_color": CARD_BG, "border_radius": CARD_RADIUS})
                         with ui.VStack(spacing=6, padding=10):
-                            ui.Label("Output Root URL (local or omniverse://)", style=self._STYLE_LABEL)
+                            ui.Label("Output Root URL (local or omniverse://)", name="Subtext")
                             self._out_root_field = ui.StringField(height=24)
 
-                            ui.Label("Material Overlay Path (Optional)", style=self._STYLE_LABEL)
-                            self._mat_field = ui.StringField(height=24)
+                            ui.Label("Material Overlay Path (Optional)", name="Subtext")
+                            self._mat_field = ui.StringField(height=24, tooltip="Path to material USD to overlay")
 
-                            with ui.HStack(height=22, spacing=5):
-                                self._inplace_cb = ui.CheckBox(width=20)
-                                self._inplace_cb.model.set_value(False)
-                                ui.Label("Allow Same Root (In-Place Build)", style={"color": 0xFFDDDDDD})
+                            ui.Label("Material Mapping JSON (Optional)", name="Subtext")
+                            self._json_field = ui.StringField(height=24, tooltip="Path to QuickNames.json for auto-binding")
+                            self._json_field.model.set_value(r"D:\Inventec\Zin_All_Tools\max_script\Zin_CAD_SelectSimilar\QuickNames.json")
 
                 ui.Spacer(height=5)
 
                 # ── Actions ──
                 with ui.HStack(height=40, spacing=10):
-                    btn_start = ui.Button("Start Build", clicked_fn=self._on_start, width=ui.Pixel(150), style={"background_color": 0xFF225522})
-                    self._setup_hover(btn_start, 0xFF225522)
-
+                    self._start_btn = ui.Button("Start Build", clicked_fn=self._on_start, width=ui.Pixel(150), name="Start")
+                    
                     with ui.ZStack(width=ui.Fraction(1), height=24):
                         self._progress_model = ui.SimpleFloatModel(0.0)
-                        self._progress_bar = ui.ProgressBar(self._progress_model, style={"color": 0xFF44AA44, "background_color": 0xFF333333, "font_size": 0})
+                        self._progress_bar = ui.ProgressBar(self._progress_model, name="Active", style={"font_size": 0})
                         self._progress_overlay_label = ui.Label("0%", alignment=ui.Alignment.CENTER, style={"color": 0xFFFFFFFF, "font_size": 12})
 
-                self._progress_label = ui.Label("Ready", height=20, alignment=ui.Alignment.CENTER, style={"color": 0xFFAAAAAA})
+                self._status_label = ui.Label("Ready", height=20, alignment=ui.Alignment.CENTER, name="Subtext")
 
                 ui.Spacer()
+                
+        self._update_start_button_state()
         return scroll_frame
+
+    def _update_start_button_state(self):
+        if not hasattr(self, "_start_btn"): return
+        if self._is_building:
+            self._start_btn.text = "Cancel"
+            self._start_btn.name = "Cancel"
+        else:
+            self._start_btn.text = "Start Build"
+            self._start_btn.name = "Start"
+            has_files = len(self._found) > 0
+            has_out_root = bool(self._out_root_field.model.get_value_as_string().strip())
+            self._start_btn.enabled = has_files and has_out_root
 
     def _on_scan(self):
         url = self._folder_field.model.get_value_as_string().strip()
@@ -340,34 +366,81 @@ class SmartAssetsBuilderWidget:
         self._found = (_list_nucleus(url, pattern, recurse) if _is_ov_url(url) else _list_local(url, pattern, recurse))
         self._count_label.text = f"Found: {len(self._found)} items"
         self._count_label.style = {"color": 0xFF44AA44}
+        self._update_start_button_state()
 
     def _on_start(self):
+        if self._is_building:
+            self._cancel_requested = True
+            return
+            
         if self._build_task: self._build_task.cancel()
+        self._cancel_requested = False
+        self._is_building = True
+        self._update_start_button_state()
         self._build_task = asyncio.ensure_future(self._run_build())
 
     async def _run_build(self):
         n = len(self._found)
-        if n == 0: return
+        if n == 0: 
+            self._is_building = False
+            self._update_start_button_state()
+            return
+            
         out_root = self._out_root_field.model.get_value_as_string().strip()
         suffix = self._id_field.model.get_value_as_string().strip()
         over = self._overwrite_cb.model.get_value_as_bool()
         mat = self._mat_field.model.get_value_as_string().strip().strip('"')
+        json_path = self._json_field.model.get_value_as_string().strip().strip('"')
+        
+        quick_names_data = {}
+        if json_path and _exists(json_path):
+            try:
+                raw_bytes = _read_bytes(json_path)
+                if raw_bytes:
+                    parsed = json.loads(raw_bytes.decode('utf-8'))
+                    quick_names_data = parsed.get("MaterialMappings", {})
+                    if not mat and parsed.get("USD_Material_Library"):
+                        mat = parsed.get("USD_Material_Library")
+            except Exception as e:
+                print(f"[SmartAssetsBuilder] Error loading JSON: {e}")
+
+        loop = asyncio.get_event_loop()
+        errors = []
         
         for i, src in enumerate(self._found, 1):
+            if self._cancel_requested:
+                self._status_label.text = "Build Cancelled."
+                self._progress_bar.name = "Error"
+                break
+                
             core, asset, main, id_f = _derive_names(src, suffix)
+            self._status_label.text = f"Building: {core}..."
+            await omni.kit.app.get_app().next_update_async()
+            
             out_dir = _join(out_root, core)
             asset_p, main_p, id_p = _ensure_usd_ext(_join(out_dir, asset)), _ensure_usd_ext(_join(out_dir, main)), _ensure_usd_ext(_join(out_root, id_f))
             
             if not over and _exists(id_p): continue
             
-            (_ensure_dir_ov(out_dir) if _is_ov_url(out_dir) else _ensure_dir_local(out_dir))
-            max_dst = _join(out_dir, os.path.basename(src))
-            _copy_file_any_scheme(src, max_dst, over, print)
-            _copy_materials_any_scheme(_dirname(src), out_dir, over, print)
+            # 使用執行緒池處理同步 IO 操作
+            def _do_io_operations():
+                (_ensure_dir_ov(out_dir) if _is_ov_url(out_dir) else _ensure_dir_local(out_dir))
+                max_dst = _join(out_dir, os.path.basename(src))
+                _copy_file_any_scheme(src, max_dst, over, print)
+                _copy_materials_any_scheme(_dirname(src), out_dir, over, print)
+                return max_dst
+                
+            try:
+                max_dst = await loop.run_in_executor(None, _do_io_operations)
+            except Exception as e:
+                errors.append(f"IO Error on {core}: {str(e)}")
+                continue
+                
+            if self._cancel_requested: break
             
             # 此處呼叫原本的 USD 建構邏輯...
             # 由於邏輯簡化，請確保 _build_asset 等函式存在於上方
-            try:
+            def _build_usd():
                 stage_a = _create_file_backed_stage(asset_p)
                 UsdGeom.SetStageUpAxis(stage_a, UsdGeom.Tokens.z)
                 UsdGeom.SetStageMetersPerUnit(stage_a, 0.01)
@@ -376,6 +449,20 @@ class SmartAssetsBuilderWidget:
                 layers = [rel_max]
                 if mat: layers.insert(0, _dotify_rel(_relref(asset_p, mat)))
                 stage_a.GetRootLayer().subLayerPaths = layers
+                
+                if quick_names_data:
+                    for prim in stage_a.Traverse():
+                        if prim.IsA(UsdGeom.Mesh):
+                            name_parts = prim.GetName().split("_")
+                            base_name = "_".join(name_parts[:-1]) if len(name_parts) > 1 and name_parts[-1].isdigit() else prim.GetName()
+                            
+                            mapping = quick_names_data.get(base_name)
+                            if mapping and mapping.get("material_prim_path"):
+                                mat_path = mapping["material_prim_path"]
+                                over_mat = stage_a.OverridePrim(mat_path)
+                                material = UsdShade.Material(over_mat)
+                                UsdShade.MaterialBindingAPI(prim).Bind(material)
+                                
                 _save(stage_a)
 
                 stage_m = _create_file_backed_stage(main_p)
@@ -394,16 +481,29 @@ class SmartAssetsBuilderWidget:
                 prim_i = stage_i.DefinePrim(f"/World/{core}")
                 prim_i.GetReferences().AddReference(_relref(id_p, main_p))
                 _save(stage_i)
+                
+            try:
+                await loop.run_in_executor(None, _build_usd)
             except Exception as e:
-                print(f"Error building {core}: {e}")
+                err_msg = f"Error building USD for {core}: {e}"
+                print(err_msg)
+                errors.append(err_msg)
 
             pct = int((i/n)*100)
             self._progress_model.as_float = float(pct)
             self._progress_overlay_label.text = f"{pct}%"
-            self._progress_label.text = f"{pct}%"
             await omni.kit.app.get_app().next_update_async()
         
-        self._progress_label.text = "Done"
+        self._is_building = False
+        self._update_start_button_state()
+        
+        if not self._cancel_requested:
+            if errors:
+                self._status_label.text = f"Done with {len(errors)} errors. See Console."
+                self._progress_bar.name = "Error"
+            else:
+                self._status_label.text = "Build Completed Successfully."
+                self._progress_bar.name = "Active"
 
 # ========================================================
 #  Extension Wrapper

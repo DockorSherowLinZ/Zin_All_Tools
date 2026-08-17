@@ -203,33 +203,24 @@ fn ZinCAD_initQuickNames = (
     return names
 )
 
-fn ZinCAD_getUserInput promptStr:"" titleStr:"Input" defaultStr:"" = (
-    rollout ro_Input "Input" (
-        local result = undefined
-        local initPrompt = ""
-        local initTitle = ""
-        local initDefault = ""
-
+fn ZinCAD_getUserInput prompt:"" title:"Input" default:"" = (
+    rollout ro_Input title (
         label lbl_prompt "" align:#left offset:[0,5] width:230
         edittext edt_input "" text:"" align:#left offset:[-4,5] width:230
         button btn_ok "OK" width:70 across:2 align:#center offset:[0,10]
         button btn_cancel "Cancel" width:70 align:#center offset:[0,10]
         
+        local result = undefined
+        
         on ro_Input open do (
-            ro_Input.title = initTitle
-            lbl_prompt.text = initPrompt
-            edt_input.text = initDefault
+            lbl_prompt.text = prompt
+            edt_input.text = default
             setFocus edt_input
         )
         on btn_ok pressed do ( result = edt_input.text; destroyDialog ro_Input )
         on btn_cancel pressed do ( destroyDialog ro_Input )
         on edt_input entered txt do ( result = txt; destroyDialog ro_Input )
     )
-    
-    ro_Input.initPrompt = promptStr
-    ro_Input.initTitle = titleStr
-    ro_Input.initDefault = defaultStr
-    
     createDialog ro_Input 250 110 modal:true
     return ro_Input.result
 )
