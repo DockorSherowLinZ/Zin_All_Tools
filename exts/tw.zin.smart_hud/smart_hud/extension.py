@@ -32,6 +32,7 @@ class HUDViewModel:
         self.current_progress_pct = 100.0
         self.current_r = 0.0
         self.current_g = 1.0
+        self.progress_text = ui.SimpleStringModel("100.0%")
         self.collapsed_progress_frame = None
         self.expanded_progress_frame = None
         
@@ -227,6 +228,7 @@ class GrayboxHUDEngine:
             "machine_type": m_type,
             "collapsed_transform": collapsed_transform,
             "expanded_transform": expanded_transform,
+            "collapsed_widget": collapsed_widget,
             "expanded_widget": expanded_widget,
             "cycle_start": cycle_start,
             "cycle_end": cycle_end,
@@ -262,7 +264,8 @@ class GrayboxHUDEngine:
             with ui.HStack():
                 ui.Spacer()
                 label = ui.Label(
-                    f"{view_model.current_progress_pct:.1f}%", 
+                    view_model.progress_text.get_value_as_string(), 
+                    model=view_model.progress_text,
                     width=0,
                     style={"color": 0xFFFFFFFF, "font_size": font_size},
                     alignment=ui.Alignment.RIGHT_CENTER
@@ -623,11 +626,17 @@ class GrayboxHUDEngine:
                     vm.current_r = r
                     vm.current_g = g
                     
+                    # Update model to trigger sc.Widget repaint
+                    vm.progress_text.set_value(f"{progress_pct:.1f}%")
+                    
+                    # Force sc.Widget texture update since Model update alone 
+                    # doesn't automatically trigger 3D texture repaint in older versions
+                    if instance.get("is_expanded") and "expanded_widget" in instance:
+                        instance["expanded_widget"].invalidate()
+                    elif not instance.get("is_expanded") and "collapsed_widget" in instance:
+                        instance["collapsed_widget"].invalidate()
+                    
                     # Directly update retained widget properties for immediate redraw.
-                    # This avoids frame.rebuild() overhead and works because the
-                    # update callback fires on the engine render tick — property
-                    # mutations on omni.ui widgets within the same tick are rendered
-                    # in the next frame without requiring explicit invalidation.
                     if hasattr(vm, "progress_bars"):
                         for pb in vm.progress_bars:
                             try:
@@ -637,7 +646,6 @@ class GrayboxHUDEngine:
                                     "border_radius": 3
                                 })
                                 pb["spacer"].width = ui.Percent(100.0 - progress_pct)
-                                pb["label"].text = f"{progress_pct:.1f}%"
                             except Exception:
                                 pass
                         

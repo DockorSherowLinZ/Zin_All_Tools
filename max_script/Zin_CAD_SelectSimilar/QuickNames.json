@@ -60,6 +60,26 @@
     "PCB_Goldfinger": {
       "material_prim_path": "/World/Looks/PCB/PCB_Goldfinger",
       "description": "Auto-generated from 3ds Max CAD Select Similar"
+    },
+    "YellowLighting": {
+      "material_prim_path": "/World/Looks/Lighting/YellowLighting",
+      "description": "Auto-generated from 3ds Max CAD Select Similar"
+    },
+    "GreenLighting": {
+      "material_prim_path": "/World/Looks/Lighting/GreenLighting",
+      "description": "Auto-generated from 3ds Max CAD Select Similar"
+    },
+    "RedLighting": {
+      "material_prim_path": "/World/Looks/Lighting/RedLighting",
+      "description": "Auto-generated from 3ds Max CAD Select Similar"
+    },
+    "BlueLighting": {
+      "material_prim_path": "/World/Looks/Lighting/BlueLighting",
+      "description": "Auto-generated from 3ds Max CAD Select Similar"
+    },
+    "WhiteLighting": {
+      "material_prim_path": "/World/Looks/Lighting/WhiteLighting",
+      "description": "Auto-generated from 3ds Max CAD Select Similar"
     }
   }
 }

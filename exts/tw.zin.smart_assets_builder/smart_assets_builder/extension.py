@@ -276,9 +276,6 @@ class SmartAssetsBuilderWidget:
         )
         with scroll_frame:
             with ui.VStack(spacing=5, padding=10, alignment=ui.Alignment.TOP, style=BUILDER_STYLE):
-                # Title
-                ui.Label("Smart Assets Builder", name="Header")
-                ui.Spacer(height=5)
 
                 # ── Source Configuration ──
                 with ui.CollapsableFrame("Source Configuration", collapsed=False, height=0):
