@@ -3,6 +3,15 @@ import omni.ui as ui
 import omni.usd
 from pxr import Usd, UsdGeom, UsdPhysics, PhysxSchema, Sdf, Gf
 
+import sys
+import os
+
+_tools_box_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../tools_box"))
+if _tools_box_path not in sys.path:
+    sys.path.append(_tools_box_path)
+    
+import tools_box.zin_ui_utils as zin_ui_utils
+
 class SmartPhysicsSetupExtension(omni.ext.IExt):
     WINDOW_NAME = "Smart Physics Setup"
     MENU_PATH = f"Zin_All_Tools/{WINDOW_NAME}"
@@ -77,64 +86,66 @@ class SmartPhysicsSetupExtension(omni.ext.IExt):
             vertical_scrollbar_policy=ui.ScrollBarPolicy.SCROLLBAR_AS_NEEDED
         )
         with scroll_frame:
-            with ui.VStack(spacing=10, padding=10):
+            with ui.VStack(style=zin_ui_utils.ZIN_NATIVE_STYLE, spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
                 
                 # --- 1. Rigid Body ---
                 with ui.CollapsableFrame("1. Rigid Body (Connectors)", height=0):
-                    with ui.VStack(spacing=5, height=0):
-                        ui.Button("Add Selected to Rigid List", clicked_fn=self._add_to_rigid, height=40)
+                    with ui.VStack(spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
+                        zin_ui_utils.build_button_row("", "Add Selected to Rigid List", self._add_to_rigid, zin_ui_utils.STYLE_POSITIVE)
                         
-                        with ui.HStack(height=20):
-                            ui.Label("Make Static (Kinematic):", width=ui.Pixel(150), tooltip="Check this if the plug should NOT fall.")
-                            ui.CheckBox(model=self._kinematic_model)
+                        zin_ui_utils.build_checkbox_row("Make Static (Kinematic):", self._kinematic_model, "", tooltip="Check this if the plug should NOT fall.")
 
-                        ui.Label("Current List:", style={"color": 0xFFAAAAAA})
-                        ui.StringField(model=self._rigid_list_str, height=60, multiline=True, read_only=True)
+                        def build_rigid_list():
+                            ui.StringField(model=self._rigid_list_str, height=60, multiline=True, read_only=True)
+                        zin_ui_utils.build_property_row("Current List:", build_rigid_list)
 
                 # --- 2. Soft Body ---
                 with ui.CollapsableFrame("2. Soft Body (Cable)", height=ui.Fraction(1)) as cf_sb:
                     cf_sb.set_collapsed_changed_fn(lambda c, f=cf_sb: setattr(f, "height", ui.Pixel(0) if c else ui.Fraction(1)))
-                    with ui.VStack(spacing=5, height=0):
-                        ui.Button("Add Selected to Soft List", clicked_fn=self._add_to_soft, height=40)
+                    with ui.VStack(spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
+                        zin_ui_utils.build_button_row("", "Add Selected to Soft List", self._add_to_soft, zin_ui_utils.STYLE_POSITIVE)
                         
-                        ui.Label("Current List:", style={"color": 0xFFAAAAAA})
-                        ui.StringField(model=self._soft_list_str, height=ui.Fraction(1), multiline=True, read_only=True)
+                        def build_soft_list():
+                            ui.StringField(model=self._soft_list_str, multiline=True, read_only=True)
+                        zin_ui_utils.build_property_row("Current List:", build_soft_list)
 
                 # --- 3. Params ---
                 with ui.CollapsableFrame("3. Physics Parameters", height=0):
-                    with ui.VStack(spacing=5, height=0):
-                        with ui.HStack():
-                            ui.Label("Contact Offset:", width=ui.Pixel(150))
+                    with ui.VStack(spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
+                        def build_offset():
                             ui.FloatDrag(model=self._contact_offset_model, min=0.0001, max=0.1, step=0.0001)
-                        with ui.HStack():
-                            ui.Label("Stiffness:", width=ui.Pixel(150))
+                        zin_ui_utils.build_property_row("Contact Offset:", build_offset)
+                        
+                        def build_stiffness():
                             ui.FloatDrag(model=self._stiffness_model, min=100.0, max=1000000.0, step=100.0)
+                        zin_ui_utils.build_property_row("Stiffness:", build_stiffness)
 
                 # --- 4. Attachment ---
                 with ui.CollapsableFrame("4. Attachment (Auto-Bind)", height=0):
-                    with ui.VStack(spacing=5, height=0):
-                        ui.Label("Auto-bind Soft to Rigid objects.", style={"color": 0xFF888888})
-                        with ui.HStack():
-                            ui.Label("Attachment Range:", width=ui.Pixel(150))
+                    with ui.VStack(spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
+                        ui.Label("Auto-bind Soft to Rigid objects.", name="Description")
+                        def build_attach_range():
                             ui.FloatDrag(model=self._attach_distance_model, min=0.001, max=0.1, step=0.001)
+                        zin_ui_utils.build_property_row("Attachment Range:", build_attach_range)
 
-                ui.Separator(height=10)
+                ui.Spacer(height=5)
 
                 # --- Actions ---
-                with ui.HStack(height=40, spacing=10):
-                    btn_apply = ui.Button("Apply All (Fix Visibility)", clicked_fn=self._apply_physics_logic, style={"background_color": 0xFF225522})
-                    self._setup_hover(btn_apply, 0xFF225522)
-                    ui.Button("Reset Lists", clicked_fn=self._clear_lists)
+                with ui.HStack(height=24, spacing=zin_ui_utils.ZIN_ROW_SPACING):
+                    ui.Button("Apply All (Fix Visibility)", style=zin_ui_utils.STYLE_POSITIVE, clicked_fn=self._apply_physics_logic)
+                    ui.Button("Reset Lists", style=zin_ui_utils.STYLE_NEGATIVE, clicked_fn=self._clear_lists)
 
-
+                ui.Spacer(height=5)
                 # --- Status ---
                 ui.StringField(
                     model=self._status_model, 
-                    height=30, 
+                    height=24, 
                     read_only=True, 
                     alignment=ui.Alignment.CENTER,
                     style={"background_color": 0x00000000, "border_width": 0, "color": 0xFFFFFF00}
                 )
+                
+                ui.Spacer()
 
         return scroll_frame  # [Bug Fix] 必須 return，否則 tools_box 嵌入時特此 tab 會顯示空白
 

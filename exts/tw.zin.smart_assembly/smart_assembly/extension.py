@@ -10,6 +10,16 @@ import time
 import omni.kit.notification_manager as nm
 from pxr import Usd, UsdPhysics, UsdGeom, Sdf, Gf
 
+import sys
+import os
+
+_tools_box_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../tools_box"))
+if _tools_box_path not in sys.path:
+    sys.path.append(_tools_box_path)
+    
+import tools_box.zin_ui_utils as zin_ui_utils
+
+
 # ========================================================
 #  Smart Assembly Widget
 # ========================================================
@@ -87,56 +97,60 @@ class SmartAssemblyWidget:
         if not self.ui_root_frame: return
 
         with self.ui_root_frame:
-            with ui.VStack(spacing=5, padding=10, alignment=ui.Alignment.TOP):
+            with ui.VStack(style=zin_ui_utils.ZIN_NATIVE_STYLE, spacing=zin_ui_utils.ZIN_V_SPACING, padding=6, alignment=ui.Alignment.TOP):
                 # Title Header
                 with ui.HStack(height=30):
                     ui.Label("Assembly Sequence Manager (Fixed)", style={"font_size": 18, "color": 0xFFDDDDDD})
-                    txt, clr = ("PHYSICS ON", 0xFF00FF00) if self.timeline and self.timeline.is_playing() else ("PHYSICS OFF", 0xFF3D3DF5)
+                    txt, clr = ("PHYSICS ON", 0xFF44AA44) if self.timeline and self.timeline.is_playing() else ("PHYSICS OFF", 0xFFAA4444)
                     ui.Label(txt, width=80, style={"color": clr, "font_size": 12})
                 ui.Spacer(height=5)
                 
                 # Config Manager Section
-                ui.Label("Configuration Manager", height=20, style={"color": 0xFFAAAAAA})
-                
-                with ui.HStack(height=30, spacing=10):
-                    self.ui_combo_box = ui.ComboBox(self.current_config_index, *[c["name"] for c in self.configs])
-                    self.ui_model_combo = self.ui_combo_box.model
-                    self.ui_combo_box.model.add_item_changed_fn(self.on_config_selected)
-                    
-                    self.ui_field_name = ui.StringField(height=24)
-                    if self.configs: self.ui_field_name.model.as_string = self.configs[self.current_config_index]["name"]
+                with ui.CollapsableFrame("Configuration Manager", collapsed=False, height=0):
+                    with ui.VStack(spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
+                        def build_config_selector():
+                            self.ui_combo_box = ui.ComboBox(self.current_config_index, *[c["name"] for c in self.configs])
+                            self.ui_model_combo = self.ui_combo_box.model
+                            self.ui_combo_box.model.add_item_changed_fn(self.on_config_selected)
+                        zin_ui_utils.build_property_row("Select Config:", build_config_selector)
+                        
+                        def build_config_name():
+                            self.ui_field_name = ui.StringField(height=24)
+                            if self.configs: self.ui_field_name.model.as_string = self.configs[self.current_config_index]["name"]
+                        zin_ui_utils.build_property_row("Config Name:", build_config_name)
 
-                with ui.HStack(height=30, spacing=10):
-                    ui.Button("RENAME", clicked_fn=self.rename_current_config)
-                    ui.Button("SAVE NEW", clicked_fn=self.save_current_as_new)
-                    self.ui_btn_delete = ui.Button("DELETE", clicked_fn=self.delete_current_config, style={"background_color": 0xFF222288})
-                    self._setup_hover(self.ui_btn_delete, 0xFF222288)
+                        with ui.HStack(height=24, spacing=zin_ui_utils.ZIN_ROW_SPACING):
+                            ui.Button("RENAME", name="Button", clicked_fn=self.rename_current_config)
+                            ui.Button("SAVE NEW", style=zin_ui_utils.STYLE_POSITIVE, clicked_fn=self.save_current_as_new)
+                            self.ui_btn_delete = ui.Button("DELETE", style=zin_ui_utils.STYLE_NEGATIVE, clicked_fn=self.delete_current_config)
 
                 ui.Spacer(height=10)
                 
-                # --- [Layout Fix] Table Headers ---
-                with ui.HStack(height=20):
-                    ui.Label("Class", width=ui.Pixel(80), style={"color": 0xFFAAAAAA})
-                    ui.Label("Part Name", width=ui.Pixel(220), style={"color": 0xFFAAAAAA})
-                    ui.Spacer()
-                    ui.Label("Status", width=ui.Pixel(100), style={"color": 0xFFAAAAAA})
-                    ui.Label("Slider / Controls", style={"color": 0xFFAAAAAA}, alignment=ui.Alignment.CENTER)  # [RWD] Fraction fill
+                with ui.CollapsableFrame("Parts List", collapsed=False, height=0):
+                    with ui.VStack(spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
+                        # --- [Layout Fix] Table Headers ---
+                        with ui.HStack(height=20):
+                            ui.Label("Class", width=ui.Pixel(80), name="Description")
+                            ui.Label("Part Name", width=ui.Pixel(220), name="Description")
+                            ui.Spacer()
+                            ui.Label("Status", width=ui.Pixel(100), name="Description")
+                            ui.Label("Slider / Controls", name="Description", alignment=ui.Alignment.CENTER)  # [RWD] Fraction fill
+                        
+                        self.ui_list_frame = ui.VStack(spacing=4)
                 
-                self.ui_list_frame = ui.VStack(spacing=4)
-                
-                ui.Spacer(height=15)
+                ui.Spacer(height=10)
                 
                 # Master Controls
-                ui.Label("Master Controls", height=20, style={"color": 0xFFAAAAAA})
-                with ui.HStack(height=40, spacing=10):
-                    self.ui_btn_step = ui.Button("STEP >> (Assemble)", clicked_fn=self.step_forward, style={"background_color": 0xFF225522})
-                    self._setup_hover(self.ui_btn_step, 0xFF225522)
-                    ui.Button("RESET ALL (Explode)", clicked_fn=self.reset_scene)
-                    
-                    any_error = any(v == -1 for v in self.status_dict.values())
-                    cal_txt = "AUTO FIX (Calibrate)" if any_error else "RE-CALIBRATE"
-                    cal_style = {"background_color": 0xFF222288} if any_error else {}
-                    self.ui_btn_calibrate = ui.Button(cal_txt, clicked_fn=lambda: asyncio.ensure_future(self.perform_homing_sequence()), style=cal_style)
+                with ui.CollapsableFrame("Master Controls", collapsed=False, height=0):
+                    with ui.VStack(spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
+                        with ui.HStack(height=30, spacing=zin_ui_utils.ZIN_ROW_SPACING):
+                            self.ui_btn_step = ui.Button("STEP >> (Assemble)", style=zin_ui_utils.STYLE_POSITIVE, clicked_fn=self.step_forward)
+                            ui.Button("RESET ALL (Explode)", style=zin_ui_utils.STYLE_NEGATIVE, clicked_fn=self.reset_scene)
+                            
+                            any_error = any(v == -1 for v in self.status_dict.values())
+                            cal_txt = "AUTO FIX (Calibrate)" if any_error else "RE-CALIBRATE"
+                            cal_style = zin_ui_utils.STYLE_NEGATIVE if any_error else {}
+                            self.ui_btn_calibrate = ui.Button(cal_txt, style=cal_style, clicked_fn=lambda: asyncio.ensure_future(self.perform_homing_sequence()))
                 
                 self.progress_label = ui.Label(f"Ready. Next Step: 1 / {len(self.items)}", height=20, alignment=ui.Alignment.CENTER)
                 

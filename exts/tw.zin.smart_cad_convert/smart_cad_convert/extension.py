@@ -11,6 +11,12 @@ from pxr import Usd, UsdGeom, Gf, Sdf, UsdShade, UsdPhysics, UsdUtils
 from omni.kit.window.filepicker import FilePickerDialog
 import omni.kit.asset_converter
 
+_tools_box_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../tools_box"))
+if _tools_box_path not in sys.path:
+    sys.path.append(_tools_box_path)
+    
+import tools_box.zin_ui_utils as zin_ui_utils
+
 try:
     from tools_box.zin_style import ZIN_GLOBAL_STYLE
     from tools_box.zin_components import ZinButton
@@ -94,76 +100,78 @@ class SmartCadConvertUI:
     def build_ui(self):
         scroll_frame = ui.ScrollingFrame()
         with scroll_frame:
-            with ui.VStack(style=ZIN_GLOBAL_STYLE, spacing=5, padding=10):
+            with ui.VStack(style=zin_ui_utils.ZIN_NATIVE_STYLE, spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
                 
-                # CAD Source Input
-                with ui.HStack(height=28, spacing=8):
-                    ui.Label("Input CAD:", width=ui.Pixel(70))
-                    self._cad_path_field = ui.StringField()
-                    ZinButton("Browse", clicked_fn=self._on_browse_cad, width=ui.Pixel(70))
+                with ui.CollapsableFrame("Import / Export Path", collapsed=False, height=0):
+                    with ui.VStack(spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
+                        # CAD Source Input
+                        def build_cad_input():
+                            with ui.HStack(spacing=zin_ui_utils.ZIN_ROW_SPACING):
+                                self._cad_path_field = ui.StringField()
+                                ui.Button("Browse", clicked_fn=self._on_browse_cad, width=70)
+                        zin_ui_utils.build_property_row("Input CAD:", build_cad_input)
 
-                # Output Folder
-                with ui.HStack(height=28, spacing=8):
-                    ui.Label("Output:", width=ui.Pixel(70))
-                    self._output_path_field = ui.StringField()
-                    self._output_path_field.model.set_value("")
-                    ZinButton("Browse", clicked_fn=self._on_browse_output, width=ui.Pixel(70))
-                ui.Label("Leave empty = auto (same folder as input)", height=16, style={"font_size": 11, "color": 0xFF666666})
+                        # Output Folder
+                        def build_output():
+                            with ui.HStack(spacing=zin_ui_utils.ZIN_ROW_SPACING):
+                                self._output_path_field = ui.StringField()
+                                self._output_path_field.model.set_value("")
+                                ui.Button("Browse", clicked_fn=self._on_browse_output, width=70)
+                        zin_ui_utils.build_property_row("Output:", build_output, tooltip="Leave empty = auto (same folder as input)")
 
+                ui.Spacer(height=5)
                 # Collapsable General
-                with ui.CollapsableFrame("General", collapsed=False):
-                    with ui.VStack(spacing=4, padding=4):
-                        with ui.HStack(height=24):
-                            ui.Label("Move to Origin", width=ui.Fraction(0.4))
-                            self._move_to_origin = ui.CheckBox()
+                with ui.CollapsableFrame("General", collapsed=False, height=0):
+                    with ui.VStack(spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
+                        self._move_to_origin = ui.SimpleBoolModel(False)
+                        zin_ui_utils.build_checkbox_row("Move to Origin:", self._move_to_origin)
                             
-
-                            
+                ui.Spacer(height=5)
                 # Collapsable File Output
-                with ui.CollapsableFrame("File Output", collapsed=False):
-                    with ui.VStack(spacing=4, padding=4):
-                        with ui.HStack(height=24):
-                            ui.Label("Enable Batch Export", width=ui.Fraction(0.4))
-                            self._batch_export = ui.CheckBox()
-                            self._batch_export.model.set_value(True)
+                with ui.CollapsableFrame("File Output", collapsed=False, height=0):
+                    with ui.VStack(spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
+                        self._batch_export = ui.SimpleBoolModel(True)
+                        zin_ui_utils.build_checkbox_row("Batch Export:", self._batch_export)
 
-                        with ui.HStack(height=24):
-                            ui.Label("Props", width=ui.Fraction(0.4))
+                        def build_props_path():
                             self._props_path = ui.StringField()
                             self._props_path.model.set_value("/Props")
+                        zin_ui_utils.build_property_row("Props Path:", build_props_path)
                             
+                ui.Spacer(height=5)
                 # Collapsable Kind
-                with ui.CollapsableFrame("Kind", collapsed=False):
-                    with ui.VStack(spacing=4, padding=4):
-                        with ui.HStack(height=24):
-                            ui.Label("Kind", width=ui.Fraction(0.4))
-                            self._kind_dropdown = ui.ComboBox(0, " (Empty)", "group", "subcomponent", "component", "assembly").model
+                with ui.CollapsableFrame("Kind", collapsed=False, height=0):
+                    with ui.VStack(spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
+                        def build_kind():
+                            cb = ui.ComboBox(0, " (Empty)", "group", "subcomponent", "component", "assembly")
+                            self._kind_dropdown = cb.model
+                        zin_ui_utils.build_property_row("Kind:", build_kind)
                             
+                ui.Spacer(height=5)
                 # Collapsable SimReady (Physics)
-                with ui.CollapsableFrame("SimReady (Physics)", collapsed=False):
-                    with ui.VStack(spacing=4, padding=4):
-                        with ui.HStack(height=24):
-                            ui.Label("Auto-Compute Physics", width=ui.Fraction(0.4))
-                            self._auto_physics = ui.CheckBox()
-                            self._auto_physics.model.set_value(True)
+                with ui.CollapsableFrame("SimReady (Physics)", collapsed=False, height=0):
+                    with ui.VStack(spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
+                        self._auto_physics = ui.SimpleBoolModel(True)
+                        zin_ui_utils.build_checkbox_row("Auto Physics:", self._auto_physics)
 
+                ui.Spacer(height=5)
                 # Collapsable Asset Optimization & Architecture
-                with ui.CollapsableFrame("Asset Optimization & Architecture", collapsed=False):
-                    with ui.VStack(spacing=4, padding=4):
-                        with ui.HStack(height=24):
-                            ui.Label("Use Payload Architecture", width=ui.Fraction(0.4))
-                            self._use_payload = ui.CheckBox()
-                            self._use_payload.model.set_value(True)
-                        ui.Spacer(height=4)
-                        ui.Label("Scene Optimizer Preset (.json):", height=20, style={"font_size": 12, "color": 0xFF888888})
-                        with ui.HStack(height=28, spacing=8):
-                            self._preset_path_field = ui.StringField()
-                            self._preset_path_field.model.set_value("")
-                            ZinButton("Browse", clicked_fn=self._on_browse_preset, width=ui.Pixel(70))
-                ui.Spacer(height=10)
-                self._execute_btn = ZinButton("Execute Convert", state="correct", clicked_fn=self._on_execute_click)
-                self._execute_btn.widget.height = ui.Pixel(36)
+                with ui.CollapsableFrame("Asset Optimization & Architecture", collapsed=False, height=0):
+                    with ui.VStack(spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
+                        self._use_payload = ui.SimpleBoolModel(True)
+                        zin_ui_utils.build_checkbox_row("Use Payload:", self._use_payload)
+                        
+                        def build_preset_path():
+                            with ui.HStack(spacing=zin_ui_utils.ZIN_ROW_SPACING):
+                                self._preset_path_field = ui.StringField()
+                                self._preset_path_field.model.set_value("")
+                                ui.Button("Browse", clicked_fn=self._on_browse_preset, width=70)
+                        zin_ui_utils.build_property_row("Preset JSON:", build_preset_path)
                 
+                ui.Spacer(height=5)
+                zin_ui_utils.build_button_row("", "Execute Convert", self._on_execute_click, zin_ui_utils.STYLE_POSITIVE)
+                
+                ui.Spacer(height=10)
                 # STATUS LOG
                 with ui.ZStack(height=120):
                     ui.Rectangle(style={"background_color": 0xFF101010, "border_radius": 4})

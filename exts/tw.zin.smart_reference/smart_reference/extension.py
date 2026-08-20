@@ -8,6 +8,15 @@ import omni.kit.pipapi  # 新增：用於自動安裝套件
 from pxr import Usd, UsdGeom, Sdf
 from omni.kit.window.filepicker import FilePickerDialog
 
+import sys
+import os
+
+_tools_box_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../tools_box"))
+if _tools_box_path not in sys.path:
+    sys.path.append(_tools_box_path)
+    
+import tools_box.zin_ui_utils as zin_ui_utils
+
 # ========================================================
 # 1. 整合樣式表 (解決 Hover 失效問題)
 # ========================================================
@@ -63,82 +72,72 @@ class SmartReferenceUI:
         scroll_frame = ui.ScrollingFrame()
         with scroll_frame:
             # 關鍵點：將樣式表套用在最外層的容器上
-            with ui.VStack(spacing=10, padding=12, alignment=ui.Alignment.TOP, style=SMART_REFERENCE_STYLE):
+            with ui.VStack(style=zin_ui_utils.ZIN_NATIVE_STYLE, spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
                 
                 # --- [Section 1] Quick Prefix Reference ---
-                ui.Label("Quick Prefix Reference", height=20, style=TITLE_STYLE)
-                with ui.VStack(spacing=6):
-                    with ui.HStack(height=28, spacing=8):
-                        ui.Label("Prefix:", width=ui.Pixel(50), style=SUB_LABEL_STYLE)
-                        self._field_prefix = ui.StringField()
-                        self._field_prefix.model.set_value("/World/Assembly")
-                        # 指定 name 以對應樣式
-                        ui.Button("Scan", width=ui.Pixel(70), name="action", clicked_fn=self._on_scan)
-                        # [RWD] 移除固定 Spacer(width=85)，讓佈局自然展開
-                    
-                    with ui.HStack(height=28, spacing=8):
-                        ui.Label("URL:", width=ui.Pixel(50), style=SUB_LABEL_STYLE)
-                        self._field_url = ui.StringField()
-                        with ui.HStack(height=24, spacing=8):
-                            self._cb_instanceable = ui.CheckBox()
-                            self._cb_instanceable.model.set_value(False)
-                            ui.Label("Instanceable", style={"color": 0xFFDDDDDD, "font_size": 14})
-                        ui.Button("Apply", width=ui.Pixel(70), name="action", clicked_fn=self._on_apply_reference)
-                        ui.Button("Reset", width=ui.Pixel(70), name="action", clicked_fn=self._on_reset_quick)
-                    
-                    with ui.ZStack(height=45):
-                        ui.Rectangle(style=INFO_BOX_STYLE)
-                        with ui.VStack():
-                            ui.Spacer()
-                            with ui.HStack(padding=6):
-                                self._lbl_results = ui.Label("Scan Results appear here...", word_wrap=True, style={"color": 0xFF00DD00})
-                            ui.Spacer()
+                with ui.CollapsableFrame("Quick Prefix Reference", collapsed=False, height=0):
+                    with ui.VStack(spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
+                        def build_prefix():
+                            with ui.HStack(spacing=zin_ui_utils.ZIN_ROW_SPACING):
+                                self._field_prefix = ui.StringField()
+                                self._field_prefix.model.set_value("/World/Assembly")
+                                ui.Button("Scan", width=70, style=zin_ui_utils.STYLE_POSITIVE, clicked_fn=self._on_scan)
+                        zin_ui_utils.build_property_row("Prefix:", build_prefix)
+                        
+                        def build_url():
+                            with ui.HStack(spacing=zin_ui_utils.ZIN_ROW_SPACING):
+                                self._field_url = ui.StringField()
+                                with ui.HStack(spacing=4):
+                                    self._cb_instanceable = ui.CheckBox(width=20)
+                                    self._cb_instanceable.model.set_value(False)
+                                    ui.Label("Instanceable", name="Description")
+                                ui.Button("Apply", width=70, style=zin_ui_utils.STYLE_POSITIVE, clicked_fn=self._on_apply_reference)
+                                ui.Button("Reset", width=70, style=zin_ui_utils.STYLE_NEGATIVE, clicked_fn=self._on_reset_quick)
+                        zin_ui_utils.build_property_row("URL:", build_url)
+                        
+                        ui.Spacer(height=5)
+                        self._lbl_results = ui.Label("Scan Results appear here...", word_wrap=True, style={"color": 0xFF00DD00})
 
-                ui.Separator(height=8, style={"color": 0x22FFFFFF})
+                ui.Spacer(height=5)
 
                 # --- [Section 2] BOM Generator ---
-                ui.Label("BOM Generator", height=22, style=TITLE_STYLE)
-                with ui.VStack(spacing=8):
-                    with ui.HStack(height=28, spacing=8):
-                        ui.Label("Excel:", width=ui.Pixel(50), style=SUB_LABEL_STYLE)
-                        self.excel_path_field = ui.StringField()
-                        last_excel = self._settings.get(self._setting_excel) or "Select a file..."
-                        self.excel_path_field.model.set_value(last_excel)
-                        # 指定 name="browse"
-                        ui.Button("Browse", width=ui.Pixel(70), name="browse", clicked_fn=self._on_browse_excel)
-                        
-                        # [RWD] 移除固定 width=85，讓 checkbox+label 區域自動收縮
-                        with ui.HStack(spacing=4, alignment=ui.Alignment.CENTER):
-                            self.remember_excel_model = ui.SimpleBoolModel(True)
-                            ui.CheckBox(model=self.remember_excel_model)
-                            ui.Label("Recent", style=SUB_LABEL_STYLE, tooltip="Remember Path")
+                with ui.CollapsableFrame("BOM Generator", collapsed=False, height=0):
+                    with ui.VStack(spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
+                        def build_excel():
+                            with ui.HStack(spacing=zin_ui_utils.ZIN_ROW_SPACING):
+                                self.excel_path_field = ui.StringField()
+                                last_excel = self._settings.get(self._setting_excel) or "Select a file..."
+                                self.excel_path_field.model.set_value(last_excel)
+                                ui.Button("Browse", width=70, clicked_fn=self._on_browse_excel)
+                                
+                                with ui.HStack(spacing=4):
+                                    self.remember_excel_model = ui.SimpleBoolModel(True)
+                                    ui.CheckBox(model=self.remember_excel_model, width=20)
+                                    ui.Label("Recent", name="Description", tooltip="Remember Path")
+                        zin_ui_utils.build_property_row("Excel:", build_excel)
 
-                    with ui.HStack(height=28, spacing=8):
-                        ui.Label("Assets:", width=ui.Pixel(50), style=SUB_LABEL_STYLE)
-                        self.asset_dir_field = ui.StringField()
-                        last_assets = self._settings.get(self._setting_assets) or "omniverse://localhost/Assets"
-                        self.asset_dir_field.model.set_value(last_assets)
-                        # 指定 name="browse"
-                        ui.Button("Browse", width=ui.Pixel(70), name="browse", clicked_fn=self._on_browse_folder)
-                        
-                        # [RWD] 移除固定 width=85
-                        with ui.HStack(spacing=4, alignment=ui.Alignment.CENTER):
-                            self.remember_assets_model = ui.SimpleBoolModel(True)
-                            ui.CheckBox(model=self.remember_assets_model)
-                            ui.Label("Recent", style=SUB_LABEL_STYLE, tooltip="Remember Path")
+                        def build_assets():
+                            with ui.HStack(spacing=zin_ui_utils.ZIN_ROW_SPACING):
+                                self.asset_dir_field = ui.StringField()
+                                last_assets = self._settings.get(self._setting_assets) or "omniverse://localhost/Assets"
+                                self.asset_dir_field.model.set_value(last_assets)
+                                ui.Button("Browse", width=70, clicked_fn=self._on_browse_folder)
+                                
+                                with ui.HStack(spacing=4):
+                                    self.remember_assets_model = ui.SimpleBoolModel(True)
+                                    ui.CheckBox(model=self.remember_assets_model, width=20)
+                                    ui.Label("Recent", name="Description", tooltip="Remember Path")
+                        zin_ui_utils.build_property_row("Assets:", build_assets)
 
-                    # 指定 name="execute"
-                    ui.Button("Execute BOM Import", height=36, name="execute", clicked_fn=self._on_import_execute)
+                        zin_ui_utils.build_button_row("", "Execute BOM Import", self._on_import_execute, zin_ui_utils.STYLE_POSITIVE)
 
-                # --- Status Log ---
-                with ui.ZStack(height=40):
-                    ui.Rectangle(style=INFO_BOX_STYLE)
-                    with ui.VStack():
-                        ui.Spacer()
-                        with ui.HStack(spacing=8, padding=6):
-                            ui.Label("STATUS:", width=65, style={"font_size": 12, "color": 0xFF888888, "font_weight": "bold"})
+                        # --- Status Log ---
+                        ui.Spacer(height=5)
+                        with ui.HStack(spacing=zin_ui_utils.ZIN_ROW_SPACING):
+                            ui.Label("STATUS:", width=ui.Percent(zin_ui_utils.ZIN_LABEL_WIDTH_PCT), style={"font_size": 12, "color": 0xFF888888, "font_weight": "bold"})
                             self.log_output = ui.Label("Ready", style={"color": 0xFF00BFFF})
-                        ui.Spacer()
+                
+                ui.Spacer()
                 
                 ui.Spacer() 
         return scroll_frame

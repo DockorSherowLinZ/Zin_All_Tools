@@ -31,6 +31,7 @@ _delete_list.tmp
 # Test Files
 /Collected_Line_FA_After_01/
 /Test_Stage/
+/ProdLine_UPH/
 
 # AI Agent & Local Configs
 .agents/

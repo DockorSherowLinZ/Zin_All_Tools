@@ -5,6 +5,15 @@ import omni.kit.app
 import omni.usd
 from pxr import Usd, UsdGeom, Gf
 
+import sys
+import os
+
+_tools_box_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../tools_box"))
+if _tools_box_path not in sys.path:
+    sys.path.append(_tools_box_path)
+    
+import tools_box.zin_ui_utils as zin_ui_utils
+
 try:
     from isaacsim.util.debug_draw import _debug_draw  # [Update 5.1]
 except ImportError:
@@ -194,16 +203,16 @@ class SmartAlignWidget:
         if not self._combo_target:
             # Init params
             with self._target_layout:
-                ui.Label("Target Object:", width=100, style={"color": 0xFFDDDDDD})
+                self._target_layout.spacing = zin_ui_utils.ZIN_ROW_SPACING
+                ui.Label("Align To:", width=ui.Percent(zin_ui_utils.ZIN_LABEL_WIDTH_PCT), name="PropertyLabel", tooltip="Target Object")
                 self._combo_target = ui.ComboBox(default_idx, *items)
                 self._combo_target.model.get_item_value_model().add_value_changed_fn(self._on_target_changed)
         else:
             # Update existing
-            # Since we can't easily swap items in default ComboBox without custom model,
-            # We will replace the children of the layout?
             self._target_layout.clear()
             with self._target_layout:
-                ui.Label("Target Object:", width=100, style={"color": 0xFFDDDDDD})
+                self._target_layout.spacing = zin_ui_utils.ZIN_ROW_SPACING
+                ui.Label("Align To:", width=ui.Percent(zin_ui_utils.ZIN_LABEL_WIDTH_PCT), name="PropertyLabel", tooltip="Target Object")
                 self._combo_target = ui.ComboBox(default_idx, *items)
                 self._combo_target.model.get_item_value_model().add_value_changed_fn(self._on_target_changed)
             
@@ -339,61 +348,57 @@ class SmartAlignWidget:
 
         with scroll_frame:
             # [修正] 靠上對齊
-            with ui.VStack(spacing=10, padding=20, alignment=ui.Alignment.TOP):
+            with ui.VStack(style=zin_ui_utils.ZIN_NATIVE_STYLE, spacing=zin_ui_utils.ZIN_V_SPACING, padding=6, alignment=ui.Alignment.TOP):
                 
-                ui.Label("Align Selection", height=20, style={"color": 0xFFDDDDDD, "font_size": 14})
-                
-                # [Safe Mode] Toggle for Debug Draw
-                with ui.HStack(height=20):
-                    ui.Label("Show 3D Overlay:", width=ui.Pixel(120), style={"color": 0xFFAAAAAA})
-                    ui.CheckBox(model=self._show_overlay_model)
+                with ui.CollapsableFrame("Align Selection", collapsed=False, height=0):
+                    with ui.VStack(spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
+                        # [Safe Mode] Toggle for Debug Draw
+                        zin_ui_utils.build_checkbox_row("Overlay:", self._show_overlay_model, "Show 3D Overlay")
+                        
+                        # Instruction
+                        ui.Label("Please select more than two objects for the function to work.", height=20, name="Description", word_wrap=True)
+                        
+                        # Target Selector Dropdown Container
+                        self._target_layout = ui.HStack(height=24)
+                        
+                        # [Lifecycle] Create subscriptions if missing (Active State)
+                        if not self._selection_sub:
+                            self._selection_sub = self._usd_context.get_stage_event_stream().create_subscription_to_pop(
+                                self._on_stage_event, name="SmartAlign Stage Event"
+                            )
+                        if not self._update_sub:
+                            self._update_sub = omni.kit.app.get_app().get_update_event_stream().create_subscription_to_pop(
+                                self._on_update, name="SmartAlign Overlay Update"
+                            )
 
-                # Instruction
-                ui.Label("Please select more than two objects for the function to work.", height=20, style={"color": 0xFF888888, "font_size": 12})
-                
-                ui.Spacer(height=5)
-                
-                # Target Selector Dropdown Container
-                self._target_layout = ui.HStack(height=24)
-                
-                # [Lifecycle] Create subscriptions if missing (Active State)
-                if not self._selection_sub:
-                    self._selection_sub = self._usd_context.get_stage_event_stream().create_subscription_to_pop(
-                        self._on_stage_event, name="SmartAlign Stage Event"
-                    )
-                if not self._update_sub:
-                    self._update_sub = omni.kit.app.get_app().get_update_event_stream().create_subscription_to_pop(
-                        self._on_update, name="SmartAlign Overlay Update"
-                    )
+                        # Trigger initial update 
+                        self._update_selection_ui()
+                        
+                        ui.Spacer(height=5)
+                        
+                        # Undo Button
+                        self._btn_undo = ui.Button("Undo (0)", height=24, clicked_fn=self._on_undo, enabled=False)
+                        
+                        ui.Spacer(height=5)
+                        
+                        # ... Action Buttons ...
+                        with ui.HStack(height=24, spacing=zin_ui_utils.ZIN_ROW_SPACING):
+                            ui.Button("Min X", style=zin_ui_utils.STYLE_POSITIVE, clicked_fn=lambda: self._align_op(0, 'min'))
+                            ui.Button("Center X", style=zin_ui_utils.STYLE_POSITIVE, clicked_fn=lambda: self._align_op(0, 'center'))
+                            ui.Button("Max X", style=zin_ui_utils.STYLE_POSITIVE, clicked_fn=lambda: self._align_op(0, 'max'))
 
-                # Trigger initial update 
-                self._update_selection_ui()
-                
-                ui.Spacer(height=5)
-                
-                # Undo Button
-                self._btn_undo = ui.Button("Undo (0)", height=30, clicked_fn=self._on_undo, enabled=False)
-                
-                ui.Spacer(height=5)
-                
-                # ... Action Buttons ...
-                with ui.HStack(height=40, spacing=10):
-                    ui.Button("Min X", clicked_fn=lambda: self._align_op(0, 'min'))
-                    ui.Button("Center X", clicked_fn=lambda: self._align_op(0, 'center'))
-                    ui.Button("Max X", clicked_fn=lambda: self._align_op(0, 'max'))
+                        with ui.HStack(height=24, spacing=zin_ui_utils.ZIN_ROW_SPACING):
+                            ui.Button("Min Y", style=zin_ui_utils.STYLE_POSITIVE, clicked_fn=lambda: self._align_op(1, 'min'))
+                            ui.Button("Center Y", style=zin_ui_utils.STYLE_POSITIVE, clicked_fn=lambda: self._align_op(1, 'center'))
+                            ui.Button("Max Y", style=zin_ui_utils.STYLE_POSITIVE, clicked_fn=lambda: self._align_op(1, 'max'))
 
-                with ui.HStack(height=40, spacing=10):
-                    ui.Button("Min Y", clicked_fn=lambda: self._align_op(1, 'min'))
-                    ui.Button("Center Y", clicked_fn=lambda: self._align_op(1, 'center'))
-                    ui.Button("Max Y", clicked_fn=lambda: self._align_op(1, 'max'))
+                        with ui.HStack(height=24, spacing=zin_ui_utils.ZIN_ROW_SPACING):
+                            ui.Button("Min Z", style=zin_ui_utils.STYLE_POSITIVE, clicked_fn=lambda: self._align_op(2, 'min'))
+                            ui.Button("Center Z", style=zin_ui_utils.STYLE_POSITIVE, clicked_fn=lambda: self._align_op(2, 'center'))
+                            ui.Button("Max Z", style=zin_ui_utils.STYLE_POSITIVE, clicked_fn=lambda: self._align_op(2, 'max'))
 
-                with ui.HStack(height=40, spacing=10):
-                    ui.Button("Min Z", clicked_fn=lambda: self._align_op(2, 'min'))
-                    ui.Button("Center Z", clicked_fn=lambda: self._align_op(2, 'center'))
-                    ui.Button("Max Z", clicked_fn=lambda: self._align_op(2, 'max'))
-
-                ui.Spacer(height=10)
-                ui.Button("Drop to Ground", height=40, clicked_fn=self._drop_to_ground, style={"background_color": 0xFF444444})
+                        ui.Spacer(height=10)
+                        ui.Button("Drop to Ground", style=zin_ui_utils.STYLE_NEGATIVE, height=24, clicked_fn=self._drop_to_ground)
                 
                 ui.Spacer()
         return scroll_frame

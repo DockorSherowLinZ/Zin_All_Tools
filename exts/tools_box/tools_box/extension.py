@@ -5,22 +5,6 @@ from pxr import Gf
 from .zin_style import ZIN_GLOBAL_STYLE
 from .zin_components import ZinButton
 
-
-# --- Import sub-tools ---
-from smart_align.extension import SmartAlignExtension
-from smart_exploded.extension import ZinSmartExplodedExtension
-from web_dashboard.extension import ZinWebDashboardExtension
-from smart_assets_builder.extension import SmartAssetsBuilderExtension
-from smart_measure.extension import SmartMeasureExtension
-from smart_reference.extension import SmartReferenceExtension
-from smart_reference.extension import SmartReferenceUI 
-from smart_assembly.extension import SmartAssemblyExtension
-from smart_physics_setup.extension import SmartPhysicsSetupExtension
-from smart_conveyor.extension import SmartConveyorExtension
-from smart_cad_convert.extension import SmartCadConvertUI
-from smart_information.extension import SmartInformationUI
-from smart_hud.extension import SmartHudUI
-
 class ToolsBoxExtension(omni.ext.IExt):
     WINDOW_NAME = "Zin Tools Box"
     MENU_PATH = f"Zin_All_Tools/{WINDOW_NAME}"
@@ -29,6 +13,20 @@ class ToolsBoxExtension(omni.ext.IExt):
         print("[Tools Box] Startup")
         self._window = None
         self._menu_added = False
+
+        # --- Lazy Import Sub-tools to prevent circular import ---
+        from smart_align.extension import SmartAlignExtension
+        from smart_exploded.extension import ZinSmartExplodedExtension
+        from web_dashboard.extension import ZinWebDashboardExtension
+        from smart_assets_builder.extension import SmartAssetsBuilderExtension
+        from smart_measure.extension import SmartMeasureExtension
+        from smart_reference.extension import SmartReferenceExtension, SmartReferenceUI 
+        from smart_assembly.extension import SmartAssemblyExtension
+        from smart_physics_setup.extension import SmartPhysicsSetupExtension
+        from smart_conveyor.extension import SmartConveyorExtension
+        from smart_cad_convert.extension import SmartCadConvertUI
+        from smart_information.extension import SmartInformationUI
+        from smart_hud.extension import SmartHudUI
 
         # --- 1. Instantiate sub-tools ---
         self.tool_align = None

@@ -7,6 +7,15 @@ import omni.ui as ui
 import omni.usd
 from urllib.parse import unquote
 
+import sys
+import os
+
+_tools_box_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../tools_box"))
+if _tools_box_path not in sys.path:
+    sys.path.append(_tools_box_path)
+    
+import tools_box.zin_ui_utils as zin_ui_utils
+
 class SmartInformationUI:
     def __init__(self):
         self._usd_context = omni.usd.get_context()
@@ -39,41 +48,42 @@ class SmartInformationUI:
             self.clear_ui()
 
     def build_ui(self):
-        with ui.VStack(spacing=5, padding=12, alignment=ui.Alignment.TOP):
+        with ui.VStack(style=zin_ui_utils.ZIN_NATIVE_STYLE, spacing=zin_ui_utils.ZIN_V_SPACING, padding=6, alignment=ui.Alignment.TOP):
             with ui.VStack(spacing=2, height=0):
-                with ui.HStack(height=18):
-                    ui.Label("Target Prim :", width=ui.Pixel(80), style={"color": 0xFF888888})
-                    self._target_label = ui.Label("--", style={"color": 0xFFDDDDDD})
-                with ui.HStack(height=18):
-                    ui.Label("Status     :", width=ui.Pixel(80), style={"color": 0xFF888888})
-                    self._status_label = ui.Label("--", style={"color": 0xFFDDDDDD})
+                def build_target():
+                    self._target_label = ui.Label("--", name="Description")
+                zin_ui_utils.build_property_row("Target Prim:", build_target)
+                
+                def build_status():
+                    self._status_label = ui.Label("--", name="Description")
+                zin_ui_utils.build_property_row("Status:", build_status)
             
-            ui.Spacer(height=8)
+            ui.Spacer(height=5)
             
             # Add / Edit Section
-            with ui.CollapsableFrame("Add / Edit Metadata", collapsed=False, height=0, style={"color": 0xFFFFFFFF}):
-                with ui.Frame(style={"background_color": 0x33000000, "border_radius": 4}):
-                    with ui.VStack(spacing=4, padding=6):
-                        with ui.HStack(height=20, spacing=4):
-                            ui.Label("Topic:", width=60, style={"color": 0xFFDDDDDD})
-                            self._edit_topic = ui.StringField(style={"color": 0xFFDDDDDD})
-                        with ui.HStack(height=20, spacing=4):
-                            ui.Label("Subject:", width=60, style={"color": 0xFFDDDDDD})
-                            self._edit_subject = ui.StringField(style={"color": 0xFFDDDDDD})
-                        with ui.HStack(height=20, spacing=4):
-                            ui.Label("Content:", width=60, style={"color": 0xFFDDDDDD})
-                            self._edit_content = ui.StringField(style={"color": 0xFFDDDDDD})
-                        
-                        with ui.HStack(height=24, spacing=4):
-                            # Zin All Tools global styles
-                            ui.Button("Add / Update", name="Correct", clicked_fn=self._on_add_metadata_clicked)
-                            ui.Button("Remove", name="Error", clicked_fn=self._on_remove_metadata_clicked)
+            with ui.CollapsableFrame("Add / Edit Metadata", collapsed=False, height=0):
+                with ui.VStack(spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
+                    def build_topic():
+                        self._edit_topic = ui.StringField()
+                    zin_ui_utils.build_property_row("Topic:", build_topic)
+                    
+                    def build_subject():
+                        self._edit_subject = ui.StringField()
+                    zin_ui_utils.build_property_row("Subject:", build_subject)
+                    
+                    def build_content():
+                        self._edit_content = ui.StringField()
+                    zin_ui_utils.build_property_row("Content:", build_content)
+                    
+                    with ui.HStack(height=24, spacing=zin_ui_utils.ZIN_ROW_SPACING):
+                        ui.Button("Add / Update", style=zin_ui_utils.STYLE_POSITIVE, clicked_fn=self._on_add_metadata_clicked)
+                        ui.Button("Remove", style=zin_ui_utils.STYLE_NEGATIVE, clicked_fn=self._on_remove_metadata_clicked)
 
-            ui.Spacer(height=4)
+            ui.Spacer(height=5)
             # Export Section
-            ui.Button("Export to JSON", height=30, clicked_fn=self._on_export_json_clicked)
+            zin_ui_utils.build_button_row("", "Export to JSON", self._on_export_json_clicked, zin_ui_utils.STYLE_POSITIVE)
             
-            ui.Spacer(height=8)
+            ui.Spacer(height=5)
             
             # Dynamic Content Area
             with ui.ScrollingFrame(height=ui.Fraction(1), style={"background_color": 0x00000000}):

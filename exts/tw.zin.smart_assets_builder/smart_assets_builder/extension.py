@@ -236,6 +236,15 @@ def _list_nucleus(url: str, pattern: str, recurse: bool) -> List[str]:
 #  SmartAssetsBuilder Widget
 # ========================================================
 
+import sys
+import os
+
+_tools_box_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../tools_box"))
+if _tools_box_path not in sys.path:
+    sys.path.append(_tools_box_path)
+    
+import tools_box.zin_ui_utils as zin_ui_utils
+
 BUILDER_STYLE = {
     "Label::Header": {"font_size": 18, "color": ui.color.system_label},
     "Label::Subtext": {"color": 0xFFAAAAAA},
@@ -267,76 +276,70 @@ class SmartAssetsBuilderWidget:
             self._build_task.cancel()
 
     def build_ui_layout(self):
-        CARD_BG = 0x33000000
-        CARD_RADIUS = 4
-
         scroll_frame = ui.ScrollingFrame(
             horizontal_scrollbar_policy=ui.ScrollBarPolicy.SCROLLBAR_AS_NEEDED,
             vertical_scrollbar_policy=ui.ScrollBarPolicy.SCROLLBAR_AS_NEEDED
         )
         with scroll_frame:
-            with ui.VStack(spacing=5, padding=10, alignment=ui.Alignment.TOP, style=BUILDER_STYLE):
+            with ui.VStack(style=zin_ui_utils.ZIN_NATIVE_STYLE, spacing=zin_ui_utils.ZIN_V_SPACING, padding=6, alignment=ui.Alignment.TOP):
 
                 # ── Source Configuration ──
                 with ui.CollapsableFrame("Source Configuration", collapsed=False, height=0):
-                    with ui.ZStack():
-                        ui.Rectangle(style={"background_color": CARD_BG, "border_radius": CARD_RADIUS})
-                        with ui.VStack(spacing=6, padding=10):
-                            ui.Label("Source Folder URL", name="Subtext")
-                            self._folder_field = ui.StringField(height=24)
+                    with ui.VStack(spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
+                        def build_src_folder():
+                            self._folder_field = ui.StringField()
+                        zin_ui_utils.build_property_row("Source Folder URL:", build_src_folder)
 
-                            with ui.HStack(spacing=10, height=24):
-                                ui.Label("Filter:", width=ui.Pixel(50), name="Subtext")
-                                self._filter_field = ui.StringField(width=ui.Fraction(1))
-                                self._filter_field.model.set_value("max_*.usd")
+                        def build_filter():
+                            self._filter_field = ui.StringField()
+                            self._filter_field.model.set_value("max_*.usd")
+                        zin_ui_utils.build_property_row("Filter:", build_filter)
 
-                            with ui.HStack(height=22, spacing=5):
-                                self._recurse_cb = ui.CheckBox(width=20)
-                                self._recurse_cb.model.set_value(True)
-                                ui.Label("Recurse Sub-folders", name="Subtext")
+                        self._recurse_cb = ui.SimpleBoolModel(True)
+                        zin_ui_utils.build_checkbox_row("Recurse Sub-folders:", self._recurse_cb)
 
-                            with ui.HStack(spacing=10, height=24):
-                                ui.Label("ID Suffix:", width=ui.Pixel(65), name="Subtext")
-                                self._id_field = ui.StringField(width=ui.Fraction(1), tooltip="Optional suffix for ID file, e.g., _v2")
-                                ui.Spacer(width=15)
-                                self._overwrite_cb = ui.CheckBox(width=20)
-                                self._overwrite_cb.model.set_value(False)
-                                ui.Label("Overwrite Existing", name="Subtext")
+                        def build_id_suffix():
+                            self._id_field = ui.StringField(tooltip="Optional suffix for ID file, e.g., _v2")
+                        zin_ui_utils.build_property_row("ID Suffix:", build_id_suffix)
+                        
+                        self._overwrite_cb = ui.SimpleBoolModel(False)
+                        zin_ui_utils.build_checkbox_row("Overwrite Existing:", self._overwrite_cb)
 
-                            ui.Spacer(height=2)
-                            with ui.HStack(height=30, spacing=10):
-                                self._scan_btn = ui.Button("Scan Source", clicked_fn=self._on_scan, width=ui.Pixel(120))
-                                self._count_label = ui.Label("Ready to scan...", style={"color": 0xFF888888})
+                        ui.Spacer(height=5)
+                        with ui.HStack(spacing=zin_ui_utils.ZIN_ROW_SPACING, height=24):
+                            ui.Button("Scan Source", clicked_fn=self._on_scan, width=120)
+                            self._count_label = ui.Label("Ready to scan...", name="Description")
 
                 ui.Spacer(height=5)
 
                 # ── Output Configuration ──
                 with ui.CollapsableFrame("Output Configuration", collapsed=False, height=0):
-                    with ui.ZStack():
-                        ui.Rectangle(style={"background_color": CARD_BG, "border_radius": CARD_RADIUS})
-                        with ui.VStack(spacing=6, padding=10):
-                            ui.Label("Output Root URL (local or omniverse://)", name="Subtext")
-                            self._out_root_field = ui.StringField(height=24)
+                    with ui.VStack(spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
+                        def build_out_root():
+                            self._out_root_field = ui.StringField()
+                        zin_ui_utils.build_property_row("Output Root URL:", build_out_root)
 
-                            ui.Label("Material Overlay Path (Optional)", name="Subtext")
-                            self._mat_field = ui.StringField(height=24, tooltip="Path to material USD to overlay")
+                        def build_mat_path():
+                            self._mat_field = ui.StringField(tooltip="Path to material USD to overlay")
+                        zin_ui_utils.build_property_row("Material Overlay:", build_mat_path)
 
-                            ui.Label("Material Mapping JSON (Optional)", name="Subtext")
-                            self._json_field = ui.StringField(height=24, tooltip="Path to QuickNames.json for auto-binding")
+                        def build_json_path():
+                            self._json_field = ui.StringField(tooltip="Path to QuickNames.json for auto-binding")
                             self._json_field.model.set_value(r"D:\Inventec\Zin_All_Tools\max_script\Zin_CAD_SelectSimilar\QuickNames.json")
+                        zin_ui_utils.build_property_row("Material JSON:", build_json_path)
 
                 ui.Spacer(height=5)
 
                 # ── Actions ──
-                with ui.HStack(height=40, spacing=10):
-                    self._start_btn = ui.Button("Start Build", clicked_fn=self._on_start, width=ui.Pixel(150), name="Start")
+                with ui.HStack(height=24, spacing=zin_ui_utils.ZIN_ROW_SPACING):
+                    self._start_btn = ui.Button("Start Build", clicked_fn=self._on_start, width=150, style=zin_ui_utils.STYLE_POSITIVE)
                     
                     with ui.ZStack(width=ui.Fraction(1), height=24):
                         self._progress_model = ui.SimpleFloatModel(0.0)
-                        self._progress_bar = ui.ProgressBar(self._progress_model, name="Active", style={"font_size": 0})
+                        self._progress_bar = ui.ProgressBar(self._progress_model, style={"font_size": 0})
                         self._progress_overlay_label = ui.Label("0%", alignment=ui.Alignment.CENTER, style={"color": 0xFFFFFFFF, "font_size": 12})
 
-                self._status_label = ui.Label("Ready", height=20, alignment=ui.Alignment.CENTER, name="Subtext")
+                self._status_label = ui.Label("Ready", height=20, alignment=ui.Alignment.CENTER, name="Description")
 
                 ui.Spacer()
                 
@@ -347,10 +350,10 @@ class SmartAssetsBuilderWidget:
         if not hasattr(self, "_start_btn"): return
         if self._is_building:
             self._start_btn.text = "Cancel"
-            self._start_btn.name = "Cancel"
+            self._start_btn.set_style(zin_ui_utils.STYLE_NEGATIVE)
         else:
             self._start_btn.text = "Start Build"
-            self._start_btn.name = "Start"
+            self._start_btn.set_style(zin_ui_utils.STYLE_POSITIVE)
             has_files = len(self._found) > 0
             has_out_root = bool(self._out_root_field.model.get_value_as_string().strip())
             self._start_btn.enabled = has_files and has_out_root

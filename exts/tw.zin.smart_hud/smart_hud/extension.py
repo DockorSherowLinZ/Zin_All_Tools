@@ -6,6 +6,15 @@ import omni.timeline
 from pxr import Usd, UsdGeom, UsdSkel, Gf, Sdf
 import random
 import statistics
+import sys
+import os
+
+# Ensure tools_box is accessible
+_tools_box_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../tools_box"))
+if _tools_box_path not in sys.path:
+    sys.path.append(_tools_box_path)
+    
+import tools_box.zin_ui_utils as zin_ui_utils
 
 # ==============================================================================
 # MVVM View Model
@@ -19,14 +28,14 @@ class HUDViewModel:
         self.robot_state = ui.SimpleStringModel("STANDBY")
         self.robot_title = ui.SimpleStringModel("Robot Arm")
         self.manual_station_name = ui.SimpleStringModel("Manual Assembly #1")
-        self.manual_station_sub = ui.SimpleStringModel("Sub Title")
-        self.manual_station_content = ui.SimpleStringModel("Content")
-        self.manual_takt_label = ui.SimpleStringModel("Takt Time Remaining:")
+        self.manual_station_sub = ui.SimpleStringModel("Station")
+        self.manual_station_content = ui.SimpleStringModel("Description")
+        self.manual_takt_label = ui.SimpleStringModel("Process:")
         
         # Generic models for custom HUDs
         self.generic_title = ui.SimpleStringModel("Custom Item")
-        self.generic_sub = ui.SimpleStringModel("Sub Title")
-        self.generic_content = ui.SimpleStringModel("Status: Active")
+        self.generic_sub = ui.SimpleStringModel("Station")
+        self.generic_content = ui.SimpleStringModel("Description")
         
         # Progress bar state
         self.current_progress_pct = 100.0
@@ -127,7 +136,7 @@ class GrayboxHUDEngine:
         
         sub_title = ""
         content = ""
-        takt_label = "Takt Time Remaining:"
+        takt_label = "Process:"
         sub_attr = prim.GetAttribute("hud_sub_title")
         content_attr = prim.GetAttribute("hud_content")
         takt_label_attr = prim.GetAttribute("hud_takt_label")
@@ -158,11 +167,11 @@ class GrayboxHUDEngine:
               f"cycle=[{cycle_start:.0f} → {cycle_end:.0f}] ({cycle_len:.0f} frames), "
               f"attrs_scanned={cycle_info['attrs_scanned']}, samples_found={cycle_info['samples_found']}")
         
-        if m_type == "AOI":
+        if m_type == "Machine":
             view_model.aoi_title.set_value(display_title)
-        elif m_type == "Robot":
+        elif m_type == "Robot Station":
             view_model.robot_title.set_value(display_title)
-        elif m_type == "ManualStation":
+        elif m_type == "Human Station":
             view_model.manual_station_name.set_value(m_type)
             view_model.manual_station_sub.set_value(sub_title)
             view_model.manual_station_content.set_value(content)
@@ -182,7 +191,7 @@ class GrayboxHUDEngine:
                 
         collapsed_transform = sc.Transform(transform=transform_matrix, look_at=sc.Transform.LookAt.CAMERA, visible=True)
         with collapsed_transform:
-            collapsed_widget = sc.Widget(width=150, height=55 if m_type == "ManualStation" else 35)
+            collapsed_widget = sc.Widget(width=150, height=55 if m_type == "Human Station" else 35)
             def build_collapsed(title=display_title, path=prim_path, m=m_type, vm=view_model):
                 def on_click(x, y, button, modifier, p=path):
                     if button == 0:
@@ -193,7 +202,7 @@ class GrayboxHUDEngine:
                     _stack = ui.ZStack()
                 with _stack:
                         ui.Rectangle(style={"background_color": 0xCC1A1E24, "border_color": 0x8800FFFF, "border_width": 1})
-                        if m == "ManualStation":
+                        if m == "Human Station":
                             with ui.VStack(spacing=2):
                                 ui.Spacer(height=4)
                                 ui.Label(title, height=18, style={"color": ui.color(0.0, 0.88, 1.0), "font_size": 14, "alignment": ui.Alignment.CENTER})
@@ -212,11 +221,11 @@ class GrayboxHUDEngine:
         with expanded_transform:
             expanded_widget = sc.Widget(width=300, height=280)
             
-            if m_type == "AOI":
+            if m_type == "Machine":
                 builder = lambda vm=view_model, p=prim_path: self._build_aoi_ui(vm, p)
-            elif m_type == "Robot":
+            elif m_type == "Robot Station":
                 builder = lambda vm=view_model, p=prim_path: self._build_robot_ui(vm, p)
-            elif m_type == "ManualStation":
+            elif m_type == "Human Station":
                 builder = lambda vm=view_model, p=prim_path: self._build_manual_station_ui(vm, p)
             else:
                 builder = lambda vm=view_model, p=prim_path, sd=show_dynamic, ss=show_static: self._build_generic_ui(vm, p, sd, ss)
@@ -600,7 +609,7 @@ class GrayboxHUDEngine:
                 vm = instance["view_model"]
                 m_type = instance["machine_type"]
                 
-                if m_type == "ManualStation":
+                if m_type == "Human Station":
                     cycle_start = instance.get("cycle_start", 0.0)
                     cycle_end = instance.get("cycle_end", 3.0 * fps)
                     cycle_len_frames = cycle_end - cycle_start
@@ -649,12 +658,12 @@ class GrayboxHUDEngine:
                             except Exception:
                                 pass
                         
-                elif m_type == "AOI":
+                elif m_type == "Machine":
                     # Update these less frequently to avoid flickering, e.g. based on frame count or time, but keeping random logic for now
                     vm.aoi_status.set_value(random.choice(["INSPECTING", "PASS", "FAIL"]))
                     vm.aoi_defect_rate.set_value(random.uniform(0.0, 5.0))
                         
-                elif m_type == "Robot":
+                elif m_type == "Robot Station":
                     vm.robot_state.set_value(random.choice(["MOVING", "WELDING", "IDLE"]))
 
     def destroy(self):
@@ -683,22 +692,16 @@ class SmartHudUI:
     UI Class managed by Zin Tools Box.
     Handles the toggle logic for the HUD Engine and Metadata configuration.
     """
+    _STYLE_POSITIVE = { 
+        "Button": { "background_color": 0xFF2A5E2A }, 
+        "Button:hovered": { "background_color": 0xFF33703A }, 
+        "Button:pressed": { "background_color": 0xFF1F471F } 
+    }
     
-    # Define styles locally to ensure they render correctly even inside nested frames
-    _STYLE_DEFAULT = {
-        "Button": {"background_color": 0xFF343432, "border_radius": 4, "margin": 2},
-        "Button:hovered": {"background_color": 0xFF4A4A48},
-        "Button:pressed": {"background_color": 0xFF5A5A58},
-    }
-    _STYLE_CORRECT = {
-        "Button": {"background_color": 0xFF2A5E2A, "border_radius": 4, "margin": 2},
-        "Button:hovered": {"background_color": 0xFF33703A},
-        "Button:pressed": {"background_color": 0xFF44AA44},
-    }
-    _STYLE_ERROR = {
-        "Button": {"background_color": 0xFF5E2A2A, "border_radius": 4, "margin": 2},
-        "Button:hovered": {"background_color": 0xFF703333},
-        "Button:pressed": {"background_color": 0xFFAA4444},
+    _STYLE_NEGATIVE = { 
+        "Button": { "background_color": 0xFF5E2A2A }, 
+        "Button:hovered": { "background_color": 0xFF703333 }, 
+        "Button:pressed": { "background_color": 0xFF471F1F } 
     }
 
     def __init__(self):
@@ -725,18 +728,18 @@ class SmartHudUI:
             if hasattr(self, "toggle_btn") and self.toggle_btn:
                 try:
                     self.toggle_btn.text = "Turn ON"
-                    self.toggle_btn.set_style(self._STYLE_CORRECT)
+                    self.toggle_btn.set_style(self._STYLE_POSITIVE)
                 except Exception:
                     pass
 
     def build_ui(self):
         """Builds the 2D control panel inside the Zin Tools Box."""
-        with ui.VStack(spacing=2):
+        with ui.VStack(style=zin_ui_utils.ZIN_NATIVE_STYLE, spacing=zin_ui_utils.ZIN_V_SPACING):
             
-            with ui.HStack(height=30, spacing=10):
+            with ui.HStack(height=30, spacing=zin_ui_utils.ZIN_ROW_SPACING):
                 # Toggle Button
                 button_text = "Turn OFF" if self.is_enabled else "Turn ON"
-                button_style = self._STYLE_ERROR if self.is_enabled else self._STYLE_CORRECT
+                button_style = self._STYLE_NEGATIVE if self.is_enabled else self._STYLE_POSITIVE
                 
                 self.toggle_btn = ui.Button(
                     button_text, 
@@ -746,72 +749,83 @@ class SmartHudUI:
                 
                 ui.Button(
                     "Generate Test Graybox Scene",
-                    style=self._STYLE_DEFAULT,
+                    name="Button",
                     clicked_fn=self._create_test_scene,
                     tooltip="Creates 3 Graybox test machines with 'machine_type' attributes properly configured."
                 )
 
             ui.Spacer(height=10)
             
-            with ui.CollapsableFrame("Add / Edit HUD Metadata", collapsed=False, style={"font_size": 16, "color": 0xFFFFFFFF}):
-                with ui.VStack(spacing=2, padding=6):
-                    ui.Label("Add custom attributes to make selected models compatible with HUD and Info Panel:", 
-                             style={"color": 0xFFAAAAAA, "font_size": 14})
+            with ui.CollapsableFrame("Add / Edit HUD Metadata", collapsed=False, height=0):
+                with ui.VStack(spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
+                    ui.Label("Add custom attributes to make selected models compatible with HUD and Info Panel:", name="Description")
+                    ui.Spacer(height=2)
                     
-                    with ui.HStack(height=24, spacing=10):
-                        ui.Label("Topic (Machine Type):", width=140, style={"color": 0xFFDDDDDD}, tooltip="Will be written to 'aif:core:assetClass' and displayed as 'Asset Class' in Factory Info.")
-                        self._topic_options = ["ManualStation", "AOI", "Robot"]
-                        self.topic_combo = ui.ComboBox(0, *self._topic_options, style={"color": 0xFFDDDDDD})
+                    def build_hud_type():
+                        self._topic_options = ["Human Station", "Machine", "Robot Station"]
+                        self.topic_combo = ui.ComboBox(0, *self._topic_options)
+                    zin_ui_utils.build_property_row("HUD Type:", build_hud_type, tooltip="Will be written to 'aif:core:assetClass'")
                         
-                    with ui.HStack(height=24, spacing=10):
-                        ui.Label("Subject (Sub Title):", width=140, style={"color": 0xFFDDDDDD}, tooltip="Will be written to 'aif:core:modelNumber' and displayed as 'Model No' in Factory Info.")
-                        self.subject_field = ui.StringField(style={"color": 0xFFDDDDDD})
+                    def build_station():
+                        self.subject_field = ui.StringField()
                         self.subject_field.model.set_value("S01")
+                    zin_ui_utils.build_property_row("Station:", build_station, tooltip="Will be written to 'aif:core:modelNumber'")
                         
-                    with ui.HStack(height=24, spacing=10):
-                        ui.Label("Content:", width=140, style={"color": 0xFFDDDDDD}, tooltip="Will be written to 'aif:core:assetDescription'. Status is hardcoded to 'Active' for demo.")
-                        self.content_field = ui.StringField(style={"color": 0xFFDDDDDD})
+                    def build_desc():
+                        self.content_field = ui.StringField()
                         self.content_field.model.set_value("Chassis")
+                    zin_ui_utils.build_property_row("Description:", build_desc, tooltip="Will be written to 'aif:core:assetDescription'.")
                         
-                    with ui.HStack(height=24, spacing=10):
-                        ui.Label("Takt Label:", width=140, style={"color": 0xFFDDDDDD}, tooltip="Will be written to 'hud_takt_label'.")
-                        self.takt_label_field = ui.StringField(style={"color": 0xFFDDDDDD})
-                        self.takt_label_field.model.set_value("Takt Time Remaining:")
+                    def build_process():
+                        self.takt_label_field = ui.StringField()
+                        self.takt_label_field.model.set_value("Process:")
+                    zin_ui_utils.build_property_row("Process:", build_process, tooltip="Will be written to 'hud_takt_label'.")
+                        
+                    self.apply_to_children_cb = ui.SimpleBoolModel(True)
+                    zin_ui_utils.build_checkbox_row("Target:", self.apply_to_children_cb, "Auto-apply to Child Meshes (For Groups)", "If checked, applying to a Group/Xform will automatically apply to its internal Meshes.")
+                    
+                    def build_custom_cycle():
+                        self.custom_cycle_field = ui.IntField()
+                        self.custom_cycle_field.model.set_value(0)
+                    zin_ui_utils.build_property_row("Custom Cycle (Frames):", build_custom_cycle, tooltip="Manual override for cycle length. Set to 0 for auto-detection.")
+                        
+                    def build_display_settings():
+                        with ui.HStack(spacing=6):
+                            self.cb_dynamic = ui.CheckBox(width=20)
+                            self.cb_dynamic.model.set_value(True)
+                            self.cb_dynamic.model.add_value_changed_fn(self._on_display_setting_changed)
+                            ui.Label("Dynamic HUD Status", width=130)
+                            
+                            self.cb_static = ui.CheckBox(width=20)
+                            self.cb_static.model.set_value(True)
+                            self.cb_static.model.add_value_changed_fn(self._on_display_setting_changed)
+                            ui.Label("Factory Info")
+                    zin_ui_utils.build_property_row("Display Settings:", build_display_settings)
                     
                     ui.Spacer(height=5)
-                    with ui.HStack(spacing=10, height=30):
+                    with ui.HStack(spacing=zin_ui_utils.ZIN_ROW_SPACING, height=24):
                         ui.Button(
                             "Add / Update",
-                            style=self._STYLE_CORRECT,
+                            style=self._STYLE_POSITIVE,
                             clicked_fn=self._apply_attributes_to_selected,
                             tooltip="Adds or updates HUD and AIF metadata attributes for selected models."
                         )
                         ui.Button(
                             "Remove",
-                            style=self._STYLE_ERROR,
+                            style=self._STYLE_NEGATIVE,
                             clicked_fn=self._remove_attributes_from_selected,
                             tooltip="Removes HUD attributes from selected models."
                         )
                         
             ui.Spacer(height=10)
-            with ui.CollapsableFrame("Animation Binding", collapsed=False, style={"font_size": 16, "color": 0xFFFFFFFF}):
-                with ui.VStack(spacing=2, padding=6):
-                    ui.Label("Bind HUD progress to a specific animated character (optional):", style={"color": 0xFFAAAAAA, "font_size": 13})
-                    with ui.HStack(height=24, spacing=10):
-                        ui.Label("Anim Target:", width=90, style={"color": 0xFFDDDDDD}, tooltip="Absolute path to the animated prim. Used to sync the progress bar.")
-                        self.anim_target_field = ui.StringField(style={"color": 0xFFDDDDDD})
-                        self.anim_target_field.model.set_value("/World/IMX_Factory_After/ASSET/asset_IMX_Factory_After_v2/Lifting_4/Scene1")
-                    with ui.HStack(height=24, spacing=10):
-                        ui.Label("Custom Cycle (Frames):", width=140, style={"color": 0xFFDDDDDD}, tooltip="Manual override for cycle length. Set to 0 for auto-detection. Use this for baked Mocap data.")
-                        self.custom_cycle_field = ui.IntField(style={"color": 0xFFDDDDDD})
-                        self.custom_cycle_field.model.set_value(0)
-                    ui.Button(
-                        "Bind to Selected",
-                        height=24,
-                        style=self._STYLE_DEFAULT,
-                        clicked_fn=self._bind_animation_target,
-                        tooltip="Writes 'aif:core:animationTarget' and optional custom cycle length to the selected prims."
-                    )
+            with ui.CollapsableFrame("Animation Binding", collapsed=False, height=0):
+                with ui.VStack(spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
+                    def build_anim_target():
+                        self.anim_target_field = ui.StringField()
+                        self.anim_target_field.model.set_value("")
+                    zin_ui_utils.build_property_row("Anim Target (optional):", build_anim_target, tooltip="Absolute path to the animated prim. Used to sync the progress bar.")
+                    
+                    zin_ui_utils.build_button_row("", "Bind to Selected", self._bind_animation_target, self._STYLE_POSITIVE, "Writes 'aif:core:animationTarget' and optional custom cycle length to the selected prims.")
                     
                     # --- Binding Diagnostic Info ---
                     ui.Spacer(height=6)
@@ -819,32 +833,18 @@ class SmartHudUI:
                         ui.Rectangle(height=1, style={"background_color": 0xFF444444})
                     ui.Spacer(height=4)
                     ui.Label("Binding Diagnostics:", height=16, style={"color": 0xFF00AAFF, "font_size": 13, "weight": "bold"})
-                    with ui.HStack(height=18, spacing=4):
-                        ui.Label("Status:", width=90, style={"color": 0xFF888888, "font_size": 12})
-                        self._diag_status_label = ui.Label("N/A", style={"color": 0xFFAAAAAA, "font_size": 12})
-                    with ui.HStack(height=18, spacing=4):
-                        ui.Label("Target:", width=90, style={"color": 0xFF888888, "font_size": 12})
-                        self._diag_target_label = ui.Label("(none)", style={"color": 0xFFAAAAAA, "font_size": 12})
-                    with ui.HStack(height=18, spacing=4):
-                        ui.Label("Cycle Length:", width=90, style={"color": 0xFF888888, "font_size": 12})
-                        self._diag_cycle_label = ui.Label("(none)", style={"color": 0xFFAAAAAA, "font_size": 12})
-
-            ui.Spacer(height=10)
-            with ui.CollapsableFrame("Display Settings", collapsed=False, style={"font_size": 16, "color": 0xFFFFFFFF}):
-                with ui.VStack(spacing=2, padding=6):
-                    ui.Label("Select information to display on the HUD overlay:", style={"color": 0xFFAAAAAA, "font_size": 13})
                     
-                    with ui.HStack(height=22, spacing=6):
-                        self.cb_dynamic = ui.CheckBox(width=18, height=18)
-                        self.cb_dynamic.model.set_value(True)
-                        self.cb_dynamic.model.add_value_changed_fn(self._on_display_setting_changed)
-                        ui.Label("Dynamic HUD Status", style={"color": 0xFFDDDDDD, "font_size": 13})
-
-                    with ui.HStack(height=22, spacing=6):
-                        self.cb_static = ui.CheckBox(width=18, height=18)
-                        self.cb_static.model.set_value(True)
-                        self.cb_static.model.add_value_changed_fn(self._on_display_setting_changed)
-                        ui.Label("Factory Info (Metadata)", style={"color": 0xFFDDDDDD, "font_size": 13})
+                    def build_diag_status():
+                        self._diag_status_label = ui.Label("N/A", name="Description")
+                    zin_ui_utils.build_property_row("Status:", build_diag_status)
+                    
+                    def build_diag_target():
+                        self._diag_target_label = ui.Label("(none)", name="Description")
+                    zin_ui_utils.build_property_row("Target:", build_diag_target)
+                    
+                    def build_diag_cycle():
+                        self._diag_cycle_label = ui.Label("(none)", name="Description")
+                    zin_ui_utils.build_property_row("Cycle Length:", build_diag_cycle)
 
             ui.Spacer()
 
@@ -902,9 +902,65 @@ class SmartHudUI:
             self.engine.rebuild_huds()
             self._update_binding_diagnostics()
 
+    def _find_closest_waypoint_pause(self, world_pos):
+        import glob
+        import json
+        import math
+        import omni.usd
+        import os
+        
+        # 動態取得當前 Stage 的路徑，進而推算 ProdLine_UPH 資料夾
+        context = omni.usd.get_context()
+        stage_url = context.get_stage_url()
+        
+        json_dir = r"D:\Inventec\DigitalTwin\Factory\IMX\ProdLine_UPH" # Fallback
+        if stage_url:
+            stage_path = stage_url.replace("omniverse://", "").split("?")[0]
+            # 假設結構為 .../IMX_1F/ProdLine/Line_S01.usd
+            parent_dir = os.path.dirname(os.path.dirname(stage_path))
+            dynamic_dir = os.path.join(parent_dir, "ProdLine_UPH")
+            if os.path.exists(dynamic_dir):
+                json_dir = dynamic_dir
+                
+        print(f"[Smart HUD] 🔍 Scanning JSON files in: {json_dir}")
+        json_files = glob.glob(f"{json_dir}/*.json")
+        
+        closest_wp = None
+        min_dist = float('inf')
+        
+        for f in json_files:
+            try:
+                with open(f, 'r', encoding='utf-8') as file:
+                    data = json.load(file)
+                    
+                waypoints = data.get("waypoints", [])
+                for wp in waypoints:
+                    pos = wp.get("pos")
+                    if pos and len(pos) >= 3:
+                        dx = pos[0] - world_pos[0]
+                        dy = pos[1] - world_pos[1]
+                        dz = pos[2] - world_pos[2]
+                        dist = math.sqrt(dx*dx + dy*dy + dz*dz)
+                        if dist < min_dist:
+                            min_dist = dist
+                            closest_wp = wp
+            except Exception as e:
+                print(f"[Smart HUD] Error reading {f}: {e}")
+                
+        if closest_wp:
+            print(f"[Smart HUD] 📍 Closest Waypoint '{closest_wp.get('name')}' found at distance {min_dist:.2f} units. Pause: {closest_wp.get('pause')}s")
+            
+        # 增加一個距離寬容值，如果離最靠近的點位大於 200 (2公尺)，可能代表抓錯了
+        if closest_wp and min_dist < 500.0:
+            if "pause" in closest_wp:
+                return closest_wp["pause"]
+            
+        print("[Smart HUD] ⚠️ No valid waypoint found within 500 units.")
+        return None
+
     def _apply_attributes_to_selected(self):
         import omni.usd
-        from pxr import Sdf
+        from pxr import Sdf, UsdGeom, Usd
         
         context = omni.usd.get_context()
         stage = context.get_stage()
@@ -918,12 +974,34 @@ class SmartHudUI:
             return
 
         idx = self.topic_combo.model.get_item_value_model().get_value_as_int()
-        topic = self._topic_options[idx] if 0 <= idx < len(self._topic_options) else "ManualStation"
+        topic = self._topic_options[idx] if 0 <= idx < len(self._topic_options) else "Human Station"
         subject = self.subject_field.model.get_value_as_string()
         content = self.content_field.model.get_value_as_string()
         takt_label = self.takt_label_field.model.get_value_as_string()
+        
+        apply_to_children = False
+        if hasattr(self, "apply_to_children_cb"):
+            apply_to_children = self.apply_to_children_cb.model.get_value_as_bool()
 
+        target_paths = set()
         for path in selection:
+            prim = stage.GetPrimAtPath(path)
+            if not prim or not prim.IsValid():
+                continue
+                
+            if apply_to_children and not prim.IsA(UsdGeom.Mesh):
+                # Expand group: find all descendant Meshes
+                meshes = [p for p in prim.GetDescendants() if p.IsA(UsdGeom.Mesh)]
+                if meshes:
+                    for m in meshes:
+                        target_paths.add(str(m.GetPath()))
+                    print(f"[Smart HUD] 📦 Auto-expanded group {path} into {len(meshes)} Mesh prims.")
+                else:
+                    target_paths.add(path)
+            else:
+                target_paths.add(path)
+
+        for path in target_paths:
             prim = stage.GetPrimAtPath(path)
             if not prim or not prim.IsValid():
                 continue
@@ -946,12 +1024,29 @@ class SmartHudUI:
             attr_takt.Set(takt_label)
             
             # Also persist custom cycle length if set in the UI
+            custom_cycle_val = 0
             if hasattr(self, "custom_cycle_field"):
                 custom_cycle_val = self.custom_cycle_field.model.get_value_as_int()
-                cycle_attr = prim.GetAttribute("hud_custom_cycle_length")
-                if not cycle_attr:
-                    cycle_attr = prim.CreateAttribute("hud_custom_cycle_length", Sdf.ValueTypeNames.Int)
-                cycle_attr.Set(custom_cycle_val)
+                
+            # --- Auto-bind from JSON if Machine or Robot Station ---
+            if topic in ["Machine", "Robot Station"]:
+                world_transform = UsdGeom.Xformable(prim).ComputeLocalToWorldTransform(Usd.TimeCode.Default())
+                translation = world_transform.ExtractTranslation()
+                pause_sec = self._find_closest_waypoint_pause(translation)
+                
+                if pause_sec is not None:
+                    fps = stage.GetTimeCodesPerSecond()
+                    auto_cycle_val = int(pause_sec * fps)
+                    if custom_cycle_val <= 0 and auto_cycle_val > 0:  # Only override if not manually set in UI and pause > 0
+                        custom_cycle_val = auto_cycle_val
+                        print(f"[Smart HUD] ✅ Auto-Bound: Matched closest Waypoint. Set cycle time to {auto_cycle_val} frames (Pause: {pause_sec}s) on {path}.")
+                    elif custom_cycle_val <= 0 and auto_cycle_val == 0:
+                        print(f"[Smart HUD] ⚠️ Closest Waypoint has 0s pause. Cycle time not updated for {path}.")
+            
+            cycle_attr = prim.GetAttribute("hud_custom_cycle_length")
+            if not cycle_attr:
+                cycle_attr = prim.CreateAttribute("hud_custom_cycle_length", Sdf.ValueTypeNames.Int)
+            cycle_attr.Set(custom_cycle_val)
 
             # 2. Add smart_info_panel attributes (aif:core and aif:spec)
             # 遵循 AIF Pipeline Samples 綁定規範 (AIF-MANAGED, Locked)
@@ -1050,9 +1145,9 @@ class SmartHudUI:
             return
 
         machines = {
-            "AOI": Gf.Vec3d(0, 0, 100),
-            "Robot": Gf.Vec3d(300, 0, 100),
-            "ManualStation": Gf.Vec3d(-300, 0, 100)
+            "Machine": Gf.Vec3d(0, 0, 100),
+            "Robot Station": Gf.Vec3d(300, 0, 100),
+            "Human Station": Gf.Vec3d(-300, 0, 100)
         }
 
         world_path = "/World"
@@ -1084,13 +1179,13 @@ class SmartHudUI:
         
         if self.is_enabled:
             self.toggle_btn.text = "Turn OFF"
-            self.toggle_btn.set_style(self._STYLE_ERROR)
+            self.toggle_btn.set_style(self._STYLE_NEGATIVE)
             if not self.engine:
                 self.engine = GrayboxHUDEngine(self)
             self._update_binding_diagnostics()
         else:
             self.toggle_btn.text = "Turn ON"
-            self.toggle_btn.set_style(self._STYLE_CORRECT)
+            self.toggle_btn.set_style(self._STYLE_POSITIVE)
             if self.engine:
                 self.engine.destroy()
                 self.engine = None
@@ -1107,10 +1202,10 @@ class SmartHudUI:
                 self._diag_cycle_label.text = "(none)"
             return
         
-        # Aggregate binding status from all ManualStation HUD instances
+        # Aggregate binding status from all Human Station HUD instances
         for prim_path, instance in self.engine._hud_instances.items():
             vm = instance["view_model"]
-            if instance["machine_type"] != "ManualStation":
+            if instance["machine_type"] != "Human Station":
                 continue
             
             is_manual = vm.bind_status == "Manual Override"
@@ -1130,7 +1225,7 @@ class SmartHudUI:
             if hasattr(self, "_diag_cycle_label") and self._diag_cycle_label:
                 suffix = " (Manual Override)" if is_manual else ""
                 self._diag_cycle_label.text = f"{vm.bind_cycle_len:.0f} frames{suffix}"
-            break  # Show first ManualStation's binding info
+            break  # Show first Human Station's binding info
 
     def shutdown(self):
         """Called by ToolsBox on extension shutdown"""

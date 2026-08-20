@@ -8,6 +8,13 @@ import urllib.parse
 from http.server import SimpleHTTPRequestHandler
 import socketserver
 
+import sys
+_tools_box_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../tools_box"))
+if _tools_box_path not in sys.path:
+    sys.path.append(_tools_box_path)
+    
+import tools_box.zin_ui_utils as zin_ui_utils
+
 # We will import SmartConveyorExtension locally inside the handlers to avoid IExt import warnings.
 
 class DashboardRequestHandler(SimpleHTTPRequestHandler):
@@ -265,14 +272,17 @@ class ZinWebDashboardExtension(omni.ext.IExt):
 
     def build_ui_layout(self):
         import omni.ui as ui
-        with ui.VStack(spacing=5, style={"margin": 5}):
-            ui.Label("Zin Web Dashboard", style={"color": 0xFFFFA500, "font_size": 18})
-            ui.Spacer(height=10)
-            with ui.HStack(height=ui.Pixel(30)):
-                ui.Label("Server Status:", width=ui.Pixel(100), style={"color": 0xFFAAAAAA})
-                ui.Label("Running", style={"color": 0xFF44AA44, "font_weight": "bold"})
-            with ui.HStack(height=ui.Pixel(30)):
-                ui.Label("Access URL:", width=ui.Pixel(100), style={"color": 0xFFAAAAAA})
-                ui.Label(f"http://localhost:{self._port}", style={"color": 0xFFDDDDDD})
-            ui.Spacer(height=10)
-            ui.Label("WebRTC Livestream is enabled for remote viewing.", style={"color": 0xFF888888})
+        with ui.VStack(style=zin_ui_utils.ZIN_NATIVE_STYLE, spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
+            with ui.CollapsableFrame("Local Server Settings", collapsed=False, height=0):
+                with ui.VStack(spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
+                    def build_status():
+                        ui.Label("Running", style={"color": 0xFF44AA44, "font_weight": "bold"})
+                    zin_ui_utils.build_property_row("Server Status:", build_status)
+                    
+                    def build_url():
+                        ui.Label(f"http://localhost:{self._port}", name="Description")
+                    zin_ui_utils.build_property_row("Access URL:", build_url)
+                    
+            ui.Spacer(height=5)
+            ui.Label("WebRTC Livestream is enabled for remote viewing.", name="Description", word_wrap=True)
+            ui.Spacer()

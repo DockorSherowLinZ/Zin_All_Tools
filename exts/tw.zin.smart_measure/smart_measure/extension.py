@@ -15,6 +15,15 @@ except Exception:
 from .measure_logic import format_stage_unit, get_precision, calculate_gap, calculate_gap_points
 
 import carb
+import sys
+import os
+
+_tools_box_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../tools_box"))
+if _tools_box_path not in sys.path:
+    sys.path.append(_tools_box_path)
+    
+import tools_box.zin_ui_utils as zin_ui_utils
+
 
 
 
@@ -84,85 +93,80 @@ class SmartMeasureWidget:
             height=ui.Fraction(1)
         )
         with scroll_frame:
-            with ui.VStack(spacing=5, padding=8, alignment=ui.Alignment.TOP):
+            with ui.VStack(style=zin_ui_utils.ZIN_NATIVE_STYLE, spacing=zin_ui_utils.ZIN_V_SPACING, padding=6, alignment=ui.Alignment.TOP):
                 # Header
                 with ui.VStack(spacing=2, height=0):
-                    with ui.HStack(height=18):
-                        ui.Label("Stage unit :", width=ui.Pixel(80), style={"color": 0x888888FF})
-                        self._stage_unit_label = ui.Label("--", style={"color": 0xFFDDDDDD})
-                    with ui.HStack(height=18):
-                        ui.Label("Up-Axis    :", width=ui.Pixel(80), style={"color": 0x888888FF})
-                        self._up_axis_label = ui.Label("--", style={"color": 0xFFDDDDDD})
-                ui.Spacer(height=4)
+                    def build_stage_unit():
+                        self._stage_unit_label = ui.Label("--", name="Description")
+                    zin_ui_utils.build_property_row("Stage unit:", build_stage_unit)
+                    
+                    def build_up_axis():
+                        self._up_axis_label = ui.Label("--", name="Description")
+                    zin_ui_utils.build_property_row("Up-Axis:", build_up_axis)
                 
                 # Selected
                 with ui.CollapsableFrame("Selected", collapsed=False, height=ui.Fraction(1)) as cf_sel:
                     cf_sel.set_collapsed_changed_fn(lambda c, f=cf_sel: setattr(f, "height", ui.Pixel(0) if c else ui.Fraction(1)))
-                    with ui.VStack(spacing=4, padding=4):
+                    with ui.VStack(spacing=zin_ui_utils.ZIN_V_SPACING, padding=4):
                         with ui.ScrollingFrame(height=ui.Fraction(1), style={"background_color": 0x33000000, "border_radius": 4}):
                              # [New] Dynamic list container
                              self._sel_list_vbox = ui.VStack(spacing=2, padding=4)
 
                 # Size
                 with ui.CollapsableFrame("Object Size (Union)", collapsed=False, height=0):
-                    with ui.Frame(style={"background_color": 0x33000000, "border_radius": 4}):
-                        with ui.VStack(spacing=4, padding=6, height=0):
-                            with ui.VStack(spacing=2, height=0):
-                                self._len_label = ui.Label("X length: --")
-                                self._wid_label = ui.Label("Y width : --")
-                                self._hei_label = ui.Label("Z height: --")
-                            ui.Spacer(height=2)
-                            with ui.ZStack(height=30):
-                                with ui.VStack():
-                                    ui.Spacer()
-                                    with ui.HStack(spacing=4):
-                                        ui.Label("Units", width=ui.Pixel(50), style={"color": 0xAAAAAAFF})
-                                        items = [u[0] for u in self.DISPLAY_UNITS]
-                                        cb = ui.ComboBox(1, *items, width=ui.Pixel(60), style={"background_color": 0xFF222222})
-                                        cb.model.get_item_value_model().add_value_changed_fn(self._on_size_unit_changed)
-                                        
-                                        ui.Label("Decimals", width=ui.Pixel(50), style={"color": 0xAAAAAAFF})
-                                        ui.IntDrag(self._custom_precision_size, min=0, max=6, width=ui.Pixel(40))
-                                        self._custom_precision_size.add_value_changed_fn(lambda m: self._update_all_labels())
-                                        
-                                        ui.Spacer(width=5)
-                                        ui.Button("Copy", width=ui.Pixel(50), clicked_fn=lambda: self._copy_result("size"))
-                                    ui.Spacer()
+                    with ui.VStack(spacing=zin_ui_utils.ZIN_V_SPACING, padding=6, height=0):
+                        with ui.VStack(spacing=2, height=0):
+                            self._len_label = ui.Label("X length: --")
+                            self._wid_label = ui.Label("Y width : --")
+                            self._hei_label = ui.Label("Z height: --")
+                        ui.Spacer(height=2)
+                        def build_size_unit():
+                            items = [u[0] for u in self.DISPLAY_UNITS]
+                            cb = ui.ComboBox(1, *items)
+                            cb.model.get_item_value_model().add_value_changed_fn(self._on_size_unit_changed)
+                        zin_ui_utils.build_property_row("Units:", build_size_unit)
+                        
+                        def build_size_decimals():
+                            ui.IntDrag(self._custom_precision_size, min=0, max=6)
+                            self._custom_precision_size.add_value_changed_fn(lambda m: self._update_all_labels())
+                        zin_ui_utils.build_property_row("Decimals:", build_size_decimals)
+                        
+                        zin_ui_utils.build_button_row("", "Copy Size", lambda: self._copy_result("size"), zin_ui_utils.STYLE_POSITIVE)
 
                 # Distance
                 with ui.CollapsableFrame("Distance (2 Objects)", collapsed=False, height=0):
-                    with ui.Frame(style={"background_color": 0x33000000, "border_radius": 4}):
-                        with ui.VStack(spacing=4, padding=6, height=0):
-                            self._dist_msg_label = ui.Label("Select exactly 2 objects", style={"color": 0xFFAA00FF}, word_wrap=True)
-                            self._dist_main_label = ui.Label("Distance: --", style={"font_size": 16, "color": 0xFF6AD7D9}) # d9d76a
-                            with ui.VStack(spacing=2, height=0):
-                                self._gap_x_label = ui.Label("Gap X: --", style={"color": 0xFF6060AA}) # aa6060
-                                self._gap_y_label = ui.Label("Gap Y: --", style={"color": 0xFF76A371}) # 71a376
-                                self._gap_z_label = ui.Label("Gap Z: --", style={"color": 0xFFA07D4F}) # 4f7da0
-                            ui.Spacer(height=2)
-                            with ui.ZStack(height=30):
-                                with ui.VStack():
-                                    ui.Spacer()
-                                    with ui.HStack(spacing=4):
-                                        ui.Label("Units", width=ui.Pixel(50), style={"color": 0xAAAAAAFF})
-                                        items = [u[0] for u in self.DISPLAY_UNITS]
-                                        cb = ui.ComboBox(1, *items, width=ui.Pixel(60), style={"background_color": 0xFF222222})
-                                        cb.model.get_item_value_model().add_value_changed_fn(self._on_dist_unit_changed)
-                                        
-                                        ui.Label("Decimals", width=ui.Pixel(50), style={"color": 0xAAAAAAFF})
-                                        ui.IntDrag(self._custom_precision_dist, min=0, max=6, width=ui.Pixel(40))
-                                        self._custom_precision_dist.add_value_changed_fn(lambda m: self._update_all_labels())
-                                        
-                                        ui.Spacer(width=5)
-                                        ui.Button("Copy", width=ui.Pixel(50), clicked_fn=lambda: self._copy_result("dist"))
-                                    ui.Spacer()
-                            # --- Viewport Overlay Toggle ---
-                            with ui.HStack(height=22, spacing=6):
-                                self._overlay_cb = ui.CheckBox(width=18, height=18)
+                    with ui.VStack(spacing=zin_ui_utils.ZIN_V_SPACING, padding=6, height=0):
+                        self._dist_msg_label = ui.Label("Select exactly 2 objects", style={"color": 0xFFAA00FF}, word_wrap=True)
+                        self._dist_main_label = ui.Label("Distance: --", style={"font_size": 16, "color": 0xFF6AD7D9})
+                        with ui.VStack(spacing=2, height=0):
+                            self._gap_x_label = ui.Label("Gap X: --", style={"color": 0xFF6060AA})
+                            self._gap_y_label = ui.Label("Gap Y: --", style={"color": 0xFF76A371})
+                            self._gap_z_label = ui.Label("Gap Z: --", style={"color": 0xFFA07D4F})
+                        ui.Spacer(height=2)
+                        
+                        def build_dist_unit():
+                            items = [u[0] for u in self.DISPLAY_UNITS]
+                            cb = ui.ComboBox(1, *items)
+                            cb.model.get_item_value_model().add_value_changed_fn(self._on_dist_unit_changed)
+                        zin_ui_utils.build_property_row("Units:", build_dist_unit)
+                        
+                        def build_dist_decimals():
+                            ui.IntDrag(self._custom_precision_dist, min=0, max=6)
+                            self._custom_precision_dist.add_value_changed_fn(lambda m: self._update_all_labels())
+                        zin_ui_utils.build_property_row("Decimals:", build_dist_decimals)
+                            
+                        zin_ui_utils.build_button_row("", "Copy Distance", lambda: self._copy_result("dist"), zin_ui_utils.STYLE_POSITIVE)
+                        
+                        # --- Viewport Overlay Toggle ---
+                        def build_overlay_cb():
+                            with ui.HStack(spacing=4):
+                                self._overlay_cb = ui.CheckBox(width=20)
                                 self._overlay_cb.model.set_value(self._show_viewport_overlay)
                                 self._overlay_cb.model.add_value_changed_fn(self._on_overlay_toggle)
-                                ui.Label("Show distance line in Viewport", style={"color": 0xFFBBBBBB})
-                ui.Spacer(height=10)
+                                ui.Label("Show distance line in Viewport", name="Description")
+                        zin_ui_utils.build_property_row("Overlay:", build_overlay_cb)
+                        
+                ui.Spacer()
         
         # [Lifecycle] Create Subscription Lazy (Active Mode)
         if not self._stage_event_sub:

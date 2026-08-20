@@ -4,6 +4,15 @@ import omni.usd
 import omni.kit.app
 from pxr import Usd, UsdGeom, Gf
 
+import sys
+import os
+
+_tools_box_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../tools_box"))
+if _tools_box_path not in sys.path:
+    sys.path.append(_tools_box_path)
+    
+import tools_box.zin_ui_utils as zin_ui_utils
+
 class ZinSmartExplodedExtension(omni.ext.IExt):
     """
     Zin Smart Exploded View Extension - Interactive Displacement Workflow
@@ -110,45 +119,37 @@ class ZinSmartExplodedExtension(omni.ext.IExt):
         """
         context = self._window.frame if getattr(self, "_window", None) else ui.VStack()
         with context:
-            with ui.VStack(style=self._style, spacing=10, padding=15):
-                # --- Header 區塊 ---
-                with ui.VStack(spacing=5):
-                    ui.Label("Interactive Part Displacement", style={"font_size": 18, "color": 0xFFFFFFFF, "font_weight": "bold"})
-                    ui.Line(height=2, style={"color": 0xFFFFA500}) # 水平品牌橘色分隔線
+            with ui.VStack(style=zin_ui_utils.ZIN_NATIVE_STYLE, spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
                 
-                ui.Spacer(height=5)
-                
-                # --- Axis Toggles (軸向切換區塊) ---
-                ui.Label("Axis:")
-                with ui.HStack(height=30, spacing=10):
-                    self._btn_x = ui.Button("X Axis", clicked_fn=lambda: self._set_axis(0))
-                    self._btn_y = ui.Button("Y Axis", clicked_fn=lambda: self._set_axis(1))
-                    self._btn_z = ui.Button("Z Axis", clicked_fn=lambda: self._set_axis(2))
-                
-                ui.Spacer(height=10)
+                with ui.CollapsableFrame("Interactive Part Displacement", collapsed=False, height=0):
+                    with ui.VStack(spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
+                        
+                        def build_axis():
+                            with ui.HStack(spacing=zin_ui_utils.ZIN_ROW_SPACING):
+                                self._btn_x = ui.Button("X Axis", clicked_fn=lambda: self._set_axis(0))
+                                self._btn_y = ui.Button("Y Axis", clicked_fn=lambda: self._set_axis(1))
+                                self._btn_z = ui.Button("Z Axis", clicked_fn=lambda: self._set_axis(2))
+                        zin_ui_utils.build_property_row("Axis:", build_axis)
 
-                # --- Large Displacement Slider (即時拖曳滑桿) ---
-                ui.Label("Displacement:")
-                
-                # 建立浮點數模型並設定範圍 -500 到 500
-                self._displacement_model = ui.SimpleFloatModel(0.0)
-                self._displacement_model.set_min(-500.0)
-                self._displacement_model.set_max(500.0)
-                self._displacement_model.add_value_changed_fn(self._on_slider_changed)
-                
-                self._slider = ui.FloatSlider(
-                    self._displacement_model, 
-                    height=30, 
-                    style={"draw_mode": ui.SliderDrawMode.DRAG}
-                )
-                self._slider.enabled = False # 預設停用，待選取物件後啟用
-                
-                ui.Spacer(height=15)
+                        def build_displacement():
+                            self._displacement_model = ui.SimpleFloatModel(0.0)
+                            self._displacement_model.set_min(-500.0)
+                            self._displacement_model.set_max(500.0)
+                            self._displacement_model.add_value_changed_fn(self._on_slider_changed)
+                            
+                            self._slider = ui.FloatSlider(
+                                self._displacement_model, 
+                                style={"draw_mode": ui.SliderDrawMode.DRAG}
+                            )
+                            self._slider.enabled = False # 預設停用，待選取物件後啟用
+                        zin_ui_utils.build_property_row("Displacement:", build_displacement)
 
-                # --- Action Buttons (底部操作按鈕) ---
-                with ui.HStack(height=40, spacing=10):
-                    ui.Button("Reset All", clicked_fn=self._reset_all)
-                    ui.Button("Commit", clicked_fn=self._clear_history)
+                        ui.Spacer(height=5)
+                        with ui.HStack(height=24, spacing=zin_ui_utils.ZIN_ROW_SPACING):
+                            ui.Button("Reset All", style=zin_ui_utils.STYLE_NEGATIVE, clicked_fn=self._reset_all)
+                            ui.Button("Commit", style=zin_ui_utils.STYLE_POSITIVE, clicked_fn=self._clear_history)
+                            
+                ui.Spacer()
 
         # 初始化預設軸向為 X 軸
         self._set_axis(0)
@@ -159,10 +160,10 @@ class ZinSmartExplodedExtension(omni.ext.IExt):
         """
         self._current_axis = axis_idx
         
-        # 更新按鈕的 Active 樣式 (利用 Button.Active)
-        self._btn_x.name = "Active" if axis_idx == 0 else ""
-        self._btn_y.name = "Active" if axis_idx == 1 else ""
-        self._btn_z.name = "Active" if axis_idx == 2 else ""
+        # 更新按鈕的 Active 樣式
+        self._btn_x.set_style(zin_ui_utils.STYLE_POSITIVE if axis_idx == 0 else {})
+        self._btn_y.set_style(zin_ui_utils.STYLE_POSITIVE if axis_idx == 1 else {})
+        self._btn_z.set_style(zin_ui_utils.STYLE_POSITIVE if axis_idx == 2 else {})
 
         # 切換軸向時，同步更新滑桿以反映該軸的當前位移量
         self._sync_slider_to_selection()
