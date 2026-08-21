@@ -242,11 +242,11 @@ class SmartCadConvertUI:
             os.makedirs(out_folder, exist_ok=True) if not _is_omni_path(out_folder) else _ensure_folder_exists(out_folder)
             
             # --- Config ---
-            batch_export = self._batch_export.model.get_value_as_bool()
-            move_to_origin = self._move_to_origin.model.get_value_as_bool()
+            batch_export = self._batch_export.get_value_as_bool()
+            move_to_origin = self._move_to_origin.get_value_as_bool()
             props_folder_name = self._props_path.model.get_value_as_string().strip("/")
-            auto_physics = self._auto_physics.model.get_value_as_bool()
-            use_payload = self._use_payload.model.get_value_as_bool()
+            auto_physics = self._auto_physics.get_value_as_bool()
+            use_payload = self._use_payload.get_value_as_bool()
             preset_path = self._preset_path_field.model.get_value_as_string().strip()
             
             kind_idx = self._kind_dropdown.get_item_value_model().as_int

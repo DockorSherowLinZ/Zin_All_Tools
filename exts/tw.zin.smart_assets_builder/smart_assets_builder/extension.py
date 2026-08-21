@@ -361,7 +361,7 @@ class SmartAssetsBuilderWidget:
     def _on_scan(self):
         url = self._folder_field.model.get_value_as_string().strip()
         pattern = self._filter_field.model.get_value_as_string().strip()
-        recurse = self._recurse_cb.model.get_value_as_bool()
+        recurse = self._recurse_cb.get_value_as_bool()
         if not url: return
         self._found = (_list_nucleus(url, pattern, recurse) if _is_ov_url(url) else _list_local(url, pattern, recurse))
         self._count_label.text = f"Found: {len(self._found)} items"
@@ -388,7 +388,7 @@ class SmartAssetsBuilderWidget:
             
         out_root = self._out_root_field.model.get_value_as_string().strip()
         suffix = self._id_field.model.get_value_as_string().strip()
-        over = self._overwrite_cb.model.get_value_as_bool()
+        over = self._overwrite_cb.get_value_as_bool()
         mat = self._mat_field.model.get_value_as_string().strip().strip('"')
         json_path = self._json_field.model.get_value_as_string().strip().strip('"')
         

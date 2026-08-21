@@ -76,7 +76,12 @@ class GrayboxHUDEngine:
         if not self.viewport_window:
             self.viewport_window = ui.Window("DSX AI Factory - Phase 7 Graybox HUD", width=800, height=600)
 
-        with self.viewport_window.get_frame("DSX_Phase7_HUD_Overlay"):
+        overlay_frame = self.viewport_window.get_frame("DSX_Phase7_HUD_Overlay")
+        # Ensure the overlay does not trap keyboard focus from the viewport
+        if hasattr(overlay_frame, "prevent_focus_on_click"):
+            overlay_frame.prevent_focus_on_click = True
+            
+        with overlay_frame:
             self.scene_view = sc.SceneView()
             if hasattr(self.viewport_window, "viewport_api"):
                 self.viewport_window.viewport_api.add_scene_view(self.scene_view)
@@ -196,7 +201,8 @@ class GrayboxHUDEngine:
                 def on_click(x, y, button, modifier, p=path):
                     if button == 0:
                         self.toggle_hud_state(p, expand=True)
-                f = ui.Frame(style={"Frame:hovered": {"background_color": 0x00000000}})
+                    return False
+                f = ui.Frame(style={"Frame:hovered": {"background_color": 0x00000000}}, prevent_focus_on_click=True)
                 f.set_mouse_pressed_fn(on_click)
                 with f:
                     _stack = ui.ZStack()
@@ -219,24 +225,38 @@ class GrayboxHUDEngine:
             
         expanded_transform = sc.Transform(transform=transform_matrix, look_at=sc.Transform.LookAt.CAMERA, visible=False)
         with expanded_transform:
-            expanded_widget = sc.Widget(width=300, height=280)
-            
-            if m_type == "Machine":
-                builder = lambda vm=view_model, p=prim_path: self._build_aoi_ui(vm, p)
-            elif m_type == "Robot Station":
-                builder = lambda vm=view_model, p=prim_path: self._build_robot_ui(vm, p)
-            elif m_type == "Human Station":
-                builder = lambda vm=view_model, p=prim_path: self._build_manual_station_ui(vm, p)
-            else:
-                builder = lambda vm=view_model, p=prim_path, sd=show_dynamic, ss=show_static: self._build_generic_ui(vm, p, sd, ss)
+            scale = 1.0
+            if self._ui_instance and hasattr(self._ui_instance, "hud_scale_model"):
+                scale = self._ui_instance.hud_scale_model.as_float
                 
-            expanded_widget.frame.set_build_fn(builder)
+            scale_matrix = [
+                scale, 0, 0, 0,
+                0, scale, 0, 0,
+                0, 0, scale, 0,
+                0, 0, 0, 1
+            ]
+            scale_transform = sc.Transform(transform=scale_matrix)
+            
+            with scale_transform:
+                expanded_widget = sc.Widget(width=300, height=280)
+                
+                if m_type == "Machine":
+                    builder = lambda vm=view_model, p=prim_path: self._build_aoi_ui(vm, p)
+                elif m_type == "Robot Station":
+                    builder = lambda vm=view_model, p=prim_path: self._build_robot_ui(vm, p)
+                elif m_type == "Human Station":
+                    builder = lambda vm=view_model, p=prim_path: self._build_manual_station_ui(vm, p)
+                else:
+                    builder = lambda vm=view_model, p=prim_path, sd=show_dynamic, ss=show_static: self._build_generic_ui(vm, p, sd, ss)
+                    
+                expanded_widget.frame.set_build_fn(builder)
 
         self._hud_instances[prim_path] = {
             "view_model": view_model,
             "machine_type": m_type,
             "collapsed_transform": collapsed_transform,
             "expanded_transform": expanded_transform,
+            "scale_transform": scale_transform,
             "collapsed_widget": collapsed_widget,
             "expanded_widget": expanded_widget,
             "cycle_start": cycle_start,
@@ -299,7 +319,8 @@ class GrayboxHUDEngine:
         def on_click(x, y, button, modifier, p=prim_path):
             if button == 0:
                 self.toggle_hud_state(p, expand=False)
-        f = ui.Frame(style={"Frame:hovered": {"background_color": 0x00000000}})
+            return False
+        f = ui.Frame(style={"Frame:hovered": {"background_color": 0x00000000}}, prevent_focus_on_click=True)
         f.set_mouse_pressed_fn(on_click)
         with f:
             _stack = ui.ZStack()
@@ -329,7 +350,8 @@ class GrayboxHUDEngine:
         def on_click(x, y, button, modifier, p=prim_path):
             if button == 0:
                 self.toggle_hud_state(p, expand=False)
-        f = ui.Frame(style={"Frame:hovered": {"background_color": 0x00000000}})
+            return False
+        f = ui.Frame(style={"Frame:hovered": {"background_color": 0x00000000}}, prevent_focus_on_click=True)
         f.set_mouse_pressed_fn(on_click)
         with f:
             _stack = ui.ZStack()
@@ -356,7 +378,8 @@ class GrayboxHUDEngine:
         def on_click(x, y, button, modifier, p=prim_path):
             if button == 0:
                 self.toggle_hud_state(p, expand=False)
-        f = ui.Frame(style={"Frame:hovered": {"background_color": 0x00000000}})
+            return False
+        f = ui.Frame(style={"Frame:hovered": {"background_color": 0x00000000}}, prevent_focus_on_click=True)
         f.set_mouse_pressed_fn(on_click)
         with f:
             _stack = ui.ZStack()
@@ -389,7 +412,8 @@ class GrayboxHUDEngine:
         def on_click(x, y, button, modifier, p=prim_path):
             if button == 0:
                 self.toggle_hud_state(p, expand=False)
-        f = ui.Frame(style={"Frame:hovered": {"background_color": 0x00000000}})
+            return False
+        f = ui.Frame(style={"Frame:hovered": {"background_color": 0x00000000}}, prevent_focus_on_click=True)
         f.set_mouse_pressed_fn(on_click)
         with f:
             _stack = ui.ZStack()
@@ -585,6 +609,8 @@ class GrayboxHUDEngine:
         import random
         import omni.usd
         import omni.timeline
+        import omni.kit.viewport.utility
+        from pxr import UsdGeom, Usd, Gf
         
         if not self._running:
             return
@@ -594,77 +620,136 @@ class GrayboxHUDEngine:
         context = omni.usd.get_context()
         stage = context.get_stage()
         
-        if stage:
-            timeline = omni.timeline.get_timeline_interface()
+        if not stage:
+            return
+
+        timeline = omni.timeline.get_timeline_interface()
+        is_playing = timeline.is_playing()
+        
+        time_code = Usd.TimeCode.Default()
+        if is_playing:
+            fps = stage.GetTimeCodesPerSecond()
+            current_frame = timeline.get_current_time() * fps
+            time_code = Usd.TimeCode(current_frame)
+            
+        # 1. Initialize Shared XformCache for performance
+        xform_cache = UsdGeom.XformCache(time_code)
+        
+        # 2. Get Camera Position for Distance Culling
+        cam_pos = None
+        window = omni.kit.viewport.utility.get_active_viewport_window()
+        if window and hasattr(window, "viewport_api"):
+            cam_path = window.viewport_api.camera_path
+            if cam_path:
+                cam_prim = stage.GetPrimAtPath(cam_path)
+                if cam_prim and cam_prim.IsValid():
+                    cam_matrix = xform_cache.GetLocalToWorldTransform(cam_prim)
+                    cam_pos = cam_matrix.ExtractTranslation()
+        
+        culling_distance_sq = 15000.0 * 15000.0  # Adjust as needed (e.g., 150 meters)
+        
+        for prim_path, instance in self._hud_instances.items():
+            vm = instance["view_model"]
+            m_type = instance["machine_type"]
+            
+            # --- Transform & Culling Update ---
+            prim = stage.GetPrimAtPath(prim_path)
+            if prim and prim.IsValid():
+                world_transform = xform_cache.GetLocalToWorldTransform(prim)
+                translation = world_transform.ExtractTranslation()
+                
+                # Check distance if camera is valid
+                if cam_pos is not None:
+                    dist_sq = (translation[0] - cam_pos[0])**2 + (translation[1] - cam_pos[1])**2 + (translation[2] - cam_pos[2])**2
+                    is_visible = dist_sq < culling_distance_sq
+                    
+                    # Toggle visibility based on distance
+                    if instance.get("is_expanded"):
+                        instance["expanded_transform"].visible = is_visible
+                        instance["collapsed_transform"].visible = False
+                    else:
+                        instance["expanded_transform"].visible = False
+                        instance["collapsed_transform"].visible = is_visible
+                        
+                    # Skip matrix update if culled
+                    if not is_visible:
+                        continue
+                
+                # Apply Z offset for HUD positioning
+                translation[2] += 80.0
+                
+                new_transform_matrix = [
+                    1, 0, 0, 0,
+                    0, 1, 0, 0,
+                    0, 0, 1, 0,
+                    translation[0], translation[1], translation[2], 1
+                ]
+                
+                if instance.get("collapsed_transform"):
+                    instance["collapsed_transform"].transform = new_transform_matrix
+                if instance.get("expanded_transform"):
+                    instance["expanded_transform"].transform = new_transform_matrix
             
             # HUD metrics/progress should only update when timeline is playing
-            if not timeline.is_playing():
-                return
+            if not is_playing:
+                continue
                 
-            fps = stage.GetTimeCodesPerSecond()
-            # timeline.get_current_time() returns seconds; multiply by fps to get the frame number
-            current_frame = timeline.get_current_time() * fps
-            
-            for prim_path, instance in self._hud_instances.items():
-                vm = instance["view_model"]
-                m_type = instance["machine_type"]
+            if m_type == "Human Station":
+                cycle_start = instance.get("cycle_start", 0.0)
+                cycle_end = instance.get("cycle_end", 3.0 * fps)
+                cycle_len_frames = cycle_end - cycle_start
                 
-                if m_type == "Human Station":
-                    cycle_start = instance.get("cycle_start", 0.0)
-                    cycle_end = instance.get("cycle_end", 3.0 * fps)
-                    cycle_len_frames = cycle_end - cycle_start
+                if cycle_len_frames > 0:
+                    # Synchronize directly with character animation playback
+                    elapsed_frames = (current_frame - cycle_start) % cycle_len_frames
+                    rem_frames = cycle_len_frames - elapsed_frames
+                    progress_pct = max(0.0, min(100.0, (rem_frames / cycle_len_frames) * 100.0))
+                else:
+                    progress_pct = 100.0
                     
-                    if cycle_len_frames > 0:
-                        # Synchronize directly with character animation playback
-                        elapsed_frames = (current_frame - cycle_start) % cycle_len_frames
-                        rem_frames = cycle_len_frames - elapsed_frames
-                        progress_pct = max(0.0, min(100.0, (rem_frames / cycle_len_frames) * 100.0))
-                    else:
-                        progress_pct = 100.0
-                        
-                    # Color logic: Green(100) -> Yellow(50) -> Red(0)
-                    if progress_pct > 50:
-                        r = max(0.0, min(1.0, (100.0 - progress_pct) / 50.0))
-                        g = 1.0
-                    else:
-                        r = 1.0
-                        g = max(0.0, min(1.0, progress_pct / 50.0))
-                        
-                    # Store values on the view model
-                    vm.current_progress_pct = progress_pct
-                    vm.current_r = r
-                    vm.current_g = g
+                # Color logic: Green(100) -> Yellow(50) -> Red(0)
+                if progress_pct > 50:
+                    r = max(0.0, min(1.0, (100.0 - progress_pct) / 50.0))
+                    g = 1.0
+                else:
+                    r = 1.0
+                    g = max(0.0, min(1.0, progress_pct / 50.0))
                     
-                    # Update model to trigger sc.Widget repaint
-                    vm.progress_text.set_value(f"{progress_pct:.1f}%")
+                # Store values on the view model
+                vm.current_progress_pct = progress_pct
+                vm.current_r = r
+                vm.current_g = g
+                
+                # Update model to trigger sc.Widget repaint
+                vm.progress_text.set_value(f"{progress_pct:.1f}%")
+                
+                # Force sc.Widget texture update since Model update alone 
+                # doesn't automatically trigger 3D texture repaint in older versions
+                if instance.get("is_expanded") and "expanded_widget" in instance:
+                    instance["expanded_widget"].invalidate()
+                elif not instance.get("is_expanded") and "collapsed_widget" in instance:
+                    instance["collapsed_widget"].invalidate()
+                
+                # Directly update retained widget properties for immediate redraw.
+                if hasattr(vm, "progress_bars"):
+                    for pb in vm.progress_bars:
+                        try:
+                            pb["fill"].width = ui.Percent(progress_pct)
+                            pb["fill"].set_style({
+                                "background_color": ui.color(r, g, 0.0, 1.0),
+                                "border_radius": 3
+                            })
+                            pb["spacer"].width = ui.Percent(100.0 - progress_pct)
+                        except Exception:
+                            pass
                     
-                    # Force sc.Widget texture update since Model update alone 
-                    # doesn't automatically trigger 3D texture repaint in older versions
-                    if instance.get("is_expanded") and "expanded_widget" in instance:
-                        instance["expanded_widget"].invalidate()
-                    elif not instance.get("is_expanded") and "collapsed_widget" in instance:
-                        instance["collapsed_widget"].invalidate()
-                    
-                    # Directly update retained widget properties for immediate redraw.
-                    if hasattr(vm, "progress_bars"):
-                        for pb in vm.progress_bars:
-                            try:
-                                pb["fill"].width = ui.Percent(progress_pct)
-                                pb["fill"].set_style({
-                                    "background_color": ui.color(r, g, 0.0, 1.0),
-                                    "border_radius": 3
-                                })
-                                pb["spacer"].width = ui.Percent(100.0 - progress_pct)
-                            except Exception:
-                                pass
-                        
-                elif m_type == "Machine":
+            elif m_type == "Machine":
                     # Update these less frequently to avoid flickering, e.g. based on frame count or time, but keeping random logic for now
                     vm.aoi_status.set_value(random.choice(["INSPECTING", "PASS", "FAIL"]))
                     vm.aoi_defect_rate.set_value(random.uniform(0.0, 5.0))
                         
-                elif m_type == "Robot Station":
-                    vm.robot_state.set_value(random.choice(["MOVING", "WELDING", "IDLE"]))
+            elif m_type == "Robot Station":
+                vm.robot_state.set_value(random.choice(["MOVING", "WELDING", "IDLE"]))
 
     def destroy(self):
         self._running = False
@@ -707,6 +792,8 @@ class SmartHudUI:
     def __init__(self):
         self.engine = None
         self.is_enabled = False
+        self.hud_scale_model = ui.SimpleFloatModel(1.0)
+        self.hud_scale_model.add_value_changed_fn(self._on_hud_scale_changed)
         
         # Subscribe to stage events to auto-disable HUD on stage change
         import omni.usd
@@ -802,6 +889,10 @@ class SmartHudUI:
                             ui.Label("Factory Info")
                     zin_ui_utils.build_property_row("Display Settings:", build_display_settings)
                     
+                    def build_scale():
+                        ui.FloatSlider(self.hud_scale_model, min=0.5, max=3.0)
+                    zin_ui_utils.build_property_row("HUD Scale:", build_scale, tooltip="Dynamically rescale the expanded HUDs.")
+                    
                     ui.Spacer(height=5)
                     with ui.HStack(spacing=zin_ui_utils.ZIN_ROW_SPACING, height=24):
                         ui.Button(
@@ -852,6 +943,22 @@ class SmartHudUI:
         # Notify the engine to rebuild HUDs to reflect the new display settings
         if self.is_enabled and self.engine:
             self.engine.rebuild_huds()
+            
+    def _on_hud_scale_changed(self, model):
+        if not self.is_enabled or not self.engine:
+            return
+            
+        scale = model.as_float
+        scale_matrix = [
+            scale, 0, 0, 0,
+            0, scale, 0, 0,
+            0, 0, scale, 0,
+            0, 0, 0, 1
+        ]
+        
+        for path, instance in self.engine._hud_instances.items():
+            if "scale_transform" in instance:
+                instance["scale_transform"].transform = scale_matrix
 
     def _bind_animation_target(self):
         """Writes 'aif:core:animationTarget' to selected prims."""
@@ -981,7 +1088,7 @@ class SmartHudUI:
         
         apply_to_children = False
         if hasattr(self, "apply_to_children_cb"):
-            apply_to_children = self.apply_to_children_cb.model.get_value_as_bool()
+            apply_to_children = self.apply_to_children_cb.get_value_as_bool()
 
         target_paths = set()
         for path in selection:
@@ -991,7 +1098,7 @@ class SmartHudUI:
                 
             if apply_to_children and not prim.IsA(UsdGeom.Mesh):
                 # Expand group: find all descendant Meshes
-                meshes = [p for p in prim.GetDescendants() if p.IsA(UsdGeom.Mesh)]
+                meshes = [p for p in Usd.PrimRange(prim) if p.IsA(UsdGeom.Mesh)]
                 if meshes:
                     for m in meshes:
                         target_paths.add(str(m.GetPath()))
@@ -1189,6 +1296,12 @@ class SmartHudUI:
             if self.engine:
                 self.engine.destroy()
                 self.engine = None
+                
+        # Explicitly release focus so hotkeys like 'F' work immediately
+        import omni.kit.viewport.utility
+        window = omni.kit.viewport.utility.get_active_viewport_window()
+        if window:
+            window.focus()
 
     def _update_binding_diagnostics(self):
         """Refresh the binding diagnostic labels from the engine's HUD instances."""
