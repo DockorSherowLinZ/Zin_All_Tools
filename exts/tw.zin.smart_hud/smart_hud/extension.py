@@ -196,14 +196,12 @@ class GrayboxHUDEngine:
                 
         collapsed_transform = sc.Transform(transform=transform_matrix, look_at=sc.Transform.LookAt.CAMERA, visible=True)
         with collapsed_transform:
-            collapsed_widget = sc.Widget(width=150, height=55 if m_type == "Human Station" else 35)
+            sc.Rectangle(width=150, height=55 if m_type == "Human Station" else 35, 
+                         color=ui.color(0, 0, 0, 0),
+                         gestures=[sc.ClickGesture(on_ended_fn=lambda sender, p=prim_path: self.toggle_hud_state(p, expand=True))])
+            collapsed_widget = sc.Widget(width=150, height=55 if m_type == "Human Station" else 35, update_policy=sc.Widget.UpdatePolicy.ON_MOUSE_HOVERED, content_clipping=True)
             def build_collapsed(title=display_title, path=prim_path, m=m_type, vm=view_model):
-                def on_click(x, y, button, modifier, p=path):
-                    if button == 0:
-                        self.toggle_hud_state(p, expand=True)
-                    return False
                 f = ui.Frame(style={"Frame:hovered": {"background_color": 0x00000000}}, prevent_focus_on_click=True)
-                f.set_mouse_pressed_fn(on_click)
                 with f:
                     _stack = ui.ZStack()
                 with _stack:
@@ -238,7 +236,10 @@ class GrayboxHUDEngine:
             scale_transform = sc.Transform(transform=scale_matrix)
             
             with scale_transform:
-                expanded_widget = sc.Widget(width=300, height=280)
+                sc.Rectangle(width=300, height=280, 
+                             color=ui.color(0, 0, 0, 0),
+                             gestures=[sc.ClickGesture(on_ended_fn=lambda sender, p=prim_path: self.toggle_hud_state(p, expand=False))])
+                expanded_widget = sc.Widget(width=300, height=280, update_policy=sc.Widget.UpdatePolicy.ON_MOUSE_HOVERED, content_clipping=True)
                 
                 if m_type == "Machine":
                     builder = lambda vm=view_model, p=prim_path: self._build_aoi_ui(vm, p)
@@ -316,12 +317,7 @@ class GrayboxHUDEngine:
 
     def _build_aoi_ui(self, view_model, prim_path):
         import omni.ui as ui
-        def on_click(x, y, button, modifier, p=prim_path):
-            if button == 0:
-                self.toggle_hud_state(p, expand=False)
-            return False
         f = ui.Frame(style={"Frame:hovered": {"background_color": 0x00000000}}, prevent_focus_on_click=True)
-        f.set_mouse_pressed_fn(on_click)
         with f:
             _stack = ui.ZStack()
         with _stack:
@@ -347,12 +343,7 @@ class GrayboxHUDEngine:
 
     def _build_robot_ui(self, view_model, prim_path):
         import omni.ui as ui
-        def on_click(x, y, button, modifier, p=prim_path):
-            if button == 0:
-                self.toggle_hud_state(p, expand=False)
-            return False
         f = ui.Frame(style={"Frame:hovered": {"background_color": 0x00000000}}, prevent_focus_on_click=True)
-        f.set_mouse_pressed_fn(on_click)
         with f:
             _stack = ui.ZStack()
         with _stack:
@@ -375,12 +366,7 @@ class GrayboxHUDEngine:
 
     def _build_manual_station_ui(self, view_model, prim_path):
         import omni.ui as ui
-        def on_click(x, y, button, modifier, p=prim_path):
-            if button == 0:
-                self.toggle_hud_state(p, expand=False)
-            return False
         f = ui.Frame(style={"Frame:hovered": {"background_color": 0x00000000}}, prevent_focus_on_click=True)
-        f.set_mouse_pressed_fn(on_click)
         with f:
             _stack = ui.ZStack()
         with _stack:
@@ -409,12 +395,7 @@ class GrayboxHUDEngine:
 
     def _build_generic_ui(self, view_model, prim_path, show_dynamic, show_static):
         import omni.ui as ui
-        def on_click(x, y, button, modifier, p=prim_path):
-            if button == 0:
-                self.toggle_hud_state(p, expand=False)
-            return False
         f = ui.Frame(style={"Frame:hovered": {"background_color": 0x00000000}}, prevent_focus_on_click=True)
-        f.set_mouse_pressed_fn(on_click)
         with f:
             _stack = ui.ZStack()
         with _stack:
@@ -603,6 +584,9 @@ class GrayboxHUDEngine:
 
     def _start_telemetry(self):
         import omni.kit.app
+        from pxr import UsdGeom
+        self._frame_counter = 0
+        self.xform_cache = UsdGeom.XformCache()
         self._update_sub = omni.kit.app.get_app().get_update_event_stream().create_subscription_to_pop(self._on_update)
 
     def _on_update(self, event):
@@ -615,6 +599,7 @@ class GrayboxHUDEngine:
         if not self._running:
             return
 
+        self._frame_counter += 1
         dt = event.payload.get("dt", 0.0)
 
         context = omni.usd.get_context()
@@ -632,19 +617,26 @@ class GrayboxHUDEngine:
             current_frame = timeline.get_current_time() * fps
             time_code = Usd.TimeCode(current_frame)
             
-        # 1. Initialize Shared XformCache for performance
-        xform_cache = UsdGeom.XformCache(time_code)
+        # 1. Update Shared XformCache for performance
+        if not hasattr(self, 'xform_cache'):
+            self.xform_cache = UsdGeom.XformCache()
+        self.xform_cache.SetTime(time_code)
+        xform_cache = self.xform_cache
         
         # 2. Get Camera Position for Distance Culling
         cam_pos = None
-        window = omni.kit.viewport.utility.get_active_viewport_window()
-        if window and hasattr(window, "viewport_api"):
-            cam_path = window.viewport_api.camera_path
-            if cam_path:
-                cam_prim = stage.GetPrimAtPath(cam_path)
-                if cam_prim and cam_prim.IsValid():
-                    cam_matrix = xform_cache.GetLocalToWorldTransform(cam_prim)
-                    cam_pos = cam_matrix.ExtractTranslation()
+        if not hasattr(self, "_cam_path"):
+            window = omni.kit.viewport.utility.get_active_viewport_window()
+            if window and hasattr(window, "viewport_api") and window.viewport_api.camera_path:
+                self._cam_path = window.viewport_api.camera_path
+            else:
+                self._cam_path = None
+                
+        if self._cam_path:
+            cam_prim = stage.GetPrimAtPath(self._cam_path)
+            if cam_prim and cam_prim.IsValid():
+                cam_matrix = xform_cache.GetLocalToWorldTransform(cam_prim)
+                cam_pos = cam_matrix.ExtractTranslation()
         
         culling_distance_sq = 15000.0 * 15000.0  # Adjust as needed (e.g., 150 meters)
         
@@ -665,11 +657,18 @@ class GrayboxHUDEngine:
                     
                     # Toggle visibility based on distance
                     if instance.get("is_expanded"):
-                        instance["expanded_transform"].visible = is_visible
-                        instance["collapsed_transform"].visible = False
+                        want_expanded = is_visible
+                        want_collapsed = False
                     else:
-                        instance["expanded_transform"].visible = False
-                        instance["collapsed_transform"].visible = is_visible
+                        want_expanded = False
+                        want_collapsed = is_visible
+                        
+                    # DIRTY CHECK: Only assign the property if the current state is different.
+                    # This prevents continuous UI recomposition (which causes severe lag).
+                    if instance["expanded_transform"].visible != want_expanded:
+                        instance["expanded_transform"].visible = want_expanded
+                    if instance["collapsed_transform"].visible != want_collapsed:
+                        instance["collapsed_transform"].visible = want_collapsed
                         
                     # Skip matrix update if culled
                     if not is_visible:
@@ -720,36 +719,36 @@ class GrayboxHUDEngine:
                 vm.current_r = r
                 vm.current_g = g
                 
-                # Update model to trigger sc.Widget repaint
-                vm.progress_text.set_value(f"{progress_pct:.1f}%")
-                
-                # Force sc.Widget texture update since Model update alone 
-                # doesn't automatically trigger 3D texture repaint in older versions
-                if instance.get("is_expanded") and "expanded_widget" in instance:
-                    instance["expanded_widget"].invalidate()
-                elif not instance.get("is_expanded") and "collapsed_widget" in instance:
-                    instance["collapsed_widget"].invalidate()
-                
-                # Directly update retained widget properties for immediate redraw.
-                if hasattr(vm, "progress_bars"):
-                    for pb in vm.progress_bars:
-                        try:
-                            pb["fill"].width = ui.Percent(progress_pct)
-                            pb["fill"].set_style({
-                                "background_color": ui.color(r, g, 0.0, 1.0),
-                                "border_radius": 3
-                            })
-                            pb["spacer"].width = ui.Percent(100.0 - progress_pct)
-                        except Exception:
-                            pass
+                # Before updating the progress bar UI, check if it changed
+                if not hasattr(vm, "last_progress_pct") or vm.last_progress_pct != progress_pct:
+                    vm.last_progress_pct = progress_pct
+                    vm.progress_text.set_value(f"{progress_pct:.1f}%")
+                    
+                    if instance.get("is_expanded") and "expanded_widget" in instance:
+                        instance["expanded_widget"].invalidate()
+                    elif not instance.get("is_expanded") and "collapsed_widget" in instance:
+                        instance["collapsed_widget"].invalidate()
+                        
+                    if hasattr(vm, "progress_bars"):
+                        for pb in vm.progress_bars:
+                            try:
+                                pb["fill"].width = ui.Percent(progress_pct)
+                                pb["fill"].set_style({
+                                    "background_color": ui.color(r, g, 0.0, 1.0),
+                                    "border_radius": 3
+                                })
+                                pb["spacer"].width = ui.Percent(100.0 - progress_pct)
+                            except Exception:
+                                pass
                     
             elif m_type == "Machine":
-                    # Update these less frequently to avoid flickering, e.g. based on frame count or time, but keeping random logic for now
+                if self._frame_counter % 30 == 0:
                     vm.aoi_status.set_value(random.choice(["INSPECTING", "PASS", "FAIL"]))
                     vm.aoi_defect_rate.set_value(random.uniform(0.0, 5.0))
                         
             elif m_type == "Robot Station":
-                vm.robot_state.set_value(random.choice(["MOVING", "WELDING", "IDLE"]))
+                if self._frame_counter % 30 == 0:
+                    vm.robot_state.set_value(random.choice(["MOVING", "WELDING", "IDLE"]))
 
     def destroy(self):
         self._running = False
