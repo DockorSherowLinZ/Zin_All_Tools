@@ -8,6 +8,7 @@ Description: Batch export .max files to .glb with recursive support and memory m
 
 macroScript BatchGLBExporter
 category:"ZinAllTools"
+icon:#("ZinAllTools", 6)
 toolTip:"Batch Export MAX files to GLB v1.2.0"
 buttonText:"Batch GLB v1.2"
 (

@@ -1,6 +1,7 @@
 macroScript DictMaterialAssigner
 category:"ZinAllTools"
 tooltip:"Dictionary Material Assigner v1.0: Keyword-Based Auto Material Assignment"
+icon:#("ZinAllTools", 4)
 (
     rollout DictMatUI "Dictionary Material Assigner v1.1" width:460 height:590
     (
@@ -640,7 +641,7 @@ tooltip:"Dictionary Material Assigner v1.0: Keyword-Based Auto Material Assignme
         on DictMatUI open do
         (
             -- Always use the known project directory (avoids write-protected Program Files)
-            scriptDir = "D:\\Inventec\\Zin_All_Tools\\max_script\\DictMaterialAssigner\\"
+            scriptDir = "D:\\Zin_All_Tools\\max_script\\DictMaterialAssigner\\"
 
             -- Fallback: if the project dir doesn't exist, try getSourceFileName
             if not doesDirectoryExist scriptDir do

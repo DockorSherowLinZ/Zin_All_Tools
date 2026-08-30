@@ -1,6 +1,7 @@
 macroScript ResetModel_v1_21
 category:"ZinAllTools"
 tooltip:"ResetModel v1.21"
+icon:#("ZinAllTools", 1)
 (
     rollout ResetModel_UI "ResetModel v1.21" width:420 height:630
     (
@@ -574,9 +575,10 @@ tooltip:"ResetModel v1.21"
 
                         if chk_autoFlip.checked do
                         (
-                            polyOp.setVertSelection node #{1..(polyOp.getNumVerts node)}
-                            node.weldThreshold = spn_weld.value
-                            node.buttonOp #WeldSelected
+                            local vw = Vertex_Weld threshold:spn_weld.value
+                            addModifier node vw
+                            collapseStack node
+                            if classof node != Editable_Poly do convertTo node Editable_Poly
 
                             local numFaces = polyOp.getNumFaces node
                             local processedFaces = #{}
@@ -661,9 +663,10 @@ tooltip:"ResetModel v1.21"
 
                             if chk_autoFlip.checked do
                             (
-                                polyOp.setVertSelection partNode #{1..(polyOp.getNumVerts partNode)}
-                                partNode.weldThreshold = spn_weld.value
-                                partNode.buttonOp #WeldSelected
+                                local vw = Vertex_Weld threshold:spn_weld.value
+                                addModifier partNode vw
+                                collapseStack partNode
+                                if classof partNode != Editable_Poly do convertTo partNode Editable_Poly
 
                                 local numFaces = polyOp.getNumFaces partNode
                                 local processedFaces = #{}

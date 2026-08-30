@@ -1,6 +1,7 @@
 macroScript Zin_CAD_SelectSimilar
 category:"ZinAllTools"
 tooltip:"CAD Select Similar"
+icon:#("ZinAllTools", 5)
 (
 -- ============================================================================
 -- CAD Select Similar & Batch Process Workflows

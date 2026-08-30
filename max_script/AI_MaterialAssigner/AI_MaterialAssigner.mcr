@@ -1,6 +1,7 @@
 macroScript AI_MaterialAssigner
 category:"ZinAllTools"
 tooltip:"AI Material Assigner v1.0: VLM-Powered Automatic Material Classification"
+icon:#("ZinAllTools", 3)
 (
     rollout AI_MatUI "AI Material Assigner v1.0" width:450 height:560
     (
@@ -584,7 +585,7 @@ tooltip:"AI Material Assigner v1.0: VLM-Powered Automatic Material Classificatio
             if srcPath != undefined and srcPath != "" then
                 scriptDir = getFilenamePath srcPath
             else
-                scriptDir = "D:\\Inventec\\Zin_All_Tools\\max_script\\AI_MaterialAssigner\\"
+                scriptDir = "D:\\Zin_All_Tools\\max_script\\AI_MaterialAssigner\\"
 
             configPath = scriptDir + "config.ini"
             tempDir = scriptDir + "_temp\\"

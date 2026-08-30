@@ -1,6 +1,7 @@
 macroScript GeomOptimizer
 category:"ZinAllTools"
 tooltip:"Geometry Optimizer v1.0: Sequential Delete Duplicates + Attach Identical Meshes"
+icon:#("ZinAllTools", 2)
 (
     rollout GeomOptUI "Geometry Optimizer v1.0" width:460 height:480
     (
@@ -565,7 +566,7 @@ tooltip:"Geometry Optimizer v1.0: Sequential Delete Duplicates + Attach Identica
 
         on GeomOptUI open do
         (
-            scriptDir = "D:\\Inventec\\Zin_All_Tools\\max_script\\GeomOptimizer\\"
+            scriptDir = "D:\\Zin_All_Tools\\max_script\\GeomOptimizer\\"
 
             if not doesDirectoryExist scriptDir do
             (

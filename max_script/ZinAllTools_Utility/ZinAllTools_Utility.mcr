@@ -1,6 +1,7 @@
 macroScript ZinAllTools_Utility
 category:"ZinAllTools"
 tooltip:"Zin All Tools Integration"
+icon:#("ZinAllTools", 7)
 (
 -- ============================================================================
 -- Zin All Tools: Utilities Integration v1.0
