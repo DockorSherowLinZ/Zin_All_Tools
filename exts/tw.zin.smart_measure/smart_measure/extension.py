@@ -86,6 +86,11 @@ class SmartMeasureWidget:
         self._bbox_cache = None
         self._destroy_scene_overlay()
 
+    def on_ui_hidden(self):
+        self._stage_event_sub = None
+        self._sel_list_vbox = None
+        self._destroy_scene_overlay()
+
     def build_ui_layout(self):
         scroll_frame = ui.ScrollingFrame(
             horizontal_scrollbar_policy=ui.ScrollBarPolicy.SCROLLBAR_AS_NEEDED,
@@ -651,6 +656,10 @@ class SmartMeasureExtension(omni.ext.IExt):
     def shutdown_logic(self):
         if self._widget:
             self._widget.shutdown()
+
+    def on_ui_hidden(self):
+        if self._widget:
+            self._widget.on_ui_hidden()
 
     def build_ui_layout(self):
         if self._widget:

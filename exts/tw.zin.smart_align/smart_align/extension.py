@@ -63,6 +63,14 @@ class SmartAlignWidget:
         self._current_paths = []
         self._undo_stack = []
         self._btn_undo = None
+
+    def on_ui_hidden(self):
+        self._selection_sub = None
+        self._update_sub = None
+        self._target_layout = None
+        self._combo_target = None
+        self._lbl_anchor_info = None
+        self._btn_undo = None
     
     def _on_target_changed(self, model):
         self._update_anchor_info()
@@ -516,4 +524,5 @@ class SmartAlignExtension(omni.ext.IExt):
     # --- Bridge Methods ---
     def startup_logic(self): self._widget.startup()
     def shutdown_logic(self): self._widget.shutdown()
+    def on_ui_hidden(self): self._widget.on_ui_hidden()
     def build_ui_layout(self): return self._widget.build_ui_layout()

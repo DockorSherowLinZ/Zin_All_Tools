@@ -1503,6 +1503,32 @@ class SmartConveyorExtension(omni.ext.IExt):
                     model["selected"] = ui.SimpleBoolModel(False)
                 if "enabled" not in model:
                     model["enabled"] = ui.SimpleBoolModel(True)
+
+                if not model.get("ui_callbacks_registered"):
+                    def update_paths_tooltip(value_model, line_model=model):
+                        field = line_model.get("paths_field")
+                        if field:
+                            field.tooltip = value_model.get_value_as_string()
+
+                    def update_config_tooltip(value_model, line_model=model):
+                        field = line_model.get("config_field")
+                        if field:
+                            field.tooltip = value_model.get_value_as_string()
+
+                    def update_settings_visibility(value_model, line_model=model):
+                        frame = line_model.get("settings_frame")
+                        if frame:
+                            frame.visible = value_model.get_value_as_bool()
+
+                    def update_override_fields(value_model, line_model=model):
+                        for field in line_model.get("override_fields", []):
+                            field.enabled = value_model.get_value_as_bool()
+
+                    model["paths"].add_value_changed_fn(update_paths_tooltip)
+                    model["config_file"].add_value_changed_fn(update_config_tooltip)
+                    model["show_settings"].add_value_changed_fn(update_settings_visibility)
+                    model["override"].add_value_changed_fn(update_override_fields)
+                    model["ui_callbacks_registered"] = True
                     
                 row_bg = 0x18FFFFFF if i % 2 == 0 else 0x00000000
                 with ui.Frame(style={"Frame": {"background_color": row_bg}}):
@@ -1535,28 +1561,18 @@ class SmartConveyorExtension(omni.ext.IExt):
                             
                             field_paths = ui.StringField(model=model["paths"], width=ui.Fraction(0.4), height=24)
                             field_config = ui.StringField(model=model["config_file"], width=ui.Fraction(0.6), height=24, style={"alignment": ui.Alignment.RIGHT_CENTER})
+                            model["paths_field"] = field_paths
+                            model["config_field"] = field_config
                             
                             # Set initial tooltips
                             field_paths.tooltip = model["paths"].get_value_as_string()
                             field_config.tooltip = model["config_file"].get_value_as_string()
                             
-                            # Dynamically update tooltips when user types or picks a file
-                            def update_paths_tooltip(m, f=field_paths):
-                                f.tooltip = m.get_value_as_string()
-                            model["paths"].add_value_changed_fn(update_paths_tooltip)
-                            
-                            def update_config_tooltip(m, f=field_config):
-                                f.tooltip = m.get_value_as_string()
-                            model["config_file"].add_value_changed_fn(update_config_tooltip)
-                            
                         settings_frame = ui.Frame(
                             style={"background_color": 0x33000000, "border_radius": 4},
                             visible=model["show_settings"].get_value_as_bool()
                         )
-                        
-                        def _on_show_settings_changed(m, f=settings_frame):
-                            f.visible = m.get_value_as_bool()
-                        model["show_settings"].add_value_changed_fn(_on_show_settings_changed)
+                        model["settings_frame"] = settings_frame
                         
                         with settings_frame:
                             with ui.HStack(height=24, spacing=8, style={"margin": 4}):
@@ -1572,14 +1588,9 @@ class SmartConveyorExtension(omni.ext.IExt):
                                     
                                     ui.Label("Interval:", width=50, style={"font_size": 12, "color": ARGB_TEXT_PRIMARY})
                                     f_interval = ui.FloatField(model=model["dispatch_interval"], width=50, height=20)
-                                    
-                                    def _on_override_changed(m, speed=f_speed, delay=f_delay, interval=f_interval):
-                                        enabled = m.get_value_as_bool()
-                                        speed.enabled = enabled
-                                        delay.enabled = enabled
-                                        interval.enabled = enabled
-                                    model["override"].add_value_changed_fn(_on_override_changed)
-                                    _on_override_changed(model["override"])
+                                    model["override_fields"] = [f_speed, f_delay, f_interval]
+                                    for field in model["override_fields"]:
+                                        field.enabled = model["override"].get_value_as_bool()
 
     def _add_multi_line(self):
         self._save_ml_undo_snapshot()

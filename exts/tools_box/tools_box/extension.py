@@ -171,8 +171,18 @@ class ToolsBoxExtension(omni.ext.IExt):
     def _change_tab(self, tab_name):
         if self._current_tab == tab_name:
             return
+        self._hide_current_tab()
         self._current_tab = tab_name
         self._refresh_content()
+
+    def _hide_current_tab(self):
+        tab_tools = {
+            "Align": self.tool_align,
+            "Measure": self.tool_measure,
+        }
+        tool = tab_tools.get(self._current_tab)
+        if tool and hasattr(tool, "on_ui_hidden"):
+            tool.on_ui_hidden()
 
     def _refresh_content(self):
         """Clear and redraw the content area"""
