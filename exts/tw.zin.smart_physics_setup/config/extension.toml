@@ -5,13 +5,10 @@ version = "1.0.0"
 description = "A tool to setup physics properties quickly."
 authors = ["Zin"]
 repository = "https://github.com/DockorSherowLinZ/Zin_All_Tools"
-changelog = "docs/CHANGELOG.md"
-readme = "docs/README.md"
 keywords = ["physics", "utils"]
 category = "ZinTools"
 
 icon = "data/SMART_PHYSICS_SETUP.png"
-preview_image = "data/preview.png"
 
 # 【關鍵修改】在這裡加入其他工具的 ID
 [dependencies]

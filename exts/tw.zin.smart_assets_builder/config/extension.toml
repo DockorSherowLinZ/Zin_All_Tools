@@ -5,13 +5,10 @@ description = "SimReady asset builder (skeleton)."
 authors = ["Zin"]
 readme = "README.md"
 repository = "https://github.com/DockorSherowLinZ/Zin_All_Tools"
-changelog = "docs/CHANGELOG.md"
-readme = "README.md"
 keywords = ["omniverse", "kit", "extension", "tw.zin"]
 category = "ZinTools"
 
 icon = "data/SMART_ASSETS_BUILDER.png"
-preview_image = "data/preview.png"
 
 # 【關鍵修改】在這裡加入其他工具的 ID
 [dependencies]
@@ -21,3 +18,7 @@ preview_image = "data/preview.png"
 
 [[python.module]]
 name = "smart_assets_builder"
+
+[settings]
+# Default QuickNames.json used for automatic material binding.
+exts."tw.zin.smart_assets_builder".material_json_path = ""

@@ -3,11 +3,8 @@ title = "Smart Assets Library"
 description = "A custom asset library for Zin All Tools supporting Local and Nucleus paths."
 version = "1.0.0"
 keywords = ["nvidia", "omniverse", "asset", "library", "zin"]
-changelog = "README.md"
-readme = "README.md"
 
 icon = "data/SMART_ASSETS_LIBRARY.png"
-preview_image = "data/preview.png"
 
 # 【關鍵修改】在這裡加入其他工具的 ID
 [dependencies]

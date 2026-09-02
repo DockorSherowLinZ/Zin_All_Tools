@@ -9,12 +9,16 @@ import statistics
 import sys
 import os
 
+import carb.settings
+
 # Ensure tools_box is accessible
 _tools_box_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../tools_box"))
 if _tools_box_path not in sys.path:
     sys.path.append(_tools_box_path)
     
 import tools_box.zin_ui_utils as zin_ui_utils
+
+SETTING_PRODLINE_UPH_DIR = "/exts/tw.zin.smart_hud/prodline_uph_dir"
 
 # ==============================================================================
 # MVVM View Model
@@ -1019,7 +1023,7 @@ class SmartHudUI:
         context = omni.usd.get_context()
         stage_url = context.get_stage_url()
         
-        json_dir = r"D:\Inventec\DigitalTwin\Factory\IMX\ProdLine_UPH" # Fallback
+        json_dir = carb.settings.get_settings().get(SETTING_PRODLINE_UPH_DIR) or ""
         if stage_url:
             stage_path = stage_url.replace("omniverse://", "").split("?")[0]
             # 假設結構為 .../IMX_1F/ProdLine/Line_S01.usd
@@ -1027,8 +1031,15 @@ class SmartHudUI:
             dynamic_dir = os.path.join(parent_dir, "ProdLine_UPH")
             if os.path.exists(dynamic_dir):
                 json_dir = dynamic_dir
-                
-        print(f"[Smart HUD] 🔍 Scanning JSON files in: {json_dir}")
+
+        if not json_dir:
+            carb.log_warn(
+                "[Smart HUD] No ProdLine_UPH folder resolved from the stage; "
+                f"set {SETTING_PRODLINE_UPH_DIR} to provide a fallback."
+            )
+            return None
+
+        carb.log_info(f"[Smart HUD] Scanning JSON files in: {json_dir}")
         json_files = glob.glob(f"{json_dir}/*.json")
         
         closest_wp = None

@@ -3,7 +3,7 @@ title = "Smart CAD Convert"
 version = "1.0.0"
 description = "A visual UI for DSX Blueprint CAD-to-USD Pipeline (FBX -> flattened USDA -> Recenter -> Instance -> Material)"
 authors = ["Zin"]
-readme = "README.md"
+repository = "https://github.com/DockorSherowLinZ/Zin_All_Tools"
 keywords = ["inventec", "zin", "cad", "usd", "pipeline"]
 category = "ZinTools"
 

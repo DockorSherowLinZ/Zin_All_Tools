@@ -239,11 +239,15 @@ def _list_nucleus(url: str, pattern: str, recurse: bool) -> List[str]:
 import sys
 import os
 
+import carb.settings
+
 _tools_box_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../tools_box"))
 if _tools_box_path not in sys.path:
     sys.path.append(_tools_box_path)
     
 import tools_box.zin_ui_utils as zin_ui_utils
+
+SETTING_MATERIAL_JSON = "/exts/tw.zin.smart_assets_builder/material_json_path"
 
 BUILDER_STYLE = {
     "Label::Header": {"font_size": 18, "color": ui.color.system_label},
@@ -325,7 +329,8 @@ class SmartAssetsBuilderWidget:
 
                         def build_json_path():
                             self._json_field = ui.StringField(tooltip="Path to QuickNames.json for auto-binding")
-                            self._json_field.model.set_value(r"D:\Inventec\Zin_All_Tools\max_script\Zin_CAD_SelectSimilar\QuickNames.json")
+                            configured = carb.settings.get_settings().get(SETTING_MATERIAL_JSON) or ""
+                            self._json_field.model.set_value(configured)
                         zin_ui_utils.build_property_row("Material JSON:", build_json_path)
 
                 ui.Spacer(height=5)

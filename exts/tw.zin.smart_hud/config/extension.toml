@@ -15,3 +15,7 @@ category = "ZinTools"
 
 [[python.module]]
 name = "smart_hud"
+
+[settings]
+# Fallback folder for ProdLine UPH JSON files when the stage layout does not resolve one.
+exts."tw.zin.smart_hud".prodline_uph_dir = ""

@@ -5,10 +5,7 @@ description = "End-User Web Dashboard for Zin Tools Box with WebRTC streaming an
 keywords = ["zin", "web", "dashboard", "webrtc"]
 authors = ["Zin"]
 repository = "https://github.com/DockorSherowLinZ/Zin_All_Tools"
-changelog = ""
-readme = "docs/README.md"
-preview_image = "data/preview.png"
-icon = "data/icon.png"
+category = "ZinTools"
 
 [dependencies]
 "omni.kit.commands" = {}

@@ -9,10 +9,14 @@
 import ast
 import glob
 import os
+import subprocess
 
 import pytest
 
 EXTS_ROOT = "exts"
+
+# 本機編譯會即時產生，僅在版控層面禁止
+TRANSIENT_DIRS = {"__pycache__"}
 
 
 def get_extension_dirs():
@@ -21,8 +25,18 @@ def get_extension_dirs():
     return sorted(
         os.path.join(EXTS_ROOT, name)
         for name in os.listdir(EXTS_ROOT)
-        if os.path.isdir(os.path.join(EXTS_ROOT, name))
+        if os.path.isdir(os.path.join(EXTS_ROOT, name)) and name not in TRANSIENT_DIRS
     )
+
+
+def get_tracked_files():
+    result = subprocess.run(
+        ["git", "ls-files"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
 
 def get_extension_sources():
@@ -58,15 +72,18 @@ def test_extension_has_manifest(ext_dir):
 
 
 def test_no_pycache_committed():
-    """確認沒有 __pycache__ 目錄被納入版控範圍"""
-    caches = glob.glob(f"{EXTS_ROOT}/**/__pycache__", recursive=True)
-    assert not caches, f"發現 __pycache__ 殘留（請刪除）：{caches}"
+    """確認沒有 __pycache__ 內容被提交。
+
+    檢查 git 追蹤狀態而非磁碟，因為本機執行測試會即時產生快取。
+    """
+    cached = [path for path in get_tracked_files() if "__pycache__/" in path]
+    assert not cached, f"以下快取檔被納入版控（請 git rm）：{cached}"
 
 
 def test_no_compiled_python_in_exts():
-    """確認 exts/ 下沒有 .pyc 編譯產物"""
-    compiled = glob.glob(f"{EXTS_ROOT}/**/*.pyc", recursive=True)
-    assert not compiled, f"發現 .pyc 編譯產物（請刪除）：{compiled}"
+    """確認沒有 .pyc 編譯產物被提交。"""
+    compiled = [path for path in get_tracked_files() if path.endswith(".pyc")]
+    assert not compiled, f"以下編譯產物被納入版控（請 git rm）：{compiled}"
 
 
 def test_no_dev_scripts_in_extension_packages():

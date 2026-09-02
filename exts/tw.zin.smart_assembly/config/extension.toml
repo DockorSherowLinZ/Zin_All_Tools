@@ -17,12 +17,7 @@ authors = ["Zin"]
 # 關鍵字
 keywords = ["assembly", "physics", "sequence", "animation"]
 
-# 文件路徑 (若無可忽略)
-changelog = "docs/CHANGELOG.md"
-readme = "docs/README.md"
-
 icon = "data/SMART_ASSEMBLY.png"
-preview_image = "data/preview.png"
 
 # ---------------------------------------------------------------
 # [關鍵] 依賴關係
