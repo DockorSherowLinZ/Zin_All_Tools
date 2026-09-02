@@ -3,12 +3,12 @@ category:"ZinAllTools"
 tooltip:"SimReady Asset Standardization Pipeline"
 icon:#("ZinAllTools", 8)
 (
-    include "D:\\Zin_All_Tools\\max_script\\Zin_SimReady_Pipeline\\Zin_SimReady_Tags.ms"
-    include "D:\\Zin_All_Tools\\max_script\\ResetModel\\Zin_ResetModelCore.ms"
-    include "D:\\Zin_All_Tools\\max_script\\GeomOptimizer\\Zin_GeomOptimizerCore.ms"
-    include "D:\\Zin_All_Tools\\max_script\\AI_MaterialAssigner\\Zin_AIMaterialAssignerCore.ms"
-    include "D:\\Zin_All_Tools\\max_script\\DictMaterialAssigner\\Zin_DictMaterialAssignerCore.ms"
-    include "D:\\Zin_All_Tools\\max_script\\Zin_CAD_SelectSimilar\\Zin_CAD_SelectSimilarCore.ms"
+    include "D:\\Inventec\\Zin_All_Tools\\max_script\\Zin_SimReady_Pipeline\\Zin_SimReady_Tags.ms"
+    include "D:\\Inventec\\Zin_All_Tools\\max_script\\ResetModel\\Zin_ResetModelCore.ms"
+    include "D:\\Inventec\\Zin_All_Tools\\max_script\\GeomOptimizer\\Zin_GeomOptimizerCore.ms"
+    include "D:\\Inventec\\Zin_All_Tools\\max_script\\AI_MaterialAssigner\\Zin_AIMaterialAssignerCore.ms"
+    include "D:\\Inventec\\Zin_All_Tools\\max_script\\DictMaterialAssigner\\Zin_DictMaterialAssignerCore.ms"
+    include "D:\\Inventec\\Zin_All_Tools\\max_script\\Zin_CAD_SelectSimilar\\Zin_CAD_SelectSimilarCore.ms"
 
     rollout SimReadyMasterUI "Zin SimReady Master Pipeline" width:340 height:800
     (
