@@ -18,15 +18,18 @@ import tools_box.zin_ui_utils as zin_ui_utils
 # We will import SmartConveyorExtension locally inside the handlers to avoid IExt import warnings.
 
 class DashboardRequestHandler(SimpleHTTPRequestHandler):
+    MAX_REQUEST_SIZE = 16 * 1024
+    CONTROL_ACTIONS = {"start", "stop", "update_line", "update_all_lines", "load_folder"}
+
+    def _send_json(self, status_code, payload):
+        self.send_response(status_code)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps(payload).encode("utf-8"))
+
     def do_GET(self):
         # Handle API calls
         if self.path == '/api/status':
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            # Add CORS headers
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            
             # Get data from SmartConveyor
             status = {
                 "is_running": False,
@@ -76,7 +79,7 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
                 import traceback
                 traceback.print_exc()
             
-            self.wfile.write(json.dumps(status).encode('utf-8'))
+            self._send_json(200, status)
             return
             
         # Serve static files from the 'public' folder
@@ -84,9 +87,22 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         if self.path == '/api/control':
-            content_length = int(self.headers['Content-Length'])
-            post_data = self.rfile.read(content_length)
-            data = json.loads(post_data.decode('utf-8'))
+            try:
+                content_length = int(self.headers.get("Content-Length", "0"))
+            except ValueError:
+                self._send_json(400, {"success": False, "error": "Invalid Content-Length"})
+                return
+            if not 0 < content_length <= self.MAX_REQUEST_SIZE:
+                self._send_json(413, {"success": False, "error": "Request body is too large"})
+                return
+            try:
+                data = json.loads(self.rfile.read(content_length).decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                self._send_json(400, {"success": False, "error": "Invalid JSON payload"})
+                return
+            if not isinstance(data, dict) or data.get("action") not in self.CONTROL_ACTIONS:
+                self._send_json(400, {"success": False, "error": "Unsupported control action"})
+                return
             
             action = data.get("action")
             speed = data.get("speed")
@@ -160,12 +176,10 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
             except ImportError:
                 pass
             
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            self.wfile.write(json.dumps({"success": True}).encode('utf-8'))
+            self._send_json(200, {"success": True})
             return
+
+        self._send_json(404, {"success": False, "error": "Not found"})
 
     def translate_path(self, path):
         # Override translate_path to point to our 'public' directory
@@ -218,7 +232,7 @@ class ZinWebDashboardExtension(omni.ext.IExt):
     def _start_server(self):
         try:
             socketserver.TCPServer.allow_reuse_address = True
-            self._httpd = socketserver.TCPServer(("", self._port), DashboardRequestHandler)
+            self._httpd = socketserver.TCPServer(("127.0.0.1", self._port), DashboardRequestHandler)
             self._server_thread = threading.Thread(target=self._httpd.serve_forever, daemon=True)
             self._server_thread.start()
             print(f"[tw.zin.web_dashboard] Web Server started at http://localhost:{self._port}")

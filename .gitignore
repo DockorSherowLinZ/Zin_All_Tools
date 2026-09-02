@@ -8,6 +8,7 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+.venv/
 
 # Test & coverage
 .coverage
@@ -38,11 +39,5 @@ _delete_list.tmp
 mcp.json
 install_mcp_servers.ps1
 
-# Old Extension Backups
-exts/tw.hud/
-
-# Diagnostic Scripts
-exts/tw.zin.smart_hud/smart_hud/diag_anim_dump.py
-
-# Max MCR
+# Local AI material configuration
 max_script/AI_MaterialAssigner/config.ini

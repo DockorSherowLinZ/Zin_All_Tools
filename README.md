@@ -31,5 +31,5 @@ Zin All Tools 是一套為 NVIDIA Omniverse 打造的強大擴充套件 (Extensi
 
 ## 安裝方式
 1. 在 Omniverse 應用程式中開啟 **Window > Extensions**。
-2. 點擊齒輪圖示 (Settings) 並將本專案目錄 `/home/zi/ov/Zin_All_Tools` (或您的下載路徑) 加入到 **Extension Search Paths** 中。
+2. 點擊齒輪圖示 (Settings) 並將本專案的 `exts` 目錄加入 **Extension Search Paths**，例如 Windows 的 `D:/Inventec/Zin_All_Tools/exts`。
 3. 在上方搜尋列搜尋 "Zin" 或特定的套件名稱，並點擊啟用。

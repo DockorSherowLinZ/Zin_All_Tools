@@ -113,6 +113,6 @@ def test_gitignore_exists():
 def test_gitignore_has_key_rules():
     """確認 .gitignore 包含關鍵排除規則"""
     content = open(".gitignore").read()
-    required_rules = ["*.bak", "__pycache__/", "*.pyc"]
+    required_rules = ["*.bak", "__pycache__/", "*.pyc", ".venv/"]
     for rule in required_rules:
         assert rule in content, f".gitignore 缺少規則：{rule}"
