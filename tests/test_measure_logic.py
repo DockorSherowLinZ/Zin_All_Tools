@@ -119,7 +119,8 @@ def test_calculate_gap_points():
 
     p1, p2 = calculate_gap_points(b1_min, b1_max, b2_min, b2_max)
 
-    # 運用最新的角落找點演算法，這兩組 AABB 距離最近的 Corner pair 為:
-    # b1 的 (1.0, 0.0, 1.0) 以及 b2 的 (2.0, 0.5, 3.0)
-    assert p1 == (1.0, 0.0, 1.0)
-    assert p2 == (2.0, 0.5, 3.0)
+    # Ray-AABB 交點法：由中心點朝對方射出，取離開各自 AABB 的表面交點。
+    for actual, expected in zip(p1, (0.8333333333, 0.5833333333, 1.0)):
+        assert math.isclose(actual, expected, rel_tol=1e-9, abs_tol=1e-9)
+    for actual, expected in zip(p2, (2.1666666667, 0.9166666667, 3.0)):
+        assert math.isclose(actual, expected, rel_tol=1e-9, abs_tol=1e-9)

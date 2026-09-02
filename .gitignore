@@ -5,6 +5,7 @@
 
 # Python cache
 __pycache__/
+exts/**/__pycache__/
 *.pyc
 *.pyo
 *.pyd
