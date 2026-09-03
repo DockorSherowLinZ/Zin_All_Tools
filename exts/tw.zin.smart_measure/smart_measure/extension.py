@@ -19,6 +19,7 @@ import sys
 import os
 
 import zin_core.ui_utils as zin_ui_utils
+from zin_core.menu import ZinMenuMixin
 
 
 
@@ -583,7 +584,7 @@ class SmartMeasureWidget:
 # ========================================================
 #  Extension Wrapper
 # ========================================================
-class SmartMeasureExtension(omni.ext.IExt):
+class SmartMeasureExtension(ZinMenuMixin, omni.ext.IExt):
     WINDOW_NAME = "Smart Measure"
     MENU_PATH = f"Zin_All_Tools/{WINDOW_NAME}"
 
@@ -605,25 +606,6 @@ class SmartMeasureExtension(omni.ext.IExt):
         if self._widget: self._widget.shutdown(); self._widget = None
         if self._window: self._window.destroy(); self._window = None
 
-    def _build_menu(self):
-        try:
-            import omni.kit.menu.utils
-            self._menu = omni.kit.menu.utils.add_menu_items([
-                omni.kit.menu.utils.MenuItemDescription(
-                    name=self.WINDOW_NAME,
-                    onclick_fn=lambda *args: self._toggle_window(None, True)
-                )
-            ], "Zin_All_Tools")
-            self._menu_added = True
-        except Exception: pass
-
-    def _remove_menu(self):
-        try:
-            import omni.kit.menu.utils
-            if hasattr(self, '_menu') and self._menu:
-                omni.kit.menu.utils.remove_menu_items(self._menu, "Zin_All_Tools")
-                self._menu = None
-        except Exception: pass
     def _toggle_window(self, menu, value):
         if value:
             if not self._window:
@@ -636,10 +618,6 @@ class SmartMeasureExtension(omni.ext.IExt):
         else:
             if self._window: self._window.visible = False
 
-    def _on_visibility_changed(self, visible):
-        if self._menu_added:
-            try: omni.kit.ui.get_editor_menu().set_value(self.MENU_PATH, bool(visible))
-            except: pass
 
     # ========================================================
     #  [關鍵] 橋接方法 (Bridge Methods)

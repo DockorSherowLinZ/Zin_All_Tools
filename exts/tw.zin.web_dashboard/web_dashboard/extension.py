@@ -10,6 +10,7 @@ import socketserver
 
 import sys
 import zin_core.ui_utils as zin_ui_utils
+from zin_core.menu import ZinMenuMixin
 
 # We will import SmartConveyorExtension locally inside the handlers to avoid IExt import warnings.
 
@@ -200,7 +201,10 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
 
 MAIN_LOOP = None
 
-class ZinWebDashboardExtension(omni.ext.IExt):
+class ZinWebDashboardExtension(ZinMenuMixin, omni.ext.IExt):
+    WINDOW_NAME = "Web Dashboard"
+    MENU_PATH = f"Zin_All_Tools/{WINDOW_NAME}"
+
     def on_startup(self, ext_id):
         global MAIN_LOOP
         import asyncio
@@ -247,25 +251,6 @@ class ZinWebDashboardExtension(omni.ext.IExt):
             self._window.destroy()
             self._window = None
         self._remove_menu()
-
-    def _build_menu(self):
-        try:
-            import omni.kit.menu.utils
-            self._menu = omni.kit.menu.utils.add_menu_items([
-                omni.kit.menu.utils.MenuItemDescription(
-                    name="Web Dashboard",
-                    onclick_fn=lambda *args: self._toggle_window(None, True)
-                )
-            ], "Zin_All_Tools")
-        except Exception: pass
-
-    def _remove_menu(self):
-        try:
-            import omni.kit.menu.utils
-            if hasattr(self, '_menu') and self._menu:
-                omni.kit.menu.utils.remove_menu_items(self._menu, "Zin_All_Tools")
-                self._menu = None
-        except Exception: pass
 
     def _toggle_window(self, menu, value):
         import omni.ui as ui

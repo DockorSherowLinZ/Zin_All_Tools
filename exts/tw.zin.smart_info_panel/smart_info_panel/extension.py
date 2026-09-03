@@ -16,6 +16,8 @@ import carb
 
 from pxr import Usd, UsdGeom
 
+from zin_core.menu import ZinMenuMixin
+
 from .info_panel_overlay import InfoPanelOverlay
 from .metadata_reader import (
     read_aif_metadata, find_aif_prim, get_fallback_metadata,
@@ -446,7 +448,7 @@ class SmartInfoPanelWidget:
 # ========================================================
 #  Extension Wrapper
 # ========================================================
-class SmartInfoPanelExtension(omni.ext.IExt):
+class SmartInfoPanelExtension(ZinMenuMixin, omni.ext.IExt):
     WINDOW_NAME = "Smart Info Panel"
     MENU_PATH = f"Zin_All_Tools/{WINDOW_NAME}"
 
@@ -470,28 +472,6 @@ class SmartInfoPanelExtension(omni.ext.IExt):
             self._window.destroy()
             self._window = None
 
-    def _build_menu(self):
-        try:
-            import omni.kit.menu.utils
-            self._menu = omni.kit.menu.utils.add_menu_items([
-                omni.kit.menu.utils.MenuItemDescription(
-                    name=self.WINDOW_NAME,
-                    onclick_fn=lambda *args: self._toggle_window(None, True),
-                )
-            ], "Zin_All_Tools")
-            self._menu_added = True
-        except Exception:
-            pass
-
-    def _remove_menu(self):
-        try:
-            import omni.kit.menu.utils
-            if hasattr(self, '_menu') and self._menu:
-                omni.kit.menu.utils.remove_menu_items(self._menu, "Zin_All_Tools")
-                self._menu = None
-        except Exception:
-            pass
-
     def _toggle_window(self, menu, value):
         if value:
             if not self._window:
@@ -508,13 +488,6 @@ class SmartInfoPanelExtension(omni.ext.IExt):
         else:
             if self._window:
                 self._window.visible = False
-
-    def _on_visibility_changed(self, visible):
-        if self._menu_added:
-            try:
-                omni.kit.ui.get_editor_menu().set_value(self.MENU_PATH, bool(visible))
-            except Exception:
-                pass
 
     # ========================================================
     #  橋接方法 (Bridge Methods) — 供 Tools Box 呼叫

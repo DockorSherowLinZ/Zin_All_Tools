@@ -13,6 +13,7 @@ import omni.kit.asset_converter
 
 import zin_core.ui_utils as zin_ui_utils
 from zin_core.components import ZinButton
+from zin_core.menu import ZinMenuMixin
 from zin_core.style import ZIN_GLOBAL_STYLE
 
 # Supported CAD file extensions (free + HOOPS-licensed)
@@ -479,7 +480,7 @@ class SmartCadConvertUI:
             self._execute_btn.widget.enabled = True
 
 
-class SmartCadConvertExtension(omni.ext.IExt):
+class SmartCadConvertExtension(ZinMenuMixin, omni.ext.IExt):
     WINDOW_NAME = "Smart CAD Convert"
     MENU_PATH = f"Zin_All_Tools/{WINDOW_NAME}"
 
@@ -499,26 +500,6 @@ class SmartCadConvertExtension(omni.ext.IExt):
             self._window = None
         self._ui = None
 
-    def _build_menu(self):
-        try:
-            import omni.kit.menu.utils
-            self._menu = omni.kit.menu.utils.add_menu_items([
-                omni.kit.menu.utils.MenuItemDescription(
-                    name=self.WINDOW_NAME,
-                    onclick_fn=lambda *args: self._toggle_window(None, True)
-                )
-            ], "Zin_All_Tools")
-            self._menu_added = True
-        except Exception: pass
-
-    def _remove_menu(self):
-        try:
-            import omni.kit.menu.utils
-            if hasattr(self, '_menu') and self._menu:
-                omni.kit.menu.utils.remove_menu_items(self._menu, "Zin_All_Tools")
-                self._menu = None
-        except Exception: pass
-
     def _toggle_window(self, menu, value):
         if value:
             if not self._window:
@@ -533,11 +514,3 @@ class SmartCadConvertExtension(omni.ext.IExt):
         else:
             if self._window:
                 self._window.visible = False
-
-    def _on_visibility_changed(self, visible):
-        if self._menu_added:
-            try:
-                import omni.kit.ui
-                omni.kit.ui.get_editor_menu().set_value(self.MENU_PATH, bool(visible))
-            except Exception:
-                pass

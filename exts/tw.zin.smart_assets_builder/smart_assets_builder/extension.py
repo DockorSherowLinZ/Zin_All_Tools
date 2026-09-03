@@ -242,6 +242,7 @@ import os
 import carb.settings
 
 import zin_core.ui_utils as zin_ui_utils
+from zin_core.menu import ZinMenuMixin
 
 SETTING_MATERIAL_JSON = "/exts/tw.zin.smart_assets_builder/material_json_path"
 
@@ -509,7 +510,7 @@ class SmartAssetsBuilderWidget:
 # ========================================================
 #  Extension Wrapper
 # ========================================================
-class SmartAssetsBuilderExtension(omni.ext.IExt):
+class SmartAssetsBuilderExtension(ZinMenuMixin, omni.ext.IExt):
     WINDOW_NAME = "SmartAssetsBuilder"
     MENU_PATH = f"Zin_All_Tools/{WINDOW_NAME}"
 
@@ -527,25 +528,6 @@ class SmartAssetsBuilderExtension(omni.ext.IExt):
         if self._widget: self._widget.shutdown()
         if self._window: self._window.destroy(); self._window = None
 
-    def _build_menu(self):
-        try:
-            import omni.kit.menu.utils
-            self._menu = omni.kit.menu.utils.add_menu_items([
-                omni.kit.menu.utils.MenuItemDescription(
-                    name=self.WINDOW_NAME,
-                    onclick_fn=lambda *args: self._toggle_window(None, True)
-                )
-            ], "Zin_All_Tools")
-            self._menu_added = True
-        except Exception: pass
-
-    def _remove_menu(self):
-        try:
-            import omni.kit.menu.utils
-            if hasattr(self, '_menu') and self._menu:
-                omni.kit.menu.utils.remove_menu_items(self._menu, "Zin_All_Tools")
-                self._menu = None
-        except Exception: pass
     def _toggle_window(self, menu, value):
         if value:
             if not self._window:
@@ -557,10 +539,6 @@ class SmartAssetsBuilderExtension(omni.ext.IExt):
         else:
             if self._window: self._window.visible = False
 
-    def _on_visibility_changed(self, visible):
-        if self._menu_added:
-            try: omni.kit.ui.get_editor_menu().set_value(self.MENU_PATH, bool(visible))
-            except: pass
 
     # --- Bridge Methods ---
     def startup_logic(self): self._widget.startup()

@@ -11,6 +11,7 @@ import sys
 import os
 
 import zin_core.ui_utils as zin_ui_utils
+from zin_core.menu import ZinMenuMixin
 
 class SmartInformationUI:
     def __init__(self):
@@ -285,7 +286,10 @@ class SmartInformationUI:
         except Exception as e:
             print(f"[SmartInformation] Export failed: {e}")
 
-class SmartInformationExtension(omni.ext.IExt):
+class SmartInformationExtension(ZinMenuMixin, omni.ext.IExt):
+    WINDOW_NAME = "Smart Information"
+    MENU_PATH = f"Zin_All_Tools/{WINDOW_NAME}"
+
     def on_startup(self, ext_id):
         self._ui = SmartInformationUI()
         self._ui.startup()
@@ -300,25 +304,6 @@ class SmartInformationExtension(omni.ext.IExt):
             self._window.destroy()
             self._window = None
         self._remove_menu()
-
-    def _build_menu(self):
-        try:
-            import omni.kit.menu.utils
-            self._menu = omni.kit.menu.utils.add_menu_items([
-                omni.kit.menu.utils.MenuItemDescription(
-                    name="Smart Information",
-                    onclick_fn=lambda *args: self._toggle_window(None, True)
-                )
-            ], "Zin_All_Tools")
-        except Exception: pass
-
-    def _remove_menu(self):
-        try:
-            import omni.kit.menu.utils
-            if hasattr(self, '_menu') and self._menu:
-                omni.kit.menu.utils.remove_menu_items(self._menu, "Zin_All_Tools")
-                self._menu = None
-        except Exception: pass
 
     def _toggle_window(self, menu, value):
         import omni.ui as ui

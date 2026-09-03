@@ -9,6 +9,7 @@ keywords = ["omniverse", "kit", "extension", "tw.zin", "metadata", "info", "pane
 category = "ZinTools"
 
 [dependencies]
+"tw.zin.core" = {}
 "omni.ui" = {}
 "omni.usd" = {}
 "omni.kit.uiapp" = {}

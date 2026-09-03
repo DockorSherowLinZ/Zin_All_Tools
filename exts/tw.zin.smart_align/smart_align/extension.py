@@ -9,6 +9,7 @@ import sys
 import os
 
 import zin_core.ui_utils as zin_ui_utils
+from zin_core.menu import ZinMenuMixin
 
 try:
     from isaacsim.util.debug_draw import _debug_draw  # [Update 5.1]
@@ -464,7 +465,7 @@ class SmartAlignWidget:
 # ========================================================
 #  Extension Wrapper
 # ========================================================
-class SmartAlignExtension(omni.ext.IExt):
+class SmartAlignExtension(ZinMenuMixin, omni.ext.IExt):
     WINDOW_NAME = "Smart Align"
     MENU_PATH = f"Zin_All_Tools/{WINDOW_NAME}"
 
@@ -482,25 +483,6 @@ class SmartAlignExtension(omni.ext.IExt):
         if self._widget: self._widget.shutdown()
         if self._window: self._window.destroy(); self._window = None
 
-    def _build_menu(self):
-        try:
-            import omni.kit.menu.utils
-            self._menu = omni.kit.menu.utils.add_menu_items([
-                omni.kit.menu.utils.MenuItemDescription(
-                    name=self.WINDOW_NAME,
-                    onclick_fn=lambda *args: self._toggle_window(None, True)
-                )
-            ], "Zin_All_Tools")
-            self._menu_added = True
-        except Exception: pass
-
-    def _remove_menu(self):
-        try:
-            import omni.kit.menu.utils
-            if hasattr(self, '_menu') and self._menu:
-                omni.kit.menu.utils.remove_menu_items(self._menu, "Zin_All_Tools")
-                self._menu = None
-        except Exception: pass
     def _toggle_window(self, menu, value):
         if value:
             if not self._window:
@@ -511,11 +493,6 @@ class SmartAlignExtension(omni.ext.IExt):
             self._window.visible = True
         else:
             if self._window: self._window.visible = False
-
-    def _on_visibility_changed(self, visible):
-        if self._menu_added:
-            try: omni.kit.ui.get_editor_menu().set_value(self.MENU_PATH, bool(visible))
-            except: pass
 
     # --- Bridge Methods ---
     def startup_logic(self): self._widget.startup()

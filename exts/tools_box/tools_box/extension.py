@@ -3,9 +3,10 @@ import omni.ui as ui
 import weakref
 from pxr import Gf
 from zin_core.components import ZinButton
+from zin_core.menu import ZinMenuMixin
 from zin_core.style import ZIN_GLOBAL_STYLE
 
-class ToolsBoxExtension(omni.ext.IExt):
+class ToolsBoxExtension(ZinMenuMixin, omni.ext.IExt):
     WINDOW_NAME = "Zin Tools Box"
     MENU_PATH = f"Zin_All_Tools/{WINDOW_NAME}"
 
@@ -107,25 +108,6 @@ class ToolsBoxExtension(omni.ext.IExt):
         # --- Show the Zin Tools Box automatically on startup ---
         self._toggle_window(None, True)
 
-    def _build_menu(self):
-        try:
-            import omni.kit.menu.utils
-            self._menu = omni.kit.menu.utils.add_menu_items([
-                omni.kit.menu.utils.MenuItemDescription(
-                    name=self.WINDOW_NAME,
-                    onclick_fn=lambda *args: self._toggle_window(None, True)
-                )
-            ], "Zin_All_Tools")
-            self._menu_added = True
-        except Exception: pass
-
-    def _remove_menu(self):
-        try:
-            import omni.kit.menu.utils
-            if hasattr(self, '_menu') and self._menu:
-                omni.kit.menu.utils.remove_menu_items(self._menu, "Zin_All_Tools")
-                self._menu = None
-        except Exception: pass
     def _toggle_window(self, menu, value):
         if value:
             if not self._window:

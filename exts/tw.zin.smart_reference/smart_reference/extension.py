@@ -12,6 +12,7 @@ import sys
 import os
 
 import zin_core.ui_utils as zin_ui_utils
+from zin_core.menu import ZinMenuMixin
 
 # ========================================================
 # 1. 整合樣式表 (解決 Hover 失效問題)
@@ -258,7 +259,7 @@ class SmartReferenceUI:
         self._file_picker = FilePickerDialog("Select Assets", click_apply_handler=on_selected)
         self._file_picker.show()
 
-class SmartReferenceExtension(omni.ext.IExt):
+class SmartReferenceExtension(ZinMenuMixin, omni.ext.IExt):
     WINDOW_NAME = "Smart Reference"
     MENU_PATH = f"Zin_All_Tools/{WINDOW_NAME}"
 
@@ -286,25 +287,6 @@ class SmartReferenceExtension(omni.ext.IExt):
             self._window = None
         self._ui = None
 
-    def _build_menu(self):
-        try:
-            import omni.kit.menu.utils
-            self._menu = omni.kit.menu.utils.add_menu_items([
-                omni.kit.menu.utils.MenuItemDescription(
-                    name=self.WINDOW_NAME,
-                    onclick_fn=lambda *args: self._toggle_window(None, True)
-                )
-            ], "Zin_All_Tools")
-            self._menu_added = True
-        except Exception: pass
-
-    def _remove_menu(self):
-        try:
-            import omni.kit.menu.utils
-            if hasattr(self, '_menu') and self._menu:
-                omni.kit.menu.utils.remove_menu_items(self._menu, "Zin_All_Tools")
-                self._menu = None
-        except Exception: pass
     def _toggle_window(self, menu, value):
         if value:
             if not self._window:
@@ -319,11 +301,3 @@ class SmartReferenceExtension(omni.ext.IExt):
         else:
             if self._window:
                 self._window.visible = False
-
-    def _on_visibility_changed(self, visible):
-        if self._menu_added:
-            try:
-                import omni.kit.ui
-                omni.kit.ui.get_editor_menu().set_value(self.MENU_PATH, bool(visible))
-            except Exception:
-                pass
