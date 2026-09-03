@@ -11,6 +11,8 @@ import os
 import zin_core.ui_utils as zin_ui_utils
 from zin_core.menu import ZinMenuMixin
 
+from .displacement_logic import apply_displacement
+
 class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
     """
     Zin Smart Exploded View Extension - Interactive Displacement Workflow
@@ -257,23 +259,33 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
             return
 
         for path in selection:
-            if path in self._offsets and path in self._original_translations:
-                # 更新該物件在當前操作軸向的相對位移量
-                self._offsets[path][self._current_axis] = val
-                
-                orig = self._original_translations[path]
-                offset = self._offsets[path]
-                
-                # 相加得出最終世界座標 (Additive Transform)
-                new_pos = Gf.Vec3d(orig[0] + offset[0], orig[1] + offset[1], orig[2] + offset[2])
+            if path not in self._offsets or path not in self._original_translations:
+                continue
 
-                prim = stage.GetPrimAtPath(path)
-                if prim and prim.IsValid():
-                    xformable = UsdGeom.Xformable(prim)
-                    if xformable:
-                        trans_op = self._get_translation_op(xformable)
-                        if trans_op is not None:
-                            trans_op.Set(new_pos)
+            prim = stage.GetPrimAtPath(path)
+            if not prim or not prim.IsValid():
+                continue
+
+            xformable = UsdGeom.Xformable(prim)
+            if not xformable:
+                continue
+
+            trans_op = self._get_translation_op(xformable)
+            if trans_op is None:
+                continue
+
+            offset = self._offsets[path]
+            orig = self._original_translations[path]
+
+            # 使用者可能以 gizmo 等外部方式移動過物件，使記錄的原點失效；
+            # apply_displacement 會偵測並重新校準，讓滑桿的改變量相對於現況套用。
+            new_pos, new_home, new_offset = apply_displacement(
+                trans_op.Get(), orig, offset, self._current_axis, val
+            )
+
+            self._original_translations[path] = Gf.Vec3d(*new_home)
+            self._offsets[path] = new_offset
+            trans_op.Set(Gf.Vec3d(*new_pos))
 
     def _reset_all(self):
         """
