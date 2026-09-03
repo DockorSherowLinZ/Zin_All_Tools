@@ -532,10 +532,6 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
             )
             return None
 
-    def _on_selection_changed(self, event):
-        """保留給既有呼叫端的相容介面；組件改由 Add Selected 明確加入。"""
-        return
-
     def on_shutdown(self):
         """清理資源：關閉視窗、清空組件表。"""
         carb.log_info("[Zin Smart Exploded View] Extension shutdown")

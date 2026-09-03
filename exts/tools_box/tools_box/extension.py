@@ -288,8 +288,17 @@ class ToolsBoxExtension(ZinMenuMixin, omni.ext.IExt):
                 self.tool_align.shutdown_logic()
             self.tool_align = None
 
-        # Clean up Exploded View reference
-        self.tool_explode = None
+        # 必須呼叫 on_shutdown，否則其事件訂閱會殘留在 Kit 中持續觸發。
+        if self.tool_explode:
+            if hasattr(self.tool_explode, "on_shutdown"):
+                self.tool_explode.on_shutdown()
+            self.tool_explode = None
+
+        # 未關閉會讓 HTTP server 執行緒殘留。
+        if self.tool_dashboard:
+            if hasattr(self.tool_dashboard, "on_shutdown"):
+                self.tool_dashboard.on_shutdown()
+            self.tool_dashboard = None
 
         # Stop and clean up Smart Conveyor (on_shutdown handles controllers list,
         # FilePicker dialogs, and Timeline subscription correctly)
