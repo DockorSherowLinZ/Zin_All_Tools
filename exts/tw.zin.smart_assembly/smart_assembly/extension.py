@@ -16,6 +16,7 @@ import os
 
 import zin_core.ui_utils as zin_ui_utils
 from zin_core.menu import ZinMenuMixin
+from zin_core.tasks import ZinTaskRegistry
 
 
 # ========================================================
@@ -38,6 +39,7 @@ class SmartAssemblyWidget:
         self.is_updating_ui = False
         self._update_task = None
         self._stage_listener = None
+        self._tasks = ZinTaskRegistry("SmartAssembly")
         
         # New State for Multi-Config
         self.configs = [] 
@@ -60,9 +62,10 @@ class SmartAssemblyWidget:
     def startup(self):
         stream = omni.usd.get_context().get_stage_event_stream()
         self._stage_listener = stream.create_subscription_to_pop(self._on_stage_event, name="smart_assembly_stage_event")
-        asyncio.ensure_future(self._deferred_startup())
+        self._tasks.spawn(self._deferred_startup())
 
     def shutdown(self):
+        self._tasks.cancel_all()
         if self._update_task: self._update_task.cancel(); self._update_task = None
         self._stage_listener = None
         self.slider_models.clear(); self.pos_labels.clear()
@@ -80,7 +83,7 @@ class SmartAssemblyWidget:
         self.refresh_list_ui()
 
     def _on_stage_event(self, event):
-        if event.type == int(omni.usd.StageEventType.OPENED): asyncio.ensure_future(self._deferred_startup())
+        if event.type == int(omni.usd.StageEventType.OPENED): self._tasks.spawn(self._deferred_startup())
 
     def build_ui_layout(self):
         # 使用 ScrollingFrame 作為根容器，確保內部內容總寬度可支撐
@@ -148,7 +151,7 @@ class SmartAssemblyWidget:
                             any_error = any(v == -1 for v in self.status_dict.values())
                             cal_txt = "AUTO FIX (Calibrate)" if any_error else "RE-CALIBRATE"
                             cal_style = zin_ui_utils.STYLE_NEGATIVE if any_error else {}
-                            self.ui_btn_calibrate = ui.Button(cal_txt, style=cal_style, clicked_fn=lambda: asyncio.ensure_future(self.perform_homing_sequence()))
+                            self.ui_btn_calibrate = ui.Button(cal_txt, style=cal_style, clicked_fn=lambda: self._tasks.spawn(self.perform_homing_sequence()))
                 
                 self.progress_label = ui.Label(f"Ready. Next Step: 1 / {len(self.items)}", height=20, alignment=ui.Alignment.CENTER)
                 
@@ -160,7 +163,7 @@ class SmartAssemblyWidget:
         
         self.refresh_list_ui()
         if self._update_task: self._update_task.cancel()
-        self._update_task = asyncio.ensure_future(self.update_sliders_loop())
+        self._update_task = self._tasks.spawn(self.update_sliders_loop())
 
     def refresh_list_ui(self):
         if self.ui_list_frame is None: return
@@ -266,7 +269,7 @@ class SmartAssemblyWidget:
             self.configs[self.current_config_index]["name"] = new_name
             self.persist_configs()
             self._temp_message = f"Renamed: '{old_name}' -> '{new_name}'"
-            asyncio.ensure_future(self._defer_refresh_full())
+            self._tasks.spawn(self._defer_refresh_full())
 
     def delete_current_config(self):
         if not self.configs: return
@@ -286,7 +289,7 @@ class SmartAssemblyWidget:
             self._temp_message = f"Deleted: {deleted_name}"
         self.items = self.sync_sequence(self.configs[self.current_config_index]["sequence"])
         self.persist_configs()
-        asyncio.ensure_future(self._defer_refresh_full())
+        self._tasks.spawn(self._defer_refresh_full())
 
     async def _defer_refresh_full(self):
         await omni.kit.app.get_app().next_update_async()
@@ -307,7 +310,7 @@ class SmartAssemblyWidget:
             if self.items == c["sequence"]:
                 conflict_name = c["name"]; self._temp_message = f"Error: Same sequence as '{conflict_name}'!"
                 if self.progress_label: self.progress_label.style = {"color": 0xFF3D3DF5}
-                asyncio.ensure_future(self._defer_refresh_full()); return
+                self._tasks.spawn(self._defer_refresh_full()); return
         input_name = self.ui_field_name.model.as_string.strip(); new_name = ""
         existing_names = set(c["name"] for c in self.configs)
         if input_name and input_name != current_loaded_name:
@@ -315,7 +318,7 @@ class SmartAssemblyWidget:
             if candidate in existing_names:
                 self._temp_message = f"Error: Name '{candidate}' exists!"
                 if self.progress_label: self.progress_label.style = {"color": 0xFF3D3DF5}
-                asyncio.ensure_future(self._defer_refresh_full()); return
+                self._tasks.spawn(self._defer_refresh_full()); return
             new_name = candidate
         else:
             max_n = 0; pattern = re.compile(r"config\s+(\d+)")
@@ -331,7 +334,7 @@ class SmartAssemblyWidget:
                 next_n += 1
         new_entry = {"name": new_name, "sequence": list(self.items)}; self.configs.append(new_entry)
         self.current_config_index = len(self.configs) - 1; self.persist_configs()
-        self._temp_message = f"Saved: {new_name}"; asyncio.ensure_future(self._defer_refresh_full())
+        self._temp_message = f"Saved: {new_name}"; self._tasks.spawn(self._defer_refresh_full())
 
     def persist_configs(self):
         try:
@@ -443,7 +446,7 @@ class SmartAssemblyWidget:
         if 0 <= n < len(self.items):
             self.items[idx], self.items[n] = self.items[n], self.items[idx]
             self.status_dict[self.items[idx]] = 0; self.status_dict[self.items[n]] = 0
-            asyncio.ensure_future(self._defer_refresh())
+            self._tasks.spawn(self._defer_refresh())
 
     async def _defer_refresh(self): await omni.kit.app.get_app().next_update_async(); self.refresh_list_ui()
 
@@ -470,7 +473,7 @@ class SmartAssemblyWidget:
         if idx < self.current_step_index:
             self.current_step_index = idx
             if self.progress_label: self.progress_label.text = f"Rewinding... Next: {self.current_step_index + 1}"
-        asyncio.ensure_future(self._defer_refresh())
+        self._tasks.spawn(self._defer_refresh())
 
     def reset_scene(self):
         self.current_step_index = 0; self.status_dict = {i: 0 for i in self.items}; self.failure_report = {i: "---" for i in self.items}
@@ -479,7 +482,7 @@ class SmartAssemblyWidget:
             lim = self.get_joint_limit(i); self.set_joint_target(i, lim)
             if i in self.slider_models: self.is_updating_ui = True; self.slider_models[i].as_float = lim; self.is_updating_ui = False
         if self.progress_label: self.progress_label.text = "Reset. Ready."
-        asyncio.ensure_future(self._defer_refresh())
+        self._tasks.spawn(self._defer_refresh())
 
     def step_forward(self):
         if not self.timeline.is_playing(): self.timeline.play()
@@ -491,10 +494,10 @@ class SmartAssemblyWidget:
             nm.post_notification(nm.Notification("Assembly Sequence Complete!", duration=3)); return
         target = self.items[self.current_step_index]; self.set_joint_target(target, 0.0)
         if target in self.slider_models: self.is_updating_ui = True; self.slider_models[target].as_float = 0.0; self.is_updating_ui = False
-        asyncio.ensure_future(self.monitor_assembly(target))
+        self._tasks.spawn(self.monitor_assembly(target))
         self.current_step_index += 1
         if self.progress_label: self.progress_label.text = f"Assembling Step {self.current_step_index}..."
-        asyncio.ensure_future(self._defer_refresh())
+        self._tasks.spawn(self._defer_refresh())
 
     async def monitor_assembly(self, p):
         for _ in range(90): await omni.kit.app.get_app().next_update_async()

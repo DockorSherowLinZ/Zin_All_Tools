@@ -5,6 +5,8 @@ import json
 import omni.ui as ui
 import omni.client
 
+from zin_core.tasks import ZinTaskRegistry
+
 from .model import CategoryItem, CategoryModel, SmartAsset
 from .smart_asset_delegate import SmartAssetPropertyDelegate
 
@@ -177,6 +179,11 @@ class SmartAssetsLibraryWindow(ui.Window):
         self._category_model = CategoryModel()
         self._delegate = LibraryDelegate()
         self._file_picker = None
+        self._tasks = ZinTaskRegistry("SmartAssetsLibrary")
+
+    def cancel_pending_tasks(self):
+        """取消尚未完成的載入任務，避免視窗銷毀後仍存取 UI。"""
+        self._tasks.cancel_all()
 
         self._asset_grid_container = None 
         self._grid_building = False 
@@ -308,7 +315,7 @@ class SmartAssetsLibraryWindow(ui.Window):
             self._refresh_library()
 
     def _refresh_library(self):
-        asyncio.ensure_future(self._load_categories_async())
+        self._tasks.spawn(self._load_categories_async())
 
     async def _load_categories_async(self):
         all_roots = []
@@ -332,7 +339,7 @@ class SmartAssetsLibraryWindow(ui.Window):
                 await self._build_tree_recursive(full, child, loop)
 
     def _on_selection_changed(self, selections):
-        if selections: asyncio.ensure_future(self._load_folder_assets_async(selections[0].full_path))
+        if selections: self._tasks.spawn(self._load_folder_assets_async(selections[0].full_path))
 
     def _on_tree_double_click(self, x, y, button, modifier):
         if button != 0: return

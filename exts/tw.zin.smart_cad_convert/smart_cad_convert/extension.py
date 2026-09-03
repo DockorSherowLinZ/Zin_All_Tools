@@ -15,6 +15,7 @@ import zin_core.ui_utils as zin_ui_utils
 from zin_core.components import ZinButton
 from zin_core.menu import ZinMenuMixin
 from zin_core.style import ZIN_GLOBAL_STYLE
+from zin_core.tasks import ZinTaskRegistry
 
 # Supported CAD file extensions (free + HOOPS-licensed)
 SUPPORTED_CAD_EXTENSIONS = (
@@ -85,6 +86,11 @@ class SmartCadConvertUI:
         
         self._execute_btn = None
         self._log_output = None
+        self._tasks = ZinTaskRegistry("SmartCadConvert")
+
+    def shutdown(self):
+        """取消尚在進行的轉換任務。"""
+        self._tasks.cancel_all()
 
     def build_ui(self):
         scroll_frame = ui.ScrollingFrame()
@@ -215,7 +221,7 @@ class SmartCadConvertUI:
             return
 
         self._execute_btn.widget.enabled = False
-        asyncio.ensure_future(self._run_pipeline_async(cad_path))
+        self._tasks.spawn(self._run_pipeline_async(cad_path))
 
     async def _run_pipeline_async(self, cad_path):
         try:
@@ -495,6 +501,8 @@ class SmartCadConvertExtension(ZinMenuMixin, omni.ext.IExt):
 
     def on_shutdown(self):
         self._remove_menu()
+        if self._ui:
+            self._ui.shutdown()
         if self._window:
             self._window.destroy()
             self._window = None

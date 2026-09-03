@@ -8,6 +8,7 @@ icon = "data/SMART_ASSETS_LIBRARY.png"
 
 # 【關鍵修改】在這裡加入其他工具的 ID
 [dependencies]
+"tw.zin.core" = {}
 "omni.ui" = {}
 "omni.usd" = {}
 "omni.kit.uiapp" = {}

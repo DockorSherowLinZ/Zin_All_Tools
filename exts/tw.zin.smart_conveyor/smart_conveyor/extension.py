@@ -29,6 +29,7 @@ from zin_core.style import (
     ARGB_CORRECT_LABEL, ARGB_TEXT_PRIMARY, ARGB_TEXT_SECONDARY,
     ARGB_TEXT_MUTED, ARGB_ICON_FOLDER, ARGB_CORRECT_BG,
 )
+from zin_core.tasks import ZinTaskRegistry
 
 # ==========================================
 # Core Logic: PCB Conveyor Controller
@@ -343,6 +344,7 @@ class SmartConveyorExtension(omni.ext.IExt):
         self._active_spawners = []     # List of active spawner configs
         self._inactive_pools = {}      # dict mapping line_id -> list of idle prim paths
         self._stage_sub = None         # Stage event subscription
+        self._tasks = ZinTaskRegistry("tw.zin.smart_conveyor")
         # UI data models are created lazily by _ensure_models()
 
     def on_startup(self, ext_id):
@@ -941,7 +943,7 @@ class SmartConveyorExtension(omni.ext.IExt):
         async def _deferred():
             await omni.kit.app.get_app().next_update_async()
             self._rebuild_slope_waypoints_ui()
-        asyncio.ensure_future(_deferred())
+        self._tasks.spawn(_deferred())
 
     def _add_slope_waypoint(self):
         self._slope_wp_models.append(self._make_wp_model(0,0,0, 0,0,0, 0, f"Point {len(self._slope_wp_models)+1}"))
@@ -1152,7 +1154,7 @@ class SmartConveyorExtension(omni.ext.IExt):
             await omni.kit.app.get_app().next_update_async()
             self._rebuild_waypoints_ui()
             self._update_undo_redo_buttons()
-        asyncio.ensure_future(defer_rebuild())
+        self._tasks.spawn(defer_rebuild())
 
     def _undo(self):
         if not self._undo_stack: return
@@ -1239,7 +1241,7 @@ class SmartConveyorExtension(omni.ext.IExt):
             self._rebuild_waypoints_ui()
             self._update_undo_redo_buttons()
             
-        asyncio.ensure_future(defer_rebuild())
+        self._tasks.spawn(defer_rebuild())
 
     def _remove_specific_waypoint(self, idx):
         if len(self._waypoint_models) <= 2:
@@ -1258,7 +1260,7 @@ class SmartConveyorExtension(omni.ext.IExt):
             self._rebuild_waypoints_ui()
             self._update_undo_redo_buttons()
             
-        asyncio.ensure_future(defer_rebuild())
+        self._tasks.spawn(defer_rebuild())
 
     def _pick_waypoint_from_selection(self, wp_model):
         """Read World Transform of currently selected object and fill into wp_model for that row"""
@@ -1643,7 +1645,7 @@ class SmartConveyorExtension(omni.ext.IExt):
         async def defer_rebuild():
             await omni.kit.app.get_app().next_update_async()
             self._rebuild_multi_line_ui()
-        asyncio.ensure_future(defer_rebuild())
+        self._tasks.spawn(defer_rebuild())
         
     def _ml_undo(self):
         if not self._ml_undo_stack: return
@@ -1747,7 +1749,7 @@ class SmartConveyorExtension(omni.ext.IExt):
                         async def defer_rebuild():
                             await omni.kit.app.get_app().next_update_async()
                             self._rebuild_scene_overrides_ui()
-                        asyncio.ensure_future(defer_rebuild())
+                        self._tasks.spawn(defer_rebuild())
                         
                     btn_text = "V" if model["show_settings"].get_value_as_bool() else ">"
                     btn = ZinButton(btn_text, state="default", width=30, clicked_fn=toggle_settings)
@@ -2602,7 +2604,7 @@ class SmartConveyorExtension(omni.ext.IExt):
             await omni.kit.app.get_app().next_update_async()
             self._rebuild_waypoints_ui()
             self._rebuild_multi_line_ui()
-        asyncio.ensure_future(defer_rebuild())
+        self._tasks.spawn(defer_rebuild())
 
     # ------------------------------------------------------------------
     # Lifecycle: fully release all resources to prevent memory leaks
@@ -2610,6 +2612,9 @@ class SmartConveyorExtension(omni.ext.IExt):
     def on_shutdown(self):
         # 1. Stop all active conveyor controllers and clean up spawned models
         self.stop_sim()
+
+        # 1b. Cancel any deferred UI rebuild tasks still pending
+        self._tasks.cancel_all()
 
         # 2. Release event subscriptions
         self._timeline_sub = None

@@ -20,6 +20,10 @@ class _FailedExpectation(AssertionError):
     pass
 
 
+class _SkippedTest(Exception):
+    pass
+
+
 def _install_pytest_stub():
     class _Mark:
         def parametrize(self, argnames, argvalues, **kwargs):
@@ -32,6 +36,7 @@ def _install_pytest_stub():
     stub = types.ModuleType("pytest")
     stub.mark = _Mark()
     stub.fail = lambda msg="": (_ for _ in ()).throw(_FailedExpectation(msg))
+    stub.skip = lambda msg="": (_ for _ in ()).throw(_SkippedTest(msg))
     sys.modules["pytest"] = stub
 
 
@@ -45,7 +50,7 @@ def main():
         for path in sorted(glob.glob("tests/test_*.py"))
     ]
 
-    total = passed = 0
+    total = passed = skipped = 0
     failures = []
 
     for module_name in modules:
@@ -61,6 +66,8 @@ def main():
                 try:
                     func(*args)
                     passed += 1
+                except _SkippedTest:
+                    skipped += 1
                 except Exception as exc:  # noqa: BLE001 - 測試執行器需捕捉全部失敗
                     label = f"{module_name}::{name}"
                     if args:
@@ -70,7 +77,10 @@ def main():
     for label, reason in failures:
         print(f"FAIL {label}\n     {reason}")
 
-    print(f"\nmodules={len(modules)} total={total} passed={passed} failed={len(failures)}")
+    print(
+        f"\nmodules={len(modules)} total={total} passed={passed} "
+        f"skipped={skipped} failed={len(failures)}"
+    )
     return 1 if failures else 0
 
 

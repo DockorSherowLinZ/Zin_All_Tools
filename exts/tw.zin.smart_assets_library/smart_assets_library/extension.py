@@ -1,3 +1,4 @@
+import carb
 import omni.ext
 import omni.ui as ui
 import omni.kit.ui
@@ -56,6 +57,7 @@ class SmartAssetsLibraryExtension(omni.ext.IExt):
 
         # 3. 銷毀視窗
         if self._window:
+            self._window.cancel_pending_tasks()
             try:
                 self._window.destroy()
             except Exception as exc:

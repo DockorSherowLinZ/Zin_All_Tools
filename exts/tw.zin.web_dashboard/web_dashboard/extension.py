@@ -170,10 +170,7 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
                             elif action == "load_folder":
                                 url = data.get("url", "").strip()
                                 if url:
-                                    import asyncio
-                                    async def do_load():
-                                        await instance.load_config_from_url_async(url)
-                                    asyncio.ensure_future(do_load())
+                                    await instance.load_config_from_url_async(url)
                                     
                         if MAIN_LOOP:
                             asyncio.run_coroutine_threadsafe(run_command(), MAIN_LOOP)

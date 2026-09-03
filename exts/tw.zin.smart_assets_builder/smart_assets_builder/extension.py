@@ -245,6 +245,7 @@ import carb.settings
 
 import zin_core.ui_utils as zin_ui_utils
 from zin_core.menu import ZinMenuMixin
+from zin_core.tasks import ZinTaskRegistry
 
 SETTING_MATERIAL_JSON = "/exts/tw.zin.smart_assets_builder/material_json_path"
 
@@ -267,6 +268,7 @@ class SmartAssetsBuilderWidget:
         self._build_task = None
         self._cancel_requested = False
         self._is_building = False
+        self._tasks = ZinTaskRegistry("SmartAssetsBuilder")
 
     def startup(self): 
         self._found = []
@@ -275,8 +277,8 @@ class SmartAssetsBuilderWidget:
         
     def shutdown(self):
         self._cancel_requested = True
-        if self._build_task: 
-            self._build_task.cancel()
+        self._tasks.cancel_all()
+        self._build_task = None
 
     def build_ui_layout(self):
         scroll_frame = ui.ScrollingFrame(
@@ -381,7 +383,7 @@ class SmartAssetsBuilderWidget:
         self._cancel_requested = False
         self._is_building = True
         self._update_start_button_state()
-        self._build_task = asyncio.ensure_future(self._run_build())
+        self._build_task = self._tasks.spawn(self._run_build())
 
     async def _run_build(self):
         n = len(self._found)
