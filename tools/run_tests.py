@@ -24,6 +24,27 @@ class _SkippedTest(Exception):
     pass
 
 
+class _RaisesContext:
+    """最小化的 pytest.raises 替代品。"""
+
+    def __init__(self, expected):
+        self.expected = expected
+        self.value = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, traceback):
+        if exc_type is None:
+            raise _FailedExpectation(
+                "DID NOT RAISE %s" % getattr(self.expected, "__name__", self.expected)
+            )
+        if not issubclass(exc_type, self.expected):
+            return False
+        self.value = exc
+        return True
+
+
 def _install_pytest_stub():
     class _Mark:
         def parametrize(self, argnames, argvalues, **kwargs):
@@ -37,6 +58,7 @@ def _install_pytest_stub():
     stub.mark = _Mark()
     stub.fail = lambda msg="": (_ for _ in ()).throw(_FailedExpectation(msg))
     stub.skip = lambda msg="": (_ for _ in ()).throw(_SkippedTest(msg))
+    stub.raises = _RaisesContext
     sys.modules["pytest"] = stub
 
 
