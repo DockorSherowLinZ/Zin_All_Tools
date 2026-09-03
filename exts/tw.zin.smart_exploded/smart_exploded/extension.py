@@ -126,8 +126,10 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
                             
                 ui.Spacer()
 
-        # 初始化預設軸向為 X 軸
-        self._set_axis(0)
+        # UI 重建後 slider 是全新的停用狀態，且選取事件不會重放，
+        # 因此主動依當前選取重新同步，否則先選取再開分頁會完全沒有反應。
+        self._set_axis(self._current_axis)
+        self._on_selection_changed(None)
 
     def _set_axis(self, axis_idx):
         """
