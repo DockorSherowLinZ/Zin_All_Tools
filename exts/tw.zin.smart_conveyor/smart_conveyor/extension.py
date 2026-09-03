@@ -31,6 +31,8 @@ from zin_core.style import (
 )
 from zin_core.tasks import ZinTaskRegistry
 
+from .conveyor_logic import calc_required_pool_size, normalize_config
+
 # ==========================================
 # Core Logic: PCB Conveyor Controller
 # ==========================================
@@ -1817,21 +1819,7 @@ class SmartConveyorExtension(omni.ext.IExt):
             self._status_label.set_style({"color": color})
 
     def _calc_required_pool_size(self, waypoints: list, speed: float, dispatch_interval: float) -> int:
-        if not waypoints or speed <= 0 or dispatch_interval <= 0:
-            return 2
-        import math
-        total_dist = 0.0
-        total_pause = 0.0
-        for i in range(1, len(waypoints)):
-            wp_prev = waypoints[i-1]
-            wp_curr = waypoints[i]
-            # Use math.dist or vector length
-            vec = wp_curr["pos"] - wp_prev["pos"]
-            total_dist += vec.GetLength()
-            total_pause += wp_curr.get("pause", 0.0)
-        total_time = (total_dist / speed) + total_pause
-        required = int(math.ceil(total_time / dispatch_interval)) + 2 # Safety buffer of 2
-        return max(1, required)
+        return calc_required_pool_size(waypoints, speed, dispatch_interval)
 
     def start_sim(self):
         """Configure template models, pre-allocate Object Pools, and start Spawner loop."""
@@ -2420,21 +2408,9 @@ class SmartConveyorExtension(omni.ext.IExt):
         return json.dumps(cfg, indent=2, ensure_ascii=False)
 
     def _parse_config_dict(self, cfg: dict) -> dict:
-        """Normalise nested format to flat keys."""
-        out = dict(cfg)
-        if "global_settings" in out:
-            gs = out["global_settings"]
-            out.setdefault("speed",             gs.get("speed", 50.0))
-            out.setdefault("initial_delay",     gs.get("initial_delay", 1.0))
-            out.setdefault("dispatch_interval", gs.get("dispatch_interval", 3.0))
-        if "behavior" in out:
-            bh = out["behavior"]
-            out.setdefault("reverse",        bh.get("reverse", False))
-            out.setdefault("loop",            bh.get("loop", False))
-            out.setdefault("end_visibility",  bh.get("end_visibility", False))
-        if "target_pcb_paths" in out and "prim_paths" not in out:
-            out["prim_paths"] = ", ".join(out["target_pcb_paths"])
-            
+        """Normalise nested format to flat keys and convert waypoint coordinates."""
+        out = normalize_config(cfg)
+
         if "waypoints" in out:
             from pxr import Gf
             converted = []
