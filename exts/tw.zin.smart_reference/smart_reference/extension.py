@@ -272,11 +272,11 @@ class SmartReferenceExtension(ZinMenuMixin, omni.ext.IExt):
     def on_startup(self, ext_id):
         # [關鍵修正] 在 Extension 啟動時自動檢查並安裝 Pandas 與 OpenPyXL
         try:
-            print("[SmartReference] Checking dependencies...")
+            carb.log_info("[SmartReference] Checking dependencies...")
             omni.kit.pipapi.install("pandas")
             omni.kit.pipapi.install("openpyxl")
         except Exception as e:
-            print(f"[SmartReference] Warning: Dependency install failed: {e}")
+            carb.log_warn(f"[SmartReference] Dependency install failed: {e}")
             
         self._build_menu()
 

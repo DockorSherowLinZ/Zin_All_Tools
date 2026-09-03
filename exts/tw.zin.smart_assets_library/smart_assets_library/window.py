@@ -297,8 +297,8 @@ class SmartAssetsLibraryWindow(ui.Window):
                 self._on_load()
             self._file_picker = FilePickerDialog("Select Folder", click_apply_handler=_apply)
             self._file_picker.show()
-        except Exception as e:
-            pass
+        except Exception as exc:
+            carb.log_error(f"[SmartAsset Explorer] Could not open folder picker: {exc}")
 
     def _on_load(self):
         raw = self._path_field.model.get_value_as_string().strip()
@@ -415,8 +415,8 @@ class SmartAssetsLibraryWindow(ui.Window):
                                 val = json_data.get(j_key, "")
                                 if val:
                                     asset.user_properties[label_name] = val
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        carb.log_warn(f"[SmartAsset Explorer] Could not read sidecar JSON metadata: {exc}")
 
                 # Pre-update Tag Cloud so the delegate displays the latest tags 
                 if self._tag_cloud:

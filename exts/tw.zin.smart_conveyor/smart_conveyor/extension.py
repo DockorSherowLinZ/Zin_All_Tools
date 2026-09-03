@@ -1924,7 +1924,9 @@ class SmartConveyorExtension(omni.ext.IExt):
                 import json
                 m_config_data = json.loads(m_json_str)
                 m_parsed_config = self._parse_config_dict(m_config_data)
-            except: continue
+            except Exception as exc:
+                carb.log_error(f"[tw.zin.smart_conveyor] Invalid line config {m_config_file}: {exc}")
+                continue
                 
             m_base_delay = m_parsed_config.get("initial_delay", 0.0)
             m_dispatch = m_parsed_config.get("dispatch_interval", dispatch_interval)
@@ -2042,7 +2044,9 @@ class SmartConveyorExtension(omni.ext.IExt):
                         try:
                             m_config_data = json.loads(m_json_str)
                             m_parsed_config = self._parse_config_dict(m_config_data)
-                        except: continue
+                        except Exception as exc:
+                            carb.log_error(f"[tw.zin.smart_conveyor] Invalid line config {m_config_file}: {exc}")
+                            continue
                         
                         if m_cfg.get("override", False):
                             m_parsed_config["speed"] = m_cfg.get("speed", 50.0)
@@ -2102,13 +2106,17 @@ class SmartConveyorExtension(omni.ext.IExt):
                             
                         self._inactive_pools[sp["line_id"]].append(ctrl.prim_path)
                         break
-                try: ctrl.stop()
-                except: pass
+                try:
+                    ctrl.stop()
+                except Exception as exc:
+                    carb.log_warn(f"[tw.zin.smart_conveyor] Failed to stop controller: {exc}")
             elif ctrl.prim and ctrl.prim.IsValid():
                 active_ctrls.append(ctrl)
             else:
-                try: ctrl.stop()
-                except: pass
+                try:
+                    ctrl.stop()
+                except Exception as exc:
+                    carb.log_warn(f"[tw.zin.smart_conveyor] Failed to stop stale controller: {exc}")
         self.controllers = active_ctrls
 
         # 2. Spawner Logic (Extract from Pool)
@@ -2142,8 +2150,10 @@ class SmartConveyorExtension(omni.ext.IExt):
             
         # Stop all active controllers
         for ctrl in self.controllers:
-            try: ctrl.stop()
-            except: pass
+            try:
+                ctrl.stop()
+            except Exception as exc:
+                carb.log_warn(f"[tw.zin.smart_conveyor] Failed to stop controller during shutdown: {exc}")
         self.controllers = []
         
         # Restore visibility of original templates
@@ -2609,15 +2619,15 @@ class SmartConveyorExtension(omni.ext.IExt):
         if self._filepicker_save is not None:
             try:
                 self._filepicker_save.destroy()
-            except Exception:
-                pass
+            except Exception as exc:
+                carb.log_verbose(f"[tw.zin.smart_conveyor] Save picker already destroyed: {exc}")
             self._filepicker_save = None
 
         if self._filepicker_load is not None:
             try:
                 self._filepicker_load.destroy()
-            except Exception:
-                pass
+            except Exception as exc:
+                carb.log_verbose(f"[tw.zin.smart_conveyor] Load picker already destroyed: {exc}")
             self._filepicker_load = None
 
         # 4. Remove the menu entry from Zin_All_Tools menu

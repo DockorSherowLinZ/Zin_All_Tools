@@ -36,8 +36,8 @@ class SmartAssetsLibraryExtension(omni.ext.IExt):
             editor_menu = omni.kit.ui.get_editor_menu()
             if editor_menu:
                 editor_menu.remove_item(self._menu_path)
-        except Exception:
-            pass
+        except Exception as exc:
+            carb.log_verbose(f"[SmartAssetsLibrary] Menu already removed: {exc}")
 
         # 2. 移除所有 Actions（一次清除，避免 reload 時重複註冊 Warning）
         try:
@@ -51,13 +51,13 @@ class SmartAssetsLibraryExtension(omni.ext.IExt):
             # 2b. 清除以完整 ext_id（含版本）註冊的其他 actions
             if hasattr(self, "_ext_id") and self._ext_id:
                 action_registry.deregister_all_actions_for_extension(self._ext_id)
-        except Exception:
-            pass
+        except Exception as exc:
+            carb.log_warn(f"[SmartAssetsLibrary] Failed to deregister actions: {exc}")
 
         # 3. 銷毀視窗
         if self._window:
             try:
                 self._window.destroy()
-            except Exception:
-                pass
+            except Exception as exc:
+                carb.log_verbose(f"[SmartAssetsLibrary] Window already destroyed: {exc}")
             self._window = None

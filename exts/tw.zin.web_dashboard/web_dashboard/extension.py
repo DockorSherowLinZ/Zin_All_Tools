@@ -1,5 +1,6 @@
 import omni.ext
 import omni.kit.app
+import carb
 import threading
 import json
 import os
@@ -72,7 +73,7 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
                                     })
                         status["lines"] = lines
             except Exception as e:
-                print(f"[tw.zin.web_dashboard] Error in /api/status: {e}")
+                carb.log_error(f"[tw.zin.web_dashboard] Error in /api/status: {e}")
                 import traceback
                 traceback.print_exc()
             
@@ -127,7 +128,8 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
                                         if speed is not None: ml["speed"].set_value(float(speed))
                                         if interval is not None: ml["dispatch_interval"].set_value(float(interval))
                                         if initial_delay is not None: ml["initial_delay"].set_value(float(initial_delay))
-                                    except Exception: pass
+                                    except Exception as exc:
+                                        carb.log_error(f"[tw.zin.web_dashboard] Failed to update multi_line {line_index}: {exc}")
                                 elif line_type == "scene_override" and hasattr(instance, '_scene_overrides_models'):
                                     try:
                                         so = instance._scene_overrides_models[int(line_index)]
@@ -135,11 +137,14 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
                                         if speed is not None: so["speed"].set_value(float(speed))
                                         if interval is not None: so["dispatch_interval"].set_value(float(interval))
                                         if initial_delay is not None: so["initial_delay"].set_value(float(initial_delay))
-                                    except Exception: pass
+                                    except Exception as exc:
+                                        carb.log_error(f"[tw.zin.web_dashboard] Failed to update scene_override {line_index}: {exc}")
                                     
                                 if instance._spawner_sub is not None:
-                                    try: instance.start_sim()
-                                    except Exception: pass
+                                    try:
+                                        instance.start_sim()
+                                    except Exception as exc:
+                                        carb.log_error(f"[tw.zin.web_dashboard] Failed to restart simulation: {exc}")
                                     
                             elif action == "update_all_lines":
                                 if hasattr(instance, '_multi_line_models'):
@@ -157,8 +162,10 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
                                         if initial_delay is not None: so["initial_delay"].set_value(float(initial_delay))
                                         
                                 if instance._spawner_sub is not None:
-                                    try: instance.start_sim()
-                                    except Exception: pass
+                                    try:
+                                        instance.start_sim()
+                                    except Exception as exc:
+                                        carb.log_error(f"[tw.zin.web_dashboard] Failed to restart simulation: {exc}")
                                     
                             elif action == "load_folder":
                                 url = data.get("url", "").strip()
@@ -170,8 +177,8 @@ class DashboardRequestHandler(SimpleHTTPRequestHandler):
                                     
                         if MAIN_LOOP:
                             asyncio.run_coroutine_threadsafe(run_command(), MAIN_LOOP)
-            except ImportError:
-                pass
+            except ImportError as exc:
+                carb.log_warn(f"[tw.zin.web_dashboard] Smart Conveyor not available: {exc}")
             
             self._send_json(200, {"success": True})
             return
@@ -210,10 +217,10 @@ class ZinWebDashboardExtension(ZinMenuMixin, omni.ext.IExt):
         import asyncio
         try:
             MAIN_LOOP = asyncio.get_event_loop()
-        except Exception:
-            pass
+        except Exception as exc:
+            carb.log_error(f"[tw.zin.web_dashboard] Could not capture Kit event loop: {exc}")
             
-        print("[tw.zin.web_dashboard] Zin Web Dashboard startup")
+        carb.log_info("[tw.zin.web_dashboard] Zin Web Dashboard startup")
         self._port = 8013
         self._httpd = None
         self._server_thread = None
@@ -223,7 +230,7 @@ class ZinWebDashboardExtension(ZinMenuMixin, omni.ext.IExt):
         manager = omni.kit.app.get_app().get_extension_manager()
         webrtc_ext_name = "omni.kit.livestream.webrtc"
         if not manager.is_extension_enabled(webrtc_ext_name):
-            print(f"[tw.zin.web_dashboard] Enabling {webrtc_ext_name}")
+            carb.log_info(f"[tw.zin.web_dashboard] Enabling {webrtc_ext_name}")
             manager.set_extension_enabled_immediate(webrtc_ext_name, True)
             
         self._window = None
@@ -235,12 +242,12 @@ class ZinWebDashboardExtension(ZinMenuMixin, omni.ext.IExt):
             self._httpd = socketserver.TCPServer(("127.0.0.1", self._port), DashboardRequestHandler)
             self._server_thread = threading.Thread(target=self._httpd.serve_forever, daemon=True)
             self._server_thread.start()
-            print(f"[tw.zin.web_dashboard] Web Server started at http://localhost:{self._port}")
+            carb.log_info(f"[tw.zin.web_dashboard] Web Server started at http://localhost:{self._port}")
         except Exception as e:
-            print(f"[tw.zin.web_dashboard] Failed to start Web Server: {e}")
+            carb.log_error(f"[tw.zin.web_dashboard] Failed to start Web Server: {e}")
 
     def on_shutdown(self):
-        print("[tw.zin.web_dashboard] Zin Web Dashboard shutdown")
+        carb.log_info("[tw.zin.web_dashboard] Zin Web Dashboard shutdown")
         if self._httpd:
             self._httpd.shutdown()
             self._httpd.server_close()

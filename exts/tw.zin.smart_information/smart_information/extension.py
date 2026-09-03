@@ -5,6 +5,7 @@ from typing import Optional, Dict, Any, List
 import omni.ext
 import omni.ui as ui
 import omni.usd
+import carb
 from urllib.parse import unquote
 
 import sys
@@ -181,7 +182,7 @@ class SmartInformationUI:
         content = self._edit_content.model.get_value_as_string().strip()
         
         if not topic or not content:
-            print("[SmartInformation] Topic and Content are required.")
+            carb.log_warn("[SmartInformation] Topic and Content are required.")
             return
             
         inventec_data = self._target_prim.GetCustomDataByKey("Inventec_Tester") or {}
@@ -247,12 +248,12 @@ class SmartInformationUI:
 
     def _on_export_json_clicked(self):
         if not self._target_prim or not self._target_prim.IsValid():
-            print("[SmartInformation] No target prim selected for export.")
+            carb.log_warn("[SmartInformation] No target prim selected for export.")
             return
             
         inventec_data = self._target_prim.GetCustomDataByKey("Inventec_Tester")
         if not inventec_data:
-            print("[SmartInformation] No metadata to export.")
+            carb.log_warn("[SmartInformation] No metadata to export.")
             return
             
         try:
@@ -276,7 +277,7 @@ class SmartInformationUI:
             with open(export_path, 'w', encoding='utf-8') as f:
                 json.dump(inventec_data, f, ensure_ascii=False, indent=4)
                 
-            print(f"[SmartInformation] Successfully exported metadata to: {export_path}")
+            carb.log_info(f"[SmartInformation] Successfully exported metadata to: {export_path}")
             
             # Show a brief UI confirmation (optional, could just rely on console)
             if self._status_label:
@@ -284,7 +285,7 @@ class SmartInformationUI:
                 self._status_label.style = {"color": 0xFF00AAFF}
                 
         except Exception as e:
-            print(f"[SmartInformation] Export failed: {e}")
+            carb.log_error(f"[SmartInformation] Export failed: {e}")
 
 class SmartInformationExtension(ZinMenuMixin, omni.ext.IExt):
     WINDOW_NAME = "Smart Information"

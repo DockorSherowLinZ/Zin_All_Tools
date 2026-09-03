@@ -3,6 +3,7 @@ import omni.usd
 import omni.ext
 import omni.timeline
 import omni.physx as physx
+import carb
 import asyncio
 import json
 import re
@@ -212,7 +213,8 @@ class SmartAssemblyWidget:
         try:
             p = omni.usd.get_context().get_stage().GetPrimAtPath(str(path))
             if p and p.IsValid(): return p
-        except: pass
+        except Exception as exc:
+            carb.log_verbose(f"[SmartAssembly] Could not resolve prim {path}: {exc}")
         return None
 
     def find_assembly_items(self):
@@ -226,7 +228,8 @@ class SmartAssemblyWidget:
             if layer and layer.customLayerData:
                 data = layer.customLayerData.get("smart_assembly_configs")
                 if data and isinstance(data, str): saved_configs = json.loads(data)
-        except: pass
+        except Exception as exc:
+            carb.log_warn(f"[SmartAssembly] Could not read saved configs from layer: {exc}")
         if not saved_configs: saved_configs = [{"name": "config 1", "sequence": list(found_items)}]
         seen_names = {}; sanitized = []
         for c in saved_configs:
@@ -336,7 +339,8 @@ class SmartAssemblyWidget:
             if not stage: return
             layer = stage.GetRootLayer(); data_str = json.dumps(self.configs)
             current_data = layer.customLayerData; current_data["smart_assembly_configs"] = data_str; layer.customLayerData = current_data
-        except: pass
+        except Exception as exc:
+            carb.log_error(f"[SmartAssembly] Failed to persist configs: {exc}")
 
     def apply_physics_parameters(self):
         if not self.stage: return
@@ -409,7 +413,9 @@ class SmartAssemblyWidget:
             try:
                 if not self.ui_list_frame: break
                 _ = self.ui_list_frame.visible 
-            except: break
+            except Exception:
+                # UI 已隨視窗销毀，結束輪詢。
+                break
             if not self.slider_models or self.is_user_dragging: continue
             for p, m in self.slider_models.items():
                 cur = self.get_current_joint_pos(p); home = self.home_positions.get(p, 0.0); val = abs(cur - home)

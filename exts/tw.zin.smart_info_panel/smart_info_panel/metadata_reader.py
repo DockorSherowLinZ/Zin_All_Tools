@@ -6,6 +6,8 @@
 # =============================================================================
 
 import math
+
+import carb
 from pxr import Usd, UsdGeom, Gf
 
 
@@ -147,7 +149,7 @@ def compute_bbox_dimensions(prim, bbox_cache, stage_mpu=1.0):
             "bbox_max": (max_pt[0], max_pt[1], max_pt[2]),
         }
     except Exception as e:
-        print(f"[SmartInfoPanel] BBox compute error: {e}")
+        carb.log_warn(f"[SmartInfoPanel] BBox compute error: {e}")
         return None
 
 

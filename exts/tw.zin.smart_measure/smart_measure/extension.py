@@ -224,7 +224,8 @@ class SmartMeasureWidget:
             try:
                 axis = UsdGeom.GetStageUpAxis(stage)
                 self._up_axis = "Z" if axis == UsdGeom.Tokens.z else "Y"
-            except: pass
+            except Exception as exc:
+                carb.log_warn(f"[SmartMeasure] Could not read stage up-axis: {exc}")
         else:
             self._stage_mpu = 1.0
             self._stage_unit_name = "m"
@@ -235,7 +236,9 @@ class SmartMeasureWidget:
         try:
             if self._stage_unit_label: self._stage_unit_label.text = self._stage_unit_name
             if self._up_axis_label: self._up_axis_label.text = self._up_axis
-        except: pass
+        except Exception:
+            # 標籤已隨分頁重建而銷毀。
+            pass
 
     def _format_stage_unit(self, mpu):
         return format_stage_unit(mpu)
@@ -339,7 +342,9 @@ class SmartMeasureWidget:
                 if union_box is None: union_box = Gf.Range3d(world)
                 else: union_box.UnionWith(world)
                 count += 1
-            except: continue
+            except Exception as exc:
+                carb.log_verbose(f"[SmartMeasure] Skipping prim during bbox union: {exc}")
+                continue
 
         if union_box and not union_box.IsEmpty() and count > 0:
             sz = union_box.GetSize()
@@ -416,7 +421,8 @@ class SmartMeasureWidget:
             
             # [Feature] Viewport Overlay
             self._update_scene_view(clear=clear)
-        except: pass
+        except Exception as exc:
+            carb.log_warn(f"[SmartMeasure] Failed to update measurement labels: {exc}")
 
     def _on_overlay_toggle(self, model):
         """User toggles viewport overlay"""
@@ -521,8 +527,8 @@ class SmartMeasureWidget:
             if camera_model:
                 self._scene_view.model = camera_model
                 return
-        except Exception:
-            pass
+        except Exception as exc:
+            carb.log_verbose(f"[SmartMeasure] Camera model probe (method 1) failed: {exc}")
 
         # 方法 2 (Kit 109)：從 ViewportAPI.__scene_views 列表取得
         # 偵測結果：_ViewportAPI__scene_views = list
@@ -533,32 +539,28 @@ class SmartMeasureWidget:
                     if hasattr(sv, 'model') and sv.model:
                         self._scene_view.model = sv.model
                         return
-        except Exception:
-            pass
+        except Exception as exc:
+            carb.log_verbose(f"[SmartMeasure] Camera model probe (method 2) failed: {exc}")
 
         # 方法 3 (Kit 106+)：直接從 viewport_api.scene_view 取得
         try:
             if hasattr(vp_api, 'scene_view') and vp_api.scene_view:
                 self._scene_view.model = vp_api.scene_view.model
                 return
-        except Exception:
-            pass
+        except Exception as exc:
+            carb.log_verbose(f"[SmartMeasure] Camera model probe (method 3) failed: {exc}")
 
         carb.log_info("[SmartMeasure] Could not auto-bind camera model — overlay may not align with viewport camera")
 
     def _destroy_scene_overlay(self):
         """Safely clear Scene overlay resources"""
-        if hasattr(self, '_scene_view') and self._scene_view:
-            try:
-                self._scene_view = None
-            except:
-                pass
-        if hasattr(self, '_scene_frame') and self._scene_frame:
+        self._scene_view = None
+        if getattr(self, "_scene_frame", None):
             try:
                 self._scene_frame.clear()
-                self._scene_frame = None
-            except:
-                pass
+            except Exception as exc:
+                carb.log_verbose(f"[SmartMeasure] Scene frame already destroyed: {exc}")
+            self._scene_frame = None
         self._manipulator = None
 
 

@@ -245,8 +245,8 @@ class InfoPanelOverlay:
             if camera_model:
                 self._scene_view.model = camera_model
                 return
-        except Exception:
-            pass
+        except Exception as exc:
+            carb.log_verbose(f"[SmartInfoPanel] Camera model probe (method 1) failed: {exc}")
 
         # 方法 2 (Kit 109)：從 ViewportAPI.__scene_views 列表取得
         try:
@@ -257,39 +257,35 @@ class InfoPanelOverlay:
                     if sv and hasattr(sv, 'model') and sv.model:
                         self._scene_view.model = sv.model
                         return
-        except Exception:
-            pass
+        except Exception as exc:
+            carb.log_verbose(f"[SmartInfoPanel] Camera model probe (method 2) failed: {exc}")
 
         # 方法 3 (Kit 106+)：直接從 viewport_api.scene_view 取得
         try:
             if hasattr(vp_api, 'scene_view') and vp_api.scene_view:
                 self._scene_view.model = vp_api.scene_view.model
                 return
-        except Exception:
-            pass
+        except Exception as exc:
+            carb.log_verbose(f"[SmartInfoPanel] Camera model probe (method 3) failed: {exc}")
 
         # 方法 4：使用 add_scene_view API
         try:
             vp_api.add_scene_view(self._scene_view)
             return
-        except Exception:
-            pass
+        except Exception as exc:
+            carb.log_verbose(f"[SmartInfoPanel] Camera model probe (method 4) failed: {exc}")
 
         carb.log_info("[SmartInfoPanel] Could not auto-bind camera model")
 
     def destroy(self):
         """安全清除 Scene overlay 資源。"""
-        if self._scene_view:
-            try:
-                self._scene_view = None
-            except Exception:
-                pass
+        self._scene_view = None
         if self._scene_frame:
             try:
                 self._scene_frame.clear()
-                self._scene_frame = None
-            except Exception:
-                pass
+            except Exception as exc:
+                carb.log_verbose(f"[SmartInfoPanel] Scene frame already destroyed: {exc}")
+            self._scene_frame = None
 
     @property
     def is_visible(self):

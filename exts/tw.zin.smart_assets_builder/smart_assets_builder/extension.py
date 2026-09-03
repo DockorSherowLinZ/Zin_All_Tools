@@ -91,8 +91,8 @@ def _relref(from_file: str, to_file: str) -> str:
             if sf == st and sfn == stn:
                 from_dir = posixpath.dirname(sp)
                 return posixpath.relpath(tp, start=from_dir)
-        except Exception:
-            pass
+        except Exception as exc:
+            carb.log_verbose(f"[SmartAssetsBuilder] Could not build relative Nucleus path: {exc}")
         return to_file
     from_dir = os.path.dirname(_abs(from_file))
     tgt_abs = _abs(_ensure_usd_ext(to_file))
@@ -139,8 +139,10 @@ def _copy_file_any_scheme(src: str, dst: str, overwrite: bool, log_fn) -> bool:
     if _exists(dst):
         if not overwrite: return True
         if _is_ov_url(dst):
-            try: omni.client.delete(dst)
-            except: pass
+            try:
+                omni.client.delete(dst)
+            except Exception as exc:
+                carb.log_warn(f"[SmartAssetsBuilder] Could not delete existing {dst}: {exc}")
     if _is_ov_url(src) == _is_ov_url(dst):
         if _is_ov_url(src):
             rc = omni.client.copy(src, dst)[0] if hasattr(omni.client, "copy") else omni.client.Result.ERROR
@@ -404,7 +406,7 @@ class SmartAssetsBuilderWidget:
                     if not mat and parsed.get("USD_Material_Library"):
                         mat = parsed.get("USD_Material_Library")
             except Exception as e:
-                print(f"[SmartAssetsBuilder] Error loading JSON: {e}")
+                carb.log_error(f"[SmartAssetsBuilder] Error loading JSON: {e}")
 
         loop = asyncio.get_event_loop()
         errors = []
@@ -488,7 +490,7 @@ class SmartAssetsBuilderWidget:
                 await loop.run_in_executor(None, _build_usd)
             except Exception as e:
                 err_msg = f"Error building USD for {core}: {e}"
-                print(err_msg)
+                carb.log_error(err_msg)
                 errors.append(err_msg)
 
             pct = int((i/n)*100)

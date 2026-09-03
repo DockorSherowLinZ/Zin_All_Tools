@@ -101,7 +101,7 @@ class SmartInfoPanelWidget:
             try:
                 cb(value)
             except Exception as e:
-                print(f"[SmartInfoPanel] Toggle callback error: {e}")
+                carb.log_error(f"[SmartInfoPanel] Toggle callback error: {e}")
 
         # 更新自身的 UI 按鈕狀態
         self._update_toggle_ui()
@@ -264,8 +264,8 @@ class SmartInfoPanelWidget:
         if self._vp_toggle_frame:
             try:
                 self._vp_toggle_frame.clear()
-            except Exception:
-                pass
+            except Exception as exc:
+                carb.log_verbose(f"[SmartInfoPanel] Toolbar frame already destroyed: {exc}")
             self._vp_toggle_frame = None
 
     def _on_vp_toggle_clicked(self):
@@ -400,8 +400,8 @@ class SmartInfoPanelWidget:
                 self._toggle_btn.style = (
                     TOGGLE_ENABLED_STYLE if self._enabled else TOGGLE_DISABLED_STYLE
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                carb.log_verbose(f"[SmartInfoPanel] Toggle button no longer valid: {exc}")
 
         # 方案 A：Viewport toolbar 按鈕
         if self._vp_toggle_btn:
@@ -412,8 +412,8 @@ class SmartInfoPanelWidget:
                 else:
                     self._vp_toggle_btn.text = "ℹ Info Panel: OFF"
                     self._vp_toggle_btn.style = TOGGLE_DISABLED_STYLE
-            except Exception:
-                pass
+            except Exception as exc:
+                carb.log_verbose(f"[SmartInfoPanel] Toolbar toggle no longer valid: {exc}")
 
         # 更新 status label
         if self._status_label:
@@ -422,16 +422,16 @@ class SmartInfoPanelWidget:
                 self._status_label.style = (
                     {"color": 0xFF44AA44} if self._enabled else {"color": 0xFF888888}
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                carb.log_verbose(f"[SmartInfoPanel] Status label no longer valid: {exc}")
 
     def _update_sel_label(self, path):
         """更新選取路徑顯示。"""
         if self._sel_path_label:
             try:
                 self._sel_path_label.text = path if path else "None"
-            except Exception:
-                pass
+            except Exception as exc:
+                carb.log_verbose(f"[SmartInfoPanel] Selection label no longer valid: {exc}")
 
     def _set_show_section(self, section, value):
         """設定顯示區塊開關並重繪。"""

@@ -5,6 +5,7 @@
 # 封裝可複用的 omni.ui 元件，統一狀態管理。
 # =============================================================================
 
+import carb
 import omni.ui as ui
 
 
@@ -107,7 +108,7 @@ class ZinButton:
             new_state (str): 目標狀態，可選 "default", "correct", "error"。
         """
         if new_state not in self._STATE_NAME_MAP:
-            print(f"[ZinButton] Warning: unknown state '{new_state}', using 'default'.")
+            carb.log_warn(f"[ZinButton] Unknown state '{new_state}', using 'default'.")
             new_state = "default"
 
         self._state = new_state

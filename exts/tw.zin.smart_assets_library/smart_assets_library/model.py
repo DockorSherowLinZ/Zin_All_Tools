@@ -1,3 +1,4 @@
+import carb
 import omni.ui as ui
 
 class CategoryItem(ui.AbstractItem):
@@ -64,7 +65,7 @@ class SmartAsset:
             # 1. Pre-check: Verify if the file exists using omni.client
             result, _ = await omni.client.stat_async(self.main_url)
             if result != omni.client.Result.OK:
-                print(f"[SmartAsset Explorer] Skip loading, file not found or inaccessible: {self.main_url}")
+                carb.log_warn(f"[SmartAsset Explorer] Skip loading, file not found or inaccessible: {self.main_url}")
                 return
 
             def _open_stage():
@@ -92,7 +93,7 @@ class SmartAsset:
                             
         except Exception as e:
             # 3. Graceful degradation without spamming raw tracebacks as Errors
-            print(f"[SmartAsset Explorer] Warning: Cannot extract USD metadata for {self.main_url} (File may be empty, invalid syntax, or locked). Message: {e}")
+            carb.log_warn(f"[SmartAsset Explorer] Cannot extract USD metadata for {self.main_url} (File may be empty, invalid syntax, or locked). Message: {e}")
             
         finally:
             self.metadata_loaded = True

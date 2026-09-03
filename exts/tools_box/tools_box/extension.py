@@ -1,6 +1,7 @@
 import omni.ext
 import omni.ui as ui
 import weakref
+import carb
 from pxr import Gf
 from zin_core.components import ZinButton
 from zin_core.menu import ZinMenuMixin
@@ -11,7 +12,7 @@ class ToolsBoxExtension(ZinMenuMixin, omni.ext.IExt):
     MENU_PATH = f"Zin_All_Tools/{WINDOW_NAME}"
 
     def on_startup(self, ext_id):
-        print("[Tools Box] Startup")
+        carb.log_info("[Tools Box] Startup")
         self._window = None
         self._menu_added = False
 
@@ -103,7 +104,7 @@ class ToolsBoxExtension(ZinMenuMixin, omni.ext.IExt):
                 try:
                     tool._build_menu()
                 except Exception as e:
-                    print(f"[Tools Box] Failed to build menu for {tool}: {e}")
+                    carb.log_error(f"[Tools Box] Failed to build menu for {tool}: {e}")
 
         # --- Show the Zin Tools Box automatically on startup ---
         self._toggle_window(None, True)

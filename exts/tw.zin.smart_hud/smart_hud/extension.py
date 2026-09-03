@@ -166,7 +166,7 @@ class GrayboxHUDEngine:
         view_model.bind_target = cycle_info["target_path"]
         view_model.bind_cycle_len = cycle_len
         
-        print(f"[Smart HUD] 🔍 {prim_path}: bind_status={cycle_info['status']}, "
+        carb.log_info(f"[Smart HUD] {prim_path}: bind_status={cycle_info['status']}, "
               f"target={cycle_info['target_path']}, "
               f"cycle=[{cycle_start:.0f} → {cycle_end:.0f}] ({cycle_len:.0f} frames), "
               f"attrs_scanned={cycle_info['attrs_scanned']}, samples_found={cycle_info['samples_found']}")
@@ -471,7 +471,7 @@ class GrayboxHUDEngine:
             if custom_val is not None and int(custom_val) > 0:
                 custom_frames = int(custom_val)
                 stage_start = stage.GetStartTimeCode()
-                print(f"[Smart HUD] 🎯 Manual cycle override: {custom_frames} frames on {prim_path}")
+                carb.log_info(f"[Smart HUD] Manual cycle override: {custom_frames} frames on {prim_path}")
                 return {
                     "start": stage_start,
                     "end": stage_start + float(custom_frames),
@@ -493,7 +493,7 @@ class GrayboxHUDEngine:
                     prim = target_prim
                     resolved_target = redirect_path
                 else:
-                    print(f"[Smart HUD] ⚠️ animationTarget '{redirect_path}' not found on stage")
+                    carb.log_warn(f"[Smart HUD] animationTarget '{redirect_path}' not found on stage")
                     fallback["target_path"] = f"{redirect_path} (NOT FOUND)"
                     return fallback
 
@@ -515,8 +515,8 @@ class GrayboxHUDEngine:
                             if src_prim and src_prim.IsValid():
                                 for sp in Usd.PrimRange(src_prim):
                                     prims_to_check.add(sp)
-        except Exception:
-            pass
+        except Exception as exc:
+            carb.log_warn(f"[Smart HUD] Could not expand animation relationship targets: {exc}")
 
         # --- Step 3: Scan using GetNumTimeSamples (most robust) ---
         anim_bounds = []
@@ -533,7 +533,7 @@ class GrayboxHUDEngine:
                             samples_found += 1
                             anim_bounds.append((float(samples[0]), float(samples[-1])))
         except Exception as e:
-            print(f"[Smart HUD] ⚠️ Error scanning attributes: {e}")
+            carb.log_warn(f"[Smart HUD] Error scanning attributes: {e}")
 
         if anim_bounds:
             start = min(b[0] for b in anim_bounds)
@@ -559,7 +559,7 @@ class GrayboxHUDEngine:
                     layer_start = layer.startTimeCode
                     layer_end = layer.endTimeCode
                     if layer_start is not None and layer_end is not None and layer_end > layer_start:
-                        print(f"[Smart HUD] 📦 Using referenced layer time codes: "
+                        carb.log_info(f"[Smart HUD] Using referenced layer time codes: "
                               f"{layer.identifier} [{layer_start:.0f} → {layer_end:.0f}]")
                         return {
                             "start": layer_start,
@@ -570,13 +570,13 @@ class GrayboxHUDEngine:
                             "samples_found": 0,
                         }
         except Exception as e:
-            print(f"[Smart HUD] ⚠️ Error querying referenced layers: {e}")
+            carb.log_warn(f"[Smart HUD] Error querying referenced layers: {e}")
 
         # --- Step 5: Final fallback (stage range) ---
         fallback["target_path"] = resolved_target
         fallback["attrs_scanned"] = attrs_scanned
         fallback["samples_found"] = samples_found
-        print(f"[Smart HUD] ⚠️ Cycle detection FAILED for {resolved_target}: "
+        carb.log_warn(f"[Smart HUD] Cycle detection FAILED for {resolved_target}: "
               f"scanned {attrs_scanned} attrs, found {samples_found} with time samples. "
               f"Using stage fallback [{fallback['start']:.0f} → {fallback['end']:.0f}]")
         return fallback
@@ -737,8 +737,8 @@ class GrayboxHUDEngine:
                                     "border_radius": 3
                                 })
                                 pb["spacer"].width = ui.Percent(100.0 - progress_pct)
-                            except Exception:
-                                pass
+                            except Exception as exc:
+                                carb.log_verbose(f"[Smart HUD] Progress bar widget no longer valid: {exc}")
                     
             elif m_type == "Machine":
                 if self._frame_counter % 30 == 0:
@@ -762,8 +762,8 @@ class GrayboxHUDEngine:
                 if hasattr(self.viewport_window, "viewport_api"):
                     try:
                         self.viewport_window.viewport_api.remove_scene_view(self.scene_view)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        carb.log_warn(f"[Smart HUD] Failed to remove scene view from viewport: {exc}")
         self.scene_view = None
 
 
@@ -805,7 +805,7 @@ class SmartHudUI:
     def _on_stage_event(self, event):
         """Safely shuts down the HUD engine if the stage changes to prevent orphaned viewports/overlays."""
         if self.is_enabled:
-            print(f"[Smart HUD] Stage event detected (type {event.type}). Disabling HUD.")
+            carb.log_info(f"[Smart HUD] Stage event detected (type {event.type}). Disabling HUD.")
             self.is_enabled = False
             if self.engine:
                 self.engine.destroy()
@@ -814,8 +814,8 @@ class SmartHudUI:
                 try:
                     self.toggle_btn.text = "Turn ON"
                     self.toggle_btn.set_style(self._STYLE_POSITIVE)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    carb.log_verbose(f"[Smart HUD] Toggle button already destroyed: {exc}")
 
     def build_ui(self):
         """Builds the 2D control panel inside the Zin Tools Box."""
@@ -966,17 +966,17 @@ class SmartHudUI:
         context = omni.usd.get_context()
         stage = context.get_stage()
         if not stage:
-            print("[Smart HUD] ❌ Error: No USD stage is currently open.")
+            carb.log_error("[Smart HUD] No USD stage is currently open.")
             return
 
         selection = context.get_selection().get_selected_prim_paths()
         if not selection:
-            print("[Smart HUD] ⚠️ No models selected. Please select a model in the stage first.")
+            carb.log_warn("[Smart HUD] No models selected. Please select a model in the stage first.")
             return
 
         target_path = self.anim_target_field.model.get_value_as_string().strip()
         if not target_path:
-            print("[Smart HUD] ⚠️ Anim Target field is empty.")
+            carb.log_warn("[Smart HUD] Anim Target field is empty.")
             return
 
         for path in selection:
@@ -997,9 +997,9 @@ class SmartHudUI:
             cycle_attr.Set(custom_cycle_val)
             
             if custom_cycle_val > 0:
-                print(f"[Smart HUD] ✅ Bound animationTarget = '{target_path}' + custom cycle = {custom_cycle_val} frames on {path}")
+                carb.log_info(f"[Smart HUD] Bound animationTarget = '{target_path}' + custom cycle = {custom_cycle_val} frames on {path}")
             else:
-                print(f"[Smart HUD] ✅ Bound animationTarget = '{target_path}' (auto-detect cycle) on {path}")
+                carb.log_info(f"[Smart HUD] Bound animationTarget = '{target_path}' (auto-detect cycle) on {path}")
         
         # Update diagnostic labels and trigger engine rebuild
         self._update_binding_diagnostics()
@@ -1057,17 +1057,17 @@ class SmartHudUI:
                             min_dist = dist
                             closest_wp = wp
             except Exception as e:
-                print(f"[Smart HUD] Error reading {f}: {e}")
+                carb.log_warn(f"[Smart HUD] Error reading {f}: {e}")
                 
         if closest_wp:
-            print(f"[Smart HUD] 📍 Closest Waypoint '{closest_wp.get('name')}' found at distance {min_dist:.2f} units. Pause: {closest_wp.get('pause')}s")
+            carb.log_info(f"[Smart HUD] Closest Waypoint '{closest_wp.get('name')}' found at distance {min_dist:.2f} units. Pause: {closest_wp.get('pause')}s")
             
         # 增加一個距離寬容值，如果離最靠近的點位大於 200 (2公尺)，可能代表抓錯了
         if closest_wp and min_dist < 500.0:
             if "pause" in closest_wp:
                 return closest_wp["pause"]
             
-        print("[Smart HUD] ⚠️ No valid waypoint found within 500 units.")
+        carb.log_warn("[Smart HUD] No valid waypoint found within 500 units.")
         return None
 
     def _apply_attributes_to_selected(self):
@@ -1077,12 +1077,12 @@ class SmartHudUI:
         context = omni.usd.get_context()
         stage = context.get_stage()
         if not stage:
-            print("[Smart HUD] ❌ Error: No USD stage is currently open.")
+            carb.log_error("[Smart HUD] No USD stage is currently open.")
             return
 
         selection = context.get_selection().get_selected_prim_paths()
         if not selection:
-            print("[Smart HUD] ⚠️ No models selected. Please select a model in the stage first.")
+            carb.log_warn("[Smart HUD] No models selected. Please select a model in the stage first.")
             return
 
         idx = self.topic_combo.model.get_item_value_model().get_value_as_int()
@@ -1107,7 +1107,7 @@ class SmartHudUI:
                 if meshes:
                     for m in meshes:
                         target_paths.add(str(m.GetPath()))
-                    print(f"[Smart HUD] 📦 Auto-expanded group {path} into {len(meshes)} Mesh prims.")
+                    carb.log_info(f"[Smart HUD] Auto-expanded group {path} into {len(meshes)} Mesh prims.")
                 else:
                     target_paths.add(path)
             else:
@@ -1151,9 +1151,9 @@ class SmartHudUI:
                     auto_cycle_val = int(pause_sec * fps)
                     if custom_cycle_val <= 0 and auto_cycle_val > 0:  # Only override if not manually set in UI and pause > 0
                         custom_cycle_val = auto_cycle_val
-                        print(f"[Smart HUD] ✅ Auto-Bound: Matched closest Waypoint. Set cycle time to {auto_cycle_val} frames (Pause: {pause_sec}s) on {path}.")
+                        carb.log_info(f"[Smart HUD] Auto-Bound: Matched closest Waypoint. Set cycle time to {auto_cycle_val} frames (Pause: {pause_sec}s) on {path}.")
                     elif custom_cycle_val <= 0 and auto_cycle_val == 0:
-                        print(f"[Smart HUD] ⚠️ Closest Waypoint has 0s pause. Cycle time not updated for {path}.")
+                        carb.log_warn(f"[Smart HUD] Closest Waypoint has 0s pause. Cycle time not updated for {path}.")
             
             cycle_attr = prim.GetAttribute("hud_custom_cycle_length")
             if not cycle_attr:
@@ -1215,7 +1215,7 @@ class SmartHudUI:
                 }
                 attr.SetCustomData(custom_data)
                 
-            print(f"[Smart HUD] ✅ Applied HUD and AIF-MANAGED attributes to {path}")
+            carb.log_info(f"[Smart HUD] Applied HUD and AIF-MANAGED attributes to {path}")
             
         if self.is_enabled and self.engine:
             self.engine.rebuild_huds()
@@ -1245,7 +1245,7 @@ class SmartHudUI:
             for attr_name in attrs_to_remove:
                 prim.RemoveProperty(attr_name)
                 
-            print(f"[Smart HUD] 🗑️ Removed HUD and Info Panel attributes from {path}")
+            carb.log_info(f"[Smart HUD] Removed HUD and Info Panel attributes from {path}")
 
     def _create_test_scene(self):
         import omni.usd
@@ -1253,7 +1253,7 @@ class SmartHudUI:
         
         stage = omni.usd.get_context().get_stage()
         if not stage:
-            print("[Smart HUD] ❌ Error: No USD stage is currently open. Please create or open a stage first.")
+            carb.log_error("[Smart HUD] No USD stage is currently open. Please create or open a stage first.")
             return
 
         machines = {
@@ -1284,7 +1284,7 @@ class SmartHudUI:
                 attr = prim.CreateAttribute("machine_type", Sdf.ValueTypeNames.String)
             attr.Set(m_type)
             
-            print(f"[Smart HUD] Created {m_type} at {path}")
+            carb.log_info(f"[Smart HUD] Created {m_type} at {path}")
 
     def _on_toggle_clicked(self):
         self.is_enabled = not self.is_enabled

@@ -3,6 +3,7 @@ import omni.ui as ui
 import omni.kit.viewport.utility
 import omni.kit.app
 import omni.usd
+import carb
 from pxr import Usd, UsdGeom, Gf
 
 import sys
@@ -43,7 +44,7 @@ class SmartAlignWidget:
         if _debug_draw:
             self._debug_draw = _debug_draw.acquire_debug_draw_interface()
         else:
-            print("[SmartAlign] Warning: isaacsim.util.debug_draw not available. 3D Overlay disabled.")  # [Update 5.1]
+            carb.log_warn("[SmartAlign] isaacsim.util.debug_draw not available. 3D Overlay disabled.")
             
         # self._update_selection_ui() # UI creation should trigger this, no need to force it here if UI doesn't exist
 
@@ -100,7 +101,7 @@ class SmartAlignWidget:
             self._usd_context.get_selection().set_selected_prim_paths(new_paths, False)
             
         except Exception as e:
-            print(f"[SmartAlign] Selection reorder failed: {e}")
+            carb.log_warn(f"[SmartAlign] Selection reorder failed: {e}")
 
     def _on_update(self, e):
         # [Lifecycle] Liveness Check
@@ -139,7 +140,8 @@ class SmartAlignWidget:
                     idx = self._combo_target.model.get_item_value_model().as_int
                     if 0 <= idx < len(self._current_paths):
                         target_path = self._current_paths[idx]
-            except: pass
+            except Exception as exc:
+                carb.log_warn(f"[SmartAlign] Could not resolve target from combo box: {exc}")
             
         if not target_path: return
             
@@ -236,7 +238,8 @@ class SmartAlignWidget:
                     path = self._current_paths[idx]
                     target_name = path.split("/")[-1]
                     color = 0xFF00FF00 # Green
-            except: pass
+            except Exception as exc:
+                carb.log_warn(f"[SmartAlign] Could not resolve anchor label: {exc}")
             
         self._lbl_anchor_info.text = f"Anchor: {target_name}"
         self._lbl_anchor_info.style = {"color": color, "font_size": 16}
@@ -306,7 +309,8 @@ class SmartAlignWidget:
             # Safest is XformCommonAPI.SetTranslate which adds ops if compatible.
             try:
                 xform_api.SetTranslate(new_vec)
-            except:
+            except Exception as exc:
+                carb.log_verbose(f"[SmartAlign] XformCommonAPI incompatible, adding raw translate op: {exc}")
                 # Fallback: Add a raw translate op
                 xformable.AddTranslateOp().Set(new_vec)
 

@@ -2,6 +2,7 @@ import omni.ext
 import omni.ui as ui
 import omni.usd
 import omni.kit.app
+import carb
 from pxr import Usd, UsdGeom, Gf
 
 import sys
@@ -19,7 +20,7 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
     MENU_PATH = f"Zin_All_Tools/{WINDOW_NAME}"
     
     def on_startup(self, ext_id):
-        print("[Zin Smart Exploded View] Extension started (Interactive Workflow)")
+        carb.log_info("[Zin Smart Exploded View] Extension started (Interactive Workflow)")
         self._window = None
         self._menu_added = False
 
@@ -276,7 +277,7 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
         """
         清理資源：關閉視窗、解除事件監聽、清空快取
         """
-        print("[Zin Smart Exploded View] Extension shutdown")
+        carb.log_info("[Zin Smart Exploded View] Extension shutdown")
         self._remove_menu()
         self._selection_sub = None
         

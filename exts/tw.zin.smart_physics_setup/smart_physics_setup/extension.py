@@ -1,6 +1,7 @@
 import omni.ext
 import omni.ui as ui
 import omni.usd
+import carb
 from pxr import Usd, UsdGeom, UsdPhysics, PhysxSchema, Sdf, Gf
 
 import sys
@@ -238,7 +239,7 @@ class SmartPhysicsSetupExtension(ZinMenuMixin, omni.ext.IExt):
         is_kinematic = self._kinematic_model.as_bool
         
         self._status_model.as_string = "Processing..."
-        print(f"--- Starting Physics Setup (v5.3 Stable) ---")
+        carb.log_info("[SmartPhysicsSetup] Starting physics setup")
 
         try:
             # Step A: Particle System
@@ -313,10 +314,10 @@ class SmartPhysicsSetupExtension(ZinMenuMixin, omni.ext.IExt):
             
             msg = f"Setup Complete. {count} attachments created."
             self._status_model.as_string = f"Success: {msg}"
-            print(msg)
+            carb.log_info(msg)
 
         except Exception as e:
             import traceback
             traceback.print_exc()
             self._status_model.as_string = f"Error: {str(e)}"
-            print(f"Error: {e}")
+            carb.log_error(f"[SmartPhysicsSetup] {e}")

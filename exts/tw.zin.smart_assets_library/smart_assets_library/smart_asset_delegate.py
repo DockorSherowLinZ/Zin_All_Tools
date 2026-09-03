@@ -1,3 +1,4 @@
+import carb
 import omni.ui as ui
 import omni.kit.undo
 from pxr import Sdf, Usd
@@ -100,7 +101,7 @@ class SmartAssetPropertyDelegate:
             def on_variant_changed(m, item, var=vset_name, opts=options, ast=asset):
                 idx = m.get_item_value_model().as_int
                 selected_opt = opts[idx]
-                print(f"[SmartAsset Explorer] Applying variant '{selected_opt}' for '{var}' to {ast.name}")
+                carb.log_info(f"[SmartAsset Explorer] Applying variant '{selected_opt}' for '{var}' to {ast.name}")
                 
                 # 若需要真實修改對應的實體 USD 檔案，需透過 Undo Group 包裝
                 with omni.kit.undo.group():
@@ -117,8 +118,8 @@ class SmartAssetPropertyDelegate:
                                 stage.Save()
                                 # 同步更新 Asset 的記憶體狀態
                                 ast.variant_sets[var]["current"] = selected_opt
-                                print(f"[SmartAsset Explorer] Successfully updated USD file {ast.main_url}")
+                                carb.log_info(f"[SmartAsset Explorer] Successfully updated USD file {ast.main_url}")
                     except Exception as e:
-                        print(f"[SmartAsset Explorer] Failed to save variant {e}")
+                        carb.log_error(f"[SmartAsset Explorer] Failed to save variant {e}")
 
             model.add_item_changed_fn(on_variant_changed)
