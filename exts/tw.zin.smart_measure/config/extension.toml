@@ -12,6 +12,7 @@ icon = "data/SMART_MEASURE.png"
 
 # 【關鍵修改】在這裡加入其他工具的 ID
 [dependencies]
+"tw.zin.core" = {}
 "omni.ui" = {}
 "omni.usd" = {}
 "omni.kit.uiapp" = {}

@@ -23,37 +23,12 @@ except Exception:
     _HAS_FILEPICKER = False
 
 # ── Import Zin Design System ─────────────────────────────────────────────────
-try:
-    _tools_box_dir = os.path.join(
-        os.path.dirname(__file__),
-        "..", "..", "tools_box", "tools_box"
-    )
-    if os.path.isdir(_tools_box_dir) and _tools_box_dir not in sys.path:
-        sys.path.insert(0, _tools_box_dir)
-    from zin_style import (
-        ZIN_GLOBAL_STYLE,
-        ARGB_CORRECT_LABEL, ARGB_TEXT_PRIMARY, ARGB_TEXT_SECONDARY,
-        ARGB_TEXT_MUTED, ARGB_ICON_FOLDER, ARGB_CORRECT_BG,
-    )
-    from zin_components import ZinButton
-except Exception as _e:
-    carb.log_warn(f"[smart_conveyor] Could not import Zin style: {_e}. Using fallback styles.")
-    ZIN_GLOBAL_STYLE    = {}
-    ARGB_CORRECT_LABEL  = 0xFF44AA44
-    ARGB_TEXT_PRIMARY   = 0xFFDDDDDD
-    ARGB_TEXT_SECONDARY = 0xFFAAAAAA
-    ARGB_TEXT_MUTED     = 0xFF888888
-    ARGB_ICON_FOLDER    = 0xFFDCA550
-    ARGB_CORRECT_BG     = 0xFF2A5E2A
-    class ZinButton:
-        def __init__(self, text, state="default", clicked_fn=None, **kwargs):
-            _COLOR = {"correct": 0xFF2A5E2A, "error": 0xFF5E2A2A, "default": 0xFF343432}
-            self._btn = ui.Button(text, clicked_fn=clicked_fn,
-                                  style={"background_color": _COLOR.get(state, 0xFF343432)},
-                                  **kwargs)
-        def set_state(self, s): pass
-        @property
-        def widget(self): return self._btn
+from zin_core.components import ZinButton
+from zin_core.style import (
+    ZIN_GLOBAL_STYLE,
+    ARGB_CORRECT_LABEL, ARGB_TEXT_PRIMARY, ARGB_TEXT_SECONDARY,
+    ARGB_TEXT_MUTED, ARGB_ICON_FOLDER, ARGB_CORRECT_BG,
+)
 
 # ==========================================
 # Core Logic: PCB Conveyor Controller

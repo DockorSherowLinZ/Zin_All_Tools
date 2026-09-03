@@ -8,6 +8,7 @@ keywords = ["inventec", "zin", "cad", "usd", "pipeline"]
 category = "ZinTools"
 
 [dependencies]
+"tw.zin.core" = {}
 "omni.ui" = {}
 "omni.usd" = {}
 "omni.kit.asset_converter" = {}

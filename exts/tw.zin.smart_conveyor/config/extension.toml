@@ -7,6 +7,7 @@ keywords = ["pcb", "conveyor", "simulation", "zin"]
 category = "ZinTools"
 
 [dependencies]
+"tw.zin.core" = {}
 "omni.kit.uiapp" = {}
 "omni.ui" = {}
 "omni.usd" = {}

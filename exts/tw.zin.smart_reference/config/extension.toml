@@ -11,6 +11,7 @@ icon = "data/SMART_REFERENCE.png"
 
 # 核心依賴：確保 pipapi 存在，才能安裝 pandas
 [dependencies]
+"tw.zin.core" = {}
 "omni.kit.pipapi" = {}
 "omni.ui" = {}
 "omni.usd" = {}

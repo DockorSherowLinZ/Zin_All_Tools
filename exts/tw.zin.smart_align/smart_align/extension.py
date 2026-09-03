@@ -8,11 +8,7 @@ from pxr import Usd, UsdGeom, Gf
 import sys
 import os
 
-_tools_box_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../tools_box"))
-if _tools_box_path not in sys.path:
-    sys.path.append(_tools_box_path)
-    
-import tools_box.zin_ui_utils as zin_ui_utils
+import zin_core.ui_utils as zin_ui_utils
 
 try:
     from isaacsim.util.debug_draw import _debug_draw  # [Update 5.1]

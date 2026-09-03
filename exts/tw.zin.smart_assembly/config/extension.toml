@@ -24,6 +24,7 @@ icon = "data/SMART_ASSEMBLY.png"
 # 根據您的程式碼 import，必須加入以下模組才能正常運作
 # ---------------------------------------------------------------
 [dependencies]
+"tw.zin.core" = {}
 "omni.kit.uiapp" = {} # 基礎 UI
 "omni.usd" = {}       # USD 操作
 "omni.timeline" = {}  # 控制播放/暫停 (homing sequence 用)

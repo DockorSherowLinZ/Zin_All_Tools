@@ -11,21 +11,9 @@ from pxr import Usd, UsdGeom, Gf, Sdf, UsdShade, UsdPhysics, UsdUtils
 from omni.kit.window.filepicker import FilePickerDialog
 import omni.kit.asset_converter
 
-_tools_box_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../tools_box"))
-if _tools_box_path not in sys.path:
-    sys.path.append(_tools_box_path)
-    
-import tools_box.zin_ui_utils as zin_ui_utils
-
-try:
-    from tools_box.zin_style import ZIN_GLOBAL_STYLE
-    from tools_box.zin_components import ZinButton
-except ImportError:
-    ZIN_GLOBAL_STYLE = {}
-    class ZinButton:
-        def __init__(self, text, state="default", clicked_fn=None, **kwargs):
-            self.widget = ui.Button(text, clicked_fn=clicked_fn, **kwargs)
-        def set_state(self, state): pass
+import zin_core.ui_utils as zin_ui_utils
+from zin_core.components import ZinButton
+from zin_core.style import ZIN_GLOBAL_STYLE
 
 # Supported CAD file extensions (free + HOOPS-licensed)
 SUPPORTED_CAD_EXTENSIONS = (

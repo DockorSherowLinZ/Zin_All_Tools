@@ -8,6 +8,7 @@ repository = "https://github.com/DockorSherowLinZ/Zin_All_Tools"
 category = "ZinTools"
 
 [dependencies]
+"tw.zin.core" = {}
 "omni.kit.commands" = {}
 "omni.ui" = {}
 "tw.zin.smart_conveyor" = {}

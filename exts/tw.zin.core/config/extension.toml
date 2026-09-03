@@ -1,0 +1,14 @@
+[package]
+title = "Zin Core"
+version = "1.0.0"
+description = "Shared UI style, components and window lifecycle helpers for the Zin All Tools suite."
+authors = ["Zin"]
+repository = "https://github.com/DockorSherowLinZ/Zin_All_Tools"
+keywords = ["omniverse", "kit", "extension", "tw.zin", "core"]
+category = "ZinTools"
+
+[dependencies]
+"omni.ui" = {}
+
+[[python.module]]
+name = "zin_core"

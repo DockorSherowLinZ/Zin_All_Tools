@@ -2,8 +2,8 @@ import omni.ext
 import omni.ui as ui
 import weakref
 from pxr import Gf
-from .zin_style import ZIN_GLOBAL_STYLE
-from .zin_components import ZinButton
+from zin_core.components import ZinButton
+from zin_core.style import ZIN_GLOBAL_STYLE
 
 class ToolsBoxExtension(omni.ext.IExt):
     WINDOW_NAME = "Zin Tools Box"
