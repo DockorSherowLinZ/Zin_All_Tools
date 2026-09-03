@@ -58,7 +58,7 @@ def resolve_translate_op(stage, path, create=False):
     try:
         return xformable.AddTranslateOp()
     except Exception as exc:
-        carb.log_warn(f"[Smart Explode] 無法在 '{path}' 建立 translate op：{exc}")
+        carb.log_warn(f"[Smart Explode] Could not create a translate op on '{path}': {exc}")
         return None
 
 
@@ -97,7 +97,7 @@ def world_center(bbox_cache, stage, path):
     try:
         bound = bbox_cache.ComputeWorldBound(prim).ComputeAlignedBox()
     except Exception as exc:
-        carb.log_warn(f"[Smart Explode] 無法計算 '{path}' 的包圍盒：{exc}")
+        carb.log_warn(f"[Smart Explode] Could not compute bounds for '{path}': {exc}")
         return None
 
     if bound.IsEmpty():

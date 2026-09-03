@@ -126,53 +126,60 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
     #  UI
     # ------------------------------------------------------------------
     def build_ui(self):
-        """建立 UI。可獨立視窗使用，也可由 Tools Box 嵌入分頁。"""
+        """建立 UI。可獨立視窗使用，也可由 Tools Box 嵌入分頁。
+
+        Kit 的 UI 字型不含中日韓字元，所有顯示字串一律使用英文。
+        """
         with ui.VStack(style=zin_ui_utils.ZIN_NATIVE_STYLE,
                        spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
 
             ui.Label(
-                "選取「組件」層級的 Prim 後按 Add Selected；該組件的整個子樹會一起移動。",
+                "Select component-level prims, then Add Selected. "
+                "Each component moves with its whole subtree.",
                 name="Description", word_wrap=True, height=0,
             )
-            ui.Spacer(height=4)
 
             with ui.HStack(height=24, spacing=zin_ui_utils.ZIN_ROW_SPACING):
                 ui.Button("Add Selected", style=zin_ui_utils.STYLE_POSITIVE,
                           clicked_fn=self._add_selected)
                 ui.Button("Auto Assign", clicked_fn=self._on_auto_assign,
-                          tooltip="依各組件相對共同中心的位置，自動指定方向與距離")
+                          tooltip="Assign direction and distance from each component's "
+                                  "offset relative to the shared center")
                 ui.Button("Clear", style=zin_ui_utils.STYLE_NEGATIVE,
                           clicked_fn=self._clear_components)
 
-            ui.Spacer(height=4)
+            # 爆炸控制是主要操作，放在按鈕下方避免被清單擠到視窗底部
+            with ui.CollapsableFrame("Explosion", collapsed=False, height=0):
+                with ui.VStack(spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
+                    def build_factor():
+                        ui.FloatSlider(self._factor_model, min=0.0, max=1.0)
+                    zin_ui_utils.build_property_row(
+                        "Explode:", build_factor,
+                        tooltip="0 = assembled, 1 = fully exploded")
+
+                    def build_multiplier():
+                        ui.FloatDrag(self._multiplier_model, min=0.1, max=20.0, step=0.1)
+                    zin_ui_utils.build_property_row(
+                        "Multiplier:", build_multiplier,
+                        tooltip="Overall distance scale for different model sizes")
+
+                    with ui.HStack(height=24, spacing=zin_ui_utils.ZIN_ROW_SPACING):
+                        ui.Button("Reset", style=zin_ui_utils.STYLE_NEGATIVE,
+                                  clicked_fn=self._on_reset,
+                                  tooltip="Return every component to its assembled position")
+                        ui.Button("Commit", style=zin_ui_utils.STYLE_POSITIVE,
+                                  clicked_fn=self._on_commit,
+                                  tooltip="Use the current positions as the new assembled state")
+
             with ui.HStack(height=20, spacing=4):
                 ui.Label("Component", width=ui.Fraction(1), name="Description")
                 ui.Label("Dir", width=ui.Pixel(64), name="Description")
                 ui.Label("Distance", width=ui.Pixel(84), name="Description")
                 ui.Spacer(width=ui.Pixel(28))
 
+            # 清單放在最後才佔用剩餘空間，空清單不會撐開版面
             with ui.ScrollingFrame(height=ui.Fraction(1)):
                 self._components_container = ui.VStack(spacing=2)
-
-            ui.Spacer(height=4)
-            with ui.CollapsableFrame("Explosion", collapsed=False, height=0):
-                with ui.VStack(spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
-                    def build_factor():
-                        ui.FloatSlider(self._factor_model, min=0.0, max=1.0)
-                    zin_ui_utils.build_property_row(
-                        "Explode:", build_factor, tooltip="0 = 組裝完成, 1 = 完全炸開")
-
-                    def build_multiplier():
-                        ui.FloatDrag(self._multiplier_model, min=0.1, max=20.0, step=0.1)
-                    zin_ui_utils.build_property_row(
-                        "Multiplier:", build_multiplier, tooltip="整體距離倍率，適應不同模型尺度")
-
-                    ui.Spacer(height=4)
-                    with ui.HStack(height=24, spacing=zin_ui_utils.ZIN_ROW_SPACING):
-                        ui.Button("Reset", style=zin_ui_utils.STYLE_NEGATIVE,
-                                  clicked_fn=self._on_reset, tooltip="回到組裝完成狀態")
-                        ui.Button("Commit", style=zin_ui_utils.STYLE_POSITIVE,
-                                  clicked_fn=self._on_commit, tooltip="將目前位置設為新的組裝原點")
 
             self._status_label = ui.Label("", name="Description", word_wrap=True, height=0)
 
@@ -190,7 +197,7 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
         self._components_container.clear()
         with self._components_container:
             if not self._components:
-                ui.Label("尚未加入組件。", name="Description")
+                ui.Label("No components added yet.", name="Description", height=0)
             else:
                 for index, component in enumerate(self._components):
                     self._build_component_row(index, component)
@@ -241,7 +248,7 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
 
         selection = omni.usd.get_context().get_selection().get_selected_prim_paths()
         if not selection:
-            self._set_status("請先在 Stage 中選取組件。")
+            self._set_status("Select one or more prims in the stage first.")
             return
 
         known = {component["path"] for component in self._components}
@@ -267,11 +274,11 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
 
         if skipped:
             self._set_status(
-                f"已加入 {added} 個組件；{len(skipped)} 個無法位移（instance proxy 或非 Xformable）："
-                + ", ".join(skipped[:3])
+                f"Added {added} component(s). Skipped {len(skipped)} that cannot be moved "
+                f"(instance proxy or not Xformable): " + ", ".join(skipped[:3])
             )
         else:
-            self._set_status(f"已加入 {added} 個組件。")
+            self._set_status(f"Added {added} component(s).")
 
     def _remove_component(self, index):
         if not 0 <= index < len(self._components):
@@ -315,7 +322,7 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
             if current is not None:
                 component["home"] = Gf.Vec3d(current)
         self._factor_model.set_value(0.0)
-        self._set_status("已將目前位置設為新的組裝原點。")
+        self._set_status("Current positions are now the assembled state.")
 
     def _auto_assign(self):
         stage = omni.usd.get_context().get_stage()
@@ -330,7 +337,7 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
                 centers[component["path"]] = center
 
         if not centers:
-            self._set_status("無法取得包圍盒，可能是 payload 尚未載入。")
+            self._set_status("Could not compute bounds; the payload may not be loaded.")
             return
 
         shared_center = bounds_center(centers.values())
@@ -352,7 +359,7 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
 
         self._rebuild_component_rows()
         self._apply()
-        self._set_status(f"已為 {len(centers)} 個組件自動分配方向與距離。")
+        self._set_status(f"Assigned direction and distance for {len(centers)} component(s).")
 
     def _reset_all(self):
         for component in self._components:
