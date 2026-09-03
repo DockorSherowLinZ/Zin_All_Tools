@@ -29,6 +29,9 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
         self._original_translations = {} # 字典格式: { prim_path (str): Gf.Vec3d }
         self._offsets = {}               # 字典格式: { prim_path (str): [x, y, z] }
 
+        # 已警告過無法位移的 prim，避免拖曳時重複洗版
+        self._unmovable_warned = set()
+
         # 當前操作軸向: 0=X, 1=Y, 2=Z
         self._current_axis = 0
         self._ignore_slider_event = False
@@ -140,16 +143,42 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
         # 切換軸向時，同步更新滑桿以反映該軸的當前位移量
         self._sync_slider_to_selection()
 
+    def _can_author_transform(self, prim):
+        """Instance proxy 是 instanced 階層的唯讀投影，USD 禁止在其上寫入屬性。"""
+        if not prim.IsInstanceProxy():
+            return True
+
+        path = str(prim.GetPath())
+        if path not in self._unmovable_warned:
+            self._unmovable_warned.add(path)
+            carb.log_warn(
+                f"[Zin Smart Exploded View] '{path}' 是 instance proxy，無法位移。"
+                "請改選取实例化的根物件，或將其 instanceable 關閉後再試。"
+            )
+        return False
+
     def _get_translation_op(self, xformable: UsdGeom.Xformable):
         """
         安全地取得或新增 xformOp:translate
         確保附加式的位移 (Additive Displacement) 不破壞模型既有的階層與旋轉結構。
+        無法寫入的 prim（例如 instance proxy）回傳 None。
         """
+        prim = xformable.GetPrim()
+        if not self._can_author_transform(prim):
+            return None
+
         ops = xformable.GetOrderedXformOps()
         for op in ops:
             if op.GetOpType() == UsdGeom.XformOp.TypeTranslate:
                 return op
-        return xformable.AddTranslateOp()
+
+        try:
+            return xformable.AddTranslateOp()
+        except Exception as exc:
+            carb.log_warn(
+                f"[Zin Smart Exploded View] 無法在 '{prim.GetPath()}' 建立 translate op：{exc}"
+            )
+            return None
 
     def _on_selection_changed(self, event):
         """
@@ -179,6 +208,8 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
             # 若為首次選取該物件，則記錄其初始狀態
             if path not in self._original_translations:
                 trans_op = self._get_translation_op(xformable)
+                if trans_op is None:
+                    continue
                 current_val = trans_op.Get()
                 if current_val is None:
                     current_val = Gf.Vec3d(0.0, 0.0, 0.0)
@@ -239,7 +270,8 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
                     xformable = UsdGeom.Xformable(prim)
                     if xformable:
                         trans_op = self._get_translation_op(xformable)
-                        trans_op.Set(new_pos)
+                        if trans_op is not None:
+                            trans_op.Set(new_pos)
 
     def _reset_all(self):
         """
@@ -255,7 +287,8 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
                 xformable = UsdGeom.Xformable(prim)
                 if xformable:
                     trans_op = self._get_translation_op(xformable)
-                    trans_op.Set(orig_pos)
+                    if trans_op is not None:
+                        trans_op.Set(orig_pos)
 
         # 清空紀錄
         self._original_translations.clear()

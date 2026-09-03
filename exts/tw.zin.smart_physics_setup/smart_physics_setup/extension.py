@@ -10,6 +10,18 @@ import os
 import zin_core.ui_utils as zin_ui_utils
 from zin_core.menu import ZinMenuMixin
 
+# Kit 110 以後移除了 particle cloth 與 PhysxPhysicsAttachment，改採新的 deformable schema。
+# 依實際綁定偵測能力，避免在舊/新 Kit 上崩潰。
+_CLOTH_APIS = ("PhysxParticleClothAPI", "PhysxAutoParticleClothAPI")
+HAS_PARTICLE_CLOTH = all(hasattr(PhysxSchema, name) for name in _CLOTH_APIS)
+HAS_PHYSICS_ATTACHMENT = hasattr(PhysxSchema, "PhysxPhysicsAttachment")
+SOFT_BODY_SUPPORTED = HAS_PARTICLE_CLOTH and HAS_PHYSICS_ATTACHMENT
+
+SOFT_BODY_UNAVAILABLE_MESSAGE = (
+    "Soft Body 在此 Kit 版本不可用：PhysX 已移除 particle cloth 與 PhysxPhysicsAttachment。"
+    "Rigid Body 設定仍可正常使用。"
+)
+
 class SmartPhysicsSetupExtension(ZinMenuMixin, omni.ext.IExt):
     WINDOW_NAME = "Smart Physics Setup"
     MENU_PATH = f"Zin_All_Tools/{WINDOW_NAME}"
@@ -74,6 +86,13 @@ class SmartPhysicsSetupExtension(ZinMenuMixin, omni.ext.IExt):
                 with ui.CollapsableFrame("2. Soft Body (Cable)", height=ui.Fraction(1)) as cf_sb:
                     cf_sb.set_collapsed_changed_fn(lambda c, f=cf_sb: setattr(f, "height", ui.Pixel(0) if c else ui.Fraction(1)))
                     with ui.VStack(spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
+                        if not SOFT_BODY_SUPPORTED:
+                            ui.Label(
+                                SOFT_BODY_UNAVAILABLE_MESSAGE,
+                                name="Description",
+                                word_wrap=True,
+                                style={"color": 0xFF00AAFF},
+                            )
                         zin_ui_utils.build_button_row("", "Add Selected to Soft List", self._add_to_soft, zin_ui_utils.STYLE_POSITIVE)
                         
                         def build_soft_list():
@@ -203,14 +222,25 @@ class SmartPhysicsSetupExtension(ZinMenuMixin, omni.ext.IExt):
         # NUKE: Remove all physics APIs to reset state
         apis_to_remove = [
             UsdPhysics.RigidBodyAPI, UsdPhysics.CollisionAPI, UsdPhysics.MeshCollisionAPI, UsdPhysics.MassAPI,
-            PhysxSchema.PhysxParticleClothAPI, PhysxSchema.PhysxAutoParticleClothAPI, 
             PhysxSchema.PhysxParticleSamplingAPI, PhysxSchema.PhysxParticleAPI,
             PhysxSchema.PhysxRigidBodyAPI, PhysxSchema.PhysxCollisionAPI
         ]
+        for name in _CLOTH_APIS:
+            cloth_api = getattr(PhysxSchema, name, None)
+            if cloth_api is not None:
+                apis_to_remove.append(cloth_api)
+
         for api in apis_to_remove:
             if prim.HasAPI(api): prim.RemoveAPI(api)
 
     def _create_attachment(self, stage, soft_path, rigid_path, distance):
+        if not HAS_PHYSICS_ATTACHMENT:
+            carb.log_warn(
+                "[SmartPhysicsSetup] PhysxPhysicsAttachment not available in this Kit build; "
+                f"skipping attachment {soft_path} -> {rigid_path}"
+            )
+            return None
+
         soft_name = Sdf.Path(soft_path).name
         rigid_name = Sdf.Path(rigid_path).name
         attach_path = f"/World/Attachments/Attach_{soft_name}_to_{rigid_name}"
@@ -285,35 +315,48 @@ class SmartPhysicsSetupExtension(ZinMenuMixin, omni.ext.IExt):
                     mesh_collision.CreateApproximationAttr().Set("convexHull")
 
             # Step C: Soft Body
-            for path in self._soft_paths:
-                prim = stage.GetPrimAtPath(path)
-                if not prim.IsValid(): continue
+            skipped_soft = 0
+            if self._soft_paths and not SOFT_BODY_SUPPORTED:
+                skipped_soft = len(self._soft_paths)
+                carb.log_warn(f"[SmartPhysicsSetup] {SOFT_BODY_UNAVAILABLE_MESSAGE}")
+            elif SOFT_BODY_SUPPORTED:
+                for path in self._soft_paths:
+                    prim = stage.GetPrimAtPath(path)
+                    if not prim.IsValid(): continue
 
-                self._clean_physics_api(prim)
-                PhysxSchema.PhysxParticleClothAPI.Apply(prim)
-                PhysxSchema.PhysxAutoParticleClothAPI.Apply(prim)
-                PhysxSchema.PhysxParticleSamplingAPI.Apply(prim)
+                    self._clean_physics_api(prim)
+                    PhysxSchema.PhysxParticleClothAPI.Apply(prim)
+                    PhysxSchema.PhysxAutoParticleClothAPI.Apply(prim)
+                    PhysxSchema.PhysxParticleSamplingAPI.Apply(prim)
 
-                self._safe_set_attribute(prim, "physxAutoParticleCloth:springStretchStiffness", stiffness)
-                self._safe_set_attribute(prim, "physxAutoParticleCloth:springBendStiffness", 500.0)
-                self._safe_set_attribute(prim, "physxAutoParticleCloth:springShearStiffness", 100.0)
-                self._safe_set_attribute(prim, "physxAutoParticleCloth:enableRemeshing", False, Sdf.ValueTypeNames.Bool)
-                self._safe_set_attribute(prim, "physxParticleSampling:samplingMode", "vertices", Sdf.ValueTypeNames.Token)
-                self._safe_set_attribute(prim, "physxParticle:selfCollision", True, Sdf.ValueTypeNames.Bool)
+                    self._safe_set_attribute(prim, "physxAutoParticleCloth:springStretchStiffness", stiffness)
+                    self._safe_set_attribute(prim, "physxAutoParticleCloth:springBendStiffness", 500.0)
+                    self._safe_set_attribute(prim, "physxAutoParticleCloth:springShearStiffness", 100.0)
+                    self._safe_set_attribute(prim, "physxAutoParticleCloth:enableRemeshing", False, Sdf.ValueTypeNames.Bool)
+                    self._safe_set_attribute(prim, "physxParticleSampling:samplingMode", "vertices", Sdf.ValueTypeNames.Token)
+                    self._safe_set_attribute(prim, "physxParticle:selfCollision", True, Sdf.ValueTypeNames.Bool)
 
-                rel = prim.GetRelationship("physxParticle:particleSystem")
-                if not rel: rel = prim.CreateRelationship("physxParticle:particleSystem")
-                rel.SetTargets([Sdf.Path(self._particle_system_path)])
+                    rel = prim.GetRelationship("physxParticle:particleSystem")
+                    if not rel: rel = prim.CreateRelationship("physxParticle:particleSystem")
+                    rel.SetTargets([Sdf.Path(self._particle_system_path)])
 
             # Step D: Attachments
             count = 0
-            for soft in self._soft_paths:
-                for rigid in self._rigid_paths:
-                    self._create_attachment(stage, soft, rigid, attach_dist)
-                    count += 1
-            
-            msg = f"Setup Complete. {count} attachments created."
-            self._status_model.as_string = f"Success: {msg}"
+            if SOFT_BODY_SUPPORTED:
+                for soft in self._soft_paths:
+                    for rigid in self._rigid_paths:
+                        self._create_attachment(stage, soft, rigid, attach_dist)
+                        count += 1
+
+            if skipped_soft:
+                msg = (
+                    f"Rigid Body 完成 ({len(self._rigid_paths)} 項）；"
+                    f"跳過 {skipped_soft} 項 Soft Body。{SOFT_BODY_UNAVAILABLE_MESSAGE}"
+                )
+                self._status_model.as_string = msg
+            else:
+                msg = f"Setup Complete. {count} attachments created."
+                self._status_model.as_string = f"Success: {msg}"
             carb.log_info(msg)
 
         except Exception as e:
