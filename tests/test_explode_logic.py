@@ -1,4 +1,4 @@
-"""Smart Exploded View 爆炸邏輯單元測試 — 不需 Omniverse 環境。"""
+"""Smart Explode 純邏輯單元測試 — 不需 Omniverse 環境。"""
 
 import math
 import os
@@ -22,13 +22,17 @@ from explode_logic import (  # noqa: E402
     distance_from_center,
     dominant_direction_label,
     exploded_position,
+    has_drifted,
     index_from_label,
     label_from_index,
     part_offset,
+    resolve_home,
     suggest_distance,
 )
 
+# 取自使用者實際模型 MOVES_BRACKET_R 的座標
 HOME = (-318.1, 495.0, 212.9)
+ASSEMBLY_CENTER = (-318.1, 495.0, 212.9)
 
 
 # ─── 方向對應 ────────────────────────────────────────────
@@ -49,32 +53,32 @@ def test_label_index_roundtrip():
         assert direction_from_index(index) == direction_from_label(label)
 
 
-def test_unknown_direction_label_is_rejected():
+def test_unknown_label_is_rejected():
     with pytest.raises(ValueError):
         direction_from_label("W+")
 
 
-def test_direction_index_out_of_range_is_rejected():
+def test_index_out_of_range_is_rejected():
     with pytest.raises(ValueError):
-        direction_from_index(99)
+        label_from_index(99)
 
 
-# ─── 位移計算 ────────────────────────────────────────────
+# ─── 位移 ────────────────────────────────────────────────
 
 def test_offset_scales_with_distance():
     assert part_offset((1.0, 0.0, 0.0), 50.0) == (50.0, 0.0, 0.0)
 
 
-def test_offset_is_zero_when_factor_is_zero():
+def test_offset_is_zero_when_assembled():
     assert part_offset((0.0, 0.0, 1.0), 50.0, factor=0.0) == (0.0, 0.0, 0.0)
 
 
-def test_offset_scales_with_global_factor():
+def test_offset_scales_with_factor():
     assert part_offset((0.0, 0.0, 1.0), 100.0, factor=0.5) == (0.0, 0.0, 50.0)
 
 
 def test_offset_scales_with_multiplier():
-    assert part_offset((0.0, 1.0, 0.0), 10.0, factor=1.0, multiplier=3.0) == (0.0, 30.0, 0.0)
+    assert part_offset((0.0, 1.0, 0.0), 10.0, multiplier=3.0) == (0.0, 30.0, 0.0)
 
 
 def test_negative_direction_moves_backwards():
@@ -86,19 +90,70 @@ def test_assembled_state_returns_home():
 
 
 def test_fully_exploded_position():
-    result = exploded_position(HOME, direction_from_label("Z+"), 80.0, factor=1.0)
-    assert result == (-318.1, 495.0, 292.9)
+    assert exploded_position(HOME, direction_from_label("Z+"), 80.0) == (-318.1, 495.0, 292.9)
 
 
-def test_partial_explosion_is_linear():
-    half = exploded_position(HOME, direction_from_label("Y+"), 100.0, factor=0.5)
-    assert half == (-318.1, 545.0, 212.9)
+def test_explosion_progress_is_linear():
+    assert exploded_position(HOME, direction_from_label("Y+"), 100.0, factor=0.5) == (
+        -318.1, 545.0, 212.9
+    )
+
+
+def test_explosion_is_absolute_not_cumulative():
+    """\u6ed1\u687f\u4ee3\u8868\u76f8\u5c0d\u539f\u9ede\u7684\u7e3d\u4f4d\u79fb\uff0c\u91cd\u8907\u5957\u7528\u4e0d\u61c9\u7d2f\u52a0\u3002"""
+    first = exploded_position(HOME, direction_from_label("Z+"), 80.0, factor=1.0)
+    second = exploded_position(HOME, direction_from_label("Z+"), 80.0, factor=1.0)
+    assert first == second
+
+
+# ─── 外部移動偵測 ────────────────────────────────────────
+
+def test_not_drifted_when_position_matches():
+    assert has_drifted(HOME, HOME, (0.0, 0.0, 0.0)) is False
+
+
+def test_not_drifted_with_applied_offset():
+    assert has_drifted((-318.1, 495.0, 292.9), HOME, (0.0, 0.0, 80.0)) is False
+
+
+def test_not_drifted_within_float_tolerance():
+    assert has_drifted((-318.1 + 1e-9, 495.0, 212.9), HOME, (0.0, 0.0, 0.0)) is False
+
+
+def test_drifted_after_manual_move():
+    assert has_drifted((0.0, 0.0, 0.0), HOME, (0.0, 0.0, 0.0)) is True
+
+
+def test_resolve_home_keeps_home_when_untouched():
+    assert resolve_home((-318.1, 495.0, 292.9), HOME, (0.0, 0.0, 80.0)) == HOME
+
+
+def test_resolve_home_rebaselines_after_manual_move():
+    # 使用者把組件拖到 (0, 500, 0)，當時既有位移為 Z=80
+    assert resolve_home((0.0, 500.0, 0.0), HOME, (0.0, 0.0, 80.0)) == (0.0, 500.0, -80.0)
+
+
+def test_resolve_home_handles_missing_value():
+    assert resolve_home(None, HOME, (0.0, 0.0, 0.0)) == HOME
+
+
+def test_manual_move_is_preserved_not_reverted():
+    """\u56de\u6b78\u7f3a\u9677\uff1a\u624b\u52d5\u79fb\u52d5\u5f8c\u8abf\u6574\u6ed1\u687f\uff0c\u7d44\u4ef6\u4e0d\u5f97\u5f48\u56de\u820a\u4f4d\u7f6e\u3002"""
+    moved_to = (0.0, 500.0, 0.0)
+    direction = direction_from_label("Z+")
+    old_offset = part_offset(direction, 80.0, factor=1.0)
+
+    home = resolve_home(moved_to, HOME, old_offset)
+    result = exploded_position(home, direction, 120.0, factor=1.0)
+
+    # 位移由 80 調到 120，應從現況再前進 40
+    assert result == (0.0, 500.0, 40.0)
 
 
 # ─── 共同中心 ────────────────────────────────────────────
 
 def test_bounds_center_uses_extents_not_average():
-    """\u5075\u6e2c\u7528\u5747\u503c\u7684\u5be6\u4f5c\uff1a\u96f6\u4ef6\u5206\u4f48\u4e0d\u5747\u6642\u4e2d\u5fc3\u4e0d\u5f97\u88ab\u62c9\u504f\u3002"""
+    """\u96f6\u4ef6\u5206\u4f48\u4e0d\u5747\u6642\u4e2d\u5fc3\u4e0d\u5f97\u88ab\u62c9\u504f\u3002"""
     centers = [(0.0, 0.0, 0.0), (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), (10.0, 0.0, 0.0)]
     assert bounds_center(centers) == (5.0, 0.0, 0.0)
 
@@ -107,28 +162,24 @@ def test_bounds_center_of_empty_list():
     assert bounds_center([]) == (0.0, 0.0, 0.0)
 
 
-def test_bounds_center_single_part():
+def test_bounds_center_single_component():
     assert bounds_center([HOME]) == HOME
 
 
 # ─── 自動方向判定 ────────────────────────────────────────
 
-def test_dominant_direction_picks_largest_axis():
-    # MOVES_BRACKET_R \u5728 Y+ \u5074
-    assert dominant_direction_label((-318.1, 522.4, 212.9), (-318.1, 495.0, 212.9)) == "Y+"
+def test_auto_direction_matches_real_bracket_layout():
+    """\u5be6\u6e2c\u5ea7\u6a19\uff1aR \u5728 Y+ \u5074\u3001L \u5728 Y- \u5074\u3002"""
+    assert dominant_direction_label((-318.1, 522.4, 212.9), ASSEMBLY_CENTER) == "Y+"
+    assert dominant_direction_label((-318.1, 467.7, 212.9), ASSEMBLY_CENTER) == "Y-"
 
 
-def test_dominant_direction_negative_side():
-    # MOVES_BRACKET_L \u5728 Y- \u5074
-    assert dominant_direction_label((-318.1, 467.7, 212.9), (-318.1, 495.0, 212.9)) == "Y-"
-
-
-def test_dominant_direction_prefers_the_strongest_offset():
+def test_auto_direction_picks_strongest_offset():
     assert dominant_direction_label((5.0, 1.0, 2.0), (0.0, 0.0, 0.0)) == "X+"
     assert dominant_direction_label((1.0, 2.0, -9.0), (0.0, 0.0, 0.0)) == "Z-"
 
 
-def test_dominant_direction_defaults_when_centered():
+def test_auto_direction_defaults_when_centered():
     assert dominant_direction_label((0.0, 0.0, 0.0), (0.0, 0.0, 0.0)) == "Z+"
 
 
@@ -152,10 +203,10 @@ def test_suggest_distance_proportional_when_accel_is_one():
 
 
 def test_suggest_distance_handles_degenerate_extent():
-    """\u6240\u6709\u96f6\u4ef6\u91cd\u5408\u6642\u4e0d\u5f97\u9664\u4ee5\u96f6\u3002"""
+    """\u6240\u6709\u7d44\u4ef6\u91cd\u5408\u6642\u4e0d\u5f97\u9664\u4ee5\u96f6\u3002"""
     assert suggest_distance((0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 50.0, max_distance=0.0) == 50.0
 
 
-def test_suggest_distance_clamps_accel_range():
+def test_suggest_distance_clamps_accel():
     value = suggest_distance((5.0, 0.0, 0.0), (0.0, 0.0, 0.0), 100.0, accel=5.0, max_distance=10.0)
     assert math.isclose(value, 50.0)
