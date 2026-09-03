@@ -2,6 +2,7 @@ import omni.ext
 import omni.ui as ui
 import omni.usd
 import omni.kit.app
+import omni.kit.commands
 import carb
 from pxr import Usd, UsdGeom, Gf
 
@@ -25,6 +26,48 @@ from .explode_logic import (
 
 # 自動分配時的基準距離，使用者可再逐項微調
 DEFAULT_BASE_DISTANCE = 50.0
+
+
+def find_translate_op(xformable):
+    """取得 xformOp:translate。
+
+    pivot 也是 TypeTranslate，但它描述旋轉/縮放中心，改動它會破壞模型。
+    """
+    for op in xformable.GetOrderedXformOps():
+        if op.GetOpType() == UsdGeom.XformOp.TypeTranslate and ":pivot" not in op.GetOpName():
+            return op
+    return None
+
+
+class ZinExplodeTransformCommand(omni.kit.commands.Command):
+    """記錄組件位移，讓爆炸操作可被 Ctrl+Z 復原。
+
+    changes 為 [(prim_path, 舊座標, 新座標)]，一次拖曳合併為單一復原步驟。
+    """
+
+    def __init__(self, changes):
+        self._changes = list(changes)
+
+    def do(self):
+        self._write({path: new for path, _old, new in self._changes})
+
+    def undo(self):
+        self._write({path: old for path, old, _new in self._changes})
+
+    def _write(self, positions):
+        stage = omni.usd.get_context().get_stage()
+        if not stage:
+            return
+        for path, value in positions.items():
+            prim = stage.GetPrimAtPath(path)
+            if not prim or not prim.IsValid():
+                continue
+            xformable = UsdGeom.Xformable(prim)
+            if not xformable:
+                continue
+            trans_op = find_translate_op(xformable)
+            if trans_op is not None:
+                trans_op.Set(Gf.Vec3d(value))
 
 
 class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
@@ -54,8 +97,17 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
 
         self._factor_model = ui.SimpleFloatModel(0.0)
         self._factor_model.add_value_changed_fn(lambda m: self._apply_explosion())
+        self._factor_model.add_begin_edit_fn(lambda m: self._begin_change())
+        self._factor_model.add_end_edit_fn(lambda m: self._end_change())
         self._multiplier_model = ui.SimpleFloatModel(1.0)
         self._multiplier_model.add_value_changed_fn(lambda m: self._apply_explosion())
+        self._multiplier_model.add_begin_edit_fn(lambda m: self._begin_change())
+        self._multiplier_model.add_end_edit_fn(lambda m: self._end_change())
+
+        # 一次拖曳期間的起始座標，用於合併成單一 undo 步驟
+        self._change_snapshot = None
+
+        omni.kit.commands.register(ZinExplodeTransformCommand)
 
         # 定義高階工業 CAD 介面風格字典 (遵循 Zin_Tools_Box 規範)
         self._style = {
@@ -115,7 +167,7 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
                     with ui.VStack(spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
                         with ui.HStack(height=24, spacing=zin_ui_utils.ZIN_ROW_SPACING):
                             ui.Button("Add Selected", style=zin_ui_utils.STYLE_POSITIVE, clicked_fn=self._add_selected_parts)
-                            ui.Button("Auto Assign", clicked_fn=self._auto_assign_directions,
+                            ui.Button("Auto Assign", clicked_fn=lambda: self._tracked_change(self._auto_assign_directions),
                                       tooltip="依各組件相對共同中心的位置，自動指定方向與距離")
                             ui.Button("Clear", style=zin_ui_utils.STYLE_NEGATIVE, clicked_fn=self._clear_parts)
 
@@ -144,7 +196,8 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
 
                         ui.Spacer(height=5)
                         with ui.HStack(height=24, spacing=zin_ui_utils.ZIN_ROW_SPACING):
-                            ui.Button("Reset", style=zin_ui_utils.STYLE_NEGATIVE, clicked_fn=self._reset_all,
+                            ui.Button("Reset", style=zin_ui_utils.STYLE_NEGATIVE,
+                                      clicked_fn=lambda: self._tracked_change(self._reset_all),
                                       tooltip="回到組裝完成狀態")
                             ui.Button("Commit", style=zin_ui_utils.STYLE_POSITIVE, clicked_fn=self._commit_positions,
                                       tooltip="將目前位置設為新的組裝原點")
@@ -153,6 +206,50 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
                 ui.Spacer()
 
         self._rebuild_parts_ui()
+
+    # ----------------------------------------------------------------------
+    #  Undo support
+    # ----------------------------------------------------------------------
+    def _capture_positions(self):
+        """記錄所有組件目前的 translate 值。"""
+        stage = omni.usd.get_context().get_stage()
+        positions = {}
+        if not stage:
+            return positions
+
+        for part in self._parts:
+            trans_op = self._resolve_translate_op(stage, part["path"])
+            if trans_op is None:
+                continue
+            value = trans_op.Get()
+            if value is not None:
+                positions[part["path"]] = Gf.Vec3d(value)
+        return positions
+
+    def _begin_change(self):
+        self._change_snapshot = self._capture_positions()
+
+    def _end_change(self):
+        """把這次操作前後的差異登錄為一個可復原的步驟。"""
+        before = self._change_snapshot
+        self._change_snapshot = None
+        if not before:
+            return
+
+        after = self._capture_positions()
+        changes = [
+            (path, before[path], after[path])
+            for path in after
+            if path in before and after[path] != before[path]
+        ]
+        if changes:
+            omni.kit.commands.execute("ZinExplodeTransform", changes=changes)
+
+    def _tracked_change(self, action):
+        """執行會改動座標的操作，並登錄為單一 undo 步驟。"""
+        self._begin_change()
+        action()
+        self._end_change()
 
     # ----------------------------------------------------------------------
     #  Component table
@@ -181,7 +278,10 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
                             lambda m, p=part: self._on_direction_changed(p, m)
                         )
 
-                        ui.FloatDrag(part["distance_model"], width=ui.Pixel(80), min=0.0, max=100000.0, step=1.0)
+                        drag = ui.FloatDrag(part["distance_model"], width=ui.Pixel(80), min=0.0, max=100000.0, step=1.0)
+                        drag.model.add_begin_edit_fn(lambda m: self._begin_change())
+                        drag.model.add_end_edit_fn(lambda m: self._end_change())
+
                         ui.Button("X", width=ui.Pixel(24),
                                   clicked_fn=lambda i=index: self._remove_part(i))
 
@@ -207,8 +307,10 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
         }
 
     def _on_direction_changed(self, part, model):
+        self._begin_change()
         part["direction"] = model.as_int
         self._apply_explosion()
+        self._end_change()
 
     def _find_part(self, path):
         for part in self._parts:
@@ -264,12 +366,12 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
         if not 0 <= index < len(self._parts):
             return
         part = self._parts[index]
-        self._restore_part(part)
+        self._tracked_change(lambda: self._restore_part(part))
         del self._parts[index]
         self._rebuild_parts_ui()
 
     def _clear_parts(self):
-        self._reset_all()
+        self._tracked_change(self._reset_all)
         self._parts = []
         self._rebuild_parts_ui()
 
@@ -438,6 +540,11 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
         """清理資源：關閉視窗、清空組件表。"""
         carb.log_info("[Zin Smart Exploded View] Extension shutdown")
         self._remove_menu()
+
+        try:
+            omni.kit.commands.unregister(ZinExplodeTransformCommand)
+        except Exception as exc:
+            carb.log_verbose(f"[Zin Smart Exploded View] Command already unregistered: {exc}")
 
         if self._window:
             self._window.destroy()
