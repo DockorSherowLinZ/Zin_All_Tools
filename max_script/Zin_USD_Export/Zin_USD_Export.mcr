@@ -49,6 +49,22 @@ icon:#("ZinAllTools", 9)
                 local tmpPy = sysInfo.tempdir + "fix_usd_root.py"
                 local pf = createFile tmpPy
                 format "from pxr import Sdf\n" to:pf
+                format "def update_paths(prim, old_p, new_p):\n" to:pf
+                format "    for prop in prim.properties:\n" to:pf
+                format "        if isinstance(prop, Sdf.RelationshipSpec): lst = prop.targetPathList\n" to:pf
+                format "        elif isinstance(prop, Sdf.AttributeSpec): lst = prop.connectionPathList\n" to:pf
+                format "        else: continue\n" to:pf
+                format "        for attr in ['explicitItems', 'prependedItems', 'appendedItems']:\n" to:pf
+                format "            items = getattr(lst, attr, [])\n" to:pf
+                format "            if items:\n" to:pf
+                format "                new_items = []\n" to:pf
+                format "                for t in items:\n" to:pf
+                format "                    ts = str(t)\n" to:pf
+                format "                    if ts == old_p or ts.startswith(old_p + '/'): new_items.append(Sdf.Path(ts.replace(old_p, new_p, 1)))\n" to:pf
+                format "                    else: new_items.append(t)\n" to:pf
+                format "                setattr(lst, attr, new_items)\n" to:pf
+                format "    for child in prim.nameChildren:\n" to:pf
+                format "        update_paths(child, old_p, new_p)\n" to:pf
                 format "layer = Sdf.Layer.FindOrOpen('%')\n" pyPath to:pf
                 format "if layer and layer.defaultPrim:\n" to:pf
                 format "    old_root = layer.defaultPrim\n" to:pf
@@ -57,6 +73,7 @@ icon:#("ZinAllTools", 9)
                 format "        edit.Add(Sdf.Path('/' + old_root), Sdf.Path('/World'))\n" to:pf
                 format "        if layer.Apply(edit):\n" to:pf
                 format "            layer.defaultPrim = 'World'\n" to:pf
+                format "            update_paths(layer.GetPrimAtPath('/World'), '/' + old_root, '/World')\n" to:pf
                 format "            layer.Save()\n" to:pf
                 close pf
                 
