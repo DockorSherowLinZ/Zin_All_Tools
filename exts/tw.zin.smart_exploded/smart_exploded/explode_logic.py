@@ -73,6 +73,34 @@ def exploded_position(home, direction, distance, factor=1.0, multiplier=1.0):
 
 
 # ─────────────────────────────────────────────
+#  分階段展開
+# ─────────────────────────────────────────────
+
+def clamp01(value):
+    return min(max(float(value), 0.0), 1.0)
+
+
+def ordered_stages(stages):
+    """排序後的不重複階段編號。"""
+    return tuple(sorted({int(stage) for stage in stages}))
+
+
+def stage_progress(factor, stage, stages):
+    """把全域進度切成依序播放的階段。
+
+    前一階段完成後下一階段才開始，形成逐層拆解的效果：
+    外殼先移開，內部模組才跟著出來。
+    只有一個階段時等同於全域進度。
+    """
+    order = ordered_stages(list(stages) + [stage])
+    if len(order) <= 1:
+        return clamp01(factor)
+
+    index = order.index(int(stage))
+    return clamp01(float(factor) * len(order) - index)
+
+
+# ─────────────────────────────────────────────
 #  外部移動偵測
 # ─────────────────────────────────────────────
 

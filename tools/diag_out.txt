@@ -1,0 +1,34 @@
+=== LAYER INFO === D:\Inventec\DigitalTwin\Factory\IUE\Building\max_IUE_Building_1F.usd
+defaultPrim: root
+rootPrims: ['root']
+
+=== TARGETS NOT UNDER /World === 27
+    /root/OfficeCeilingLamp.material:binding [explicitItems] -> /root/Looks/Office_CeilingLamp
+    /root/Looks/Office_CeilingLamp/UsdPreviewSurface/Office_CeilingLamp.inputs:diffuseColor [explicitItems] -> /root/Looks/Office_CeilingLamp/UsdPreviewSurface/OfficeCeilingLamp_BaseColor.outputs:rgb
+    /root/Looks/Office_CeilingLamp/UsdPreviewSurface/Office_CeilingLamp.inputs:emissiveColor [explicitItems] -> /root/Looks/Office_CeilingLamp/UsdPreviewSurface/OfficeCeilingLamp_Emission.outputs:rgb
+    /root/Looks/Office_CeilingLamp/UsdPreviewSurface/Office_CeilingLamp.inputs:opacity [explicitItems] -> /root/Looks/Office_CeilingLamp/UsdPreviewSurface/OfficeCeilingLamp_Opacity.outputs:rgb
+    /root/Looks/Office_CeilingLamp/UsdPreviewSurface/Office_CeilingLamp.inputs:roughness [explicitItems] -> /root/Looks/Office_CeilingLamp/UsdPreviewSurface/OfficeCeilingLamp_Roughness.outputs:rgb
+    /root/Looks/Office_CeilingLamp/UsdPreviewSurface/Office_CeilingLamp.inputs:metallic [explicitItems] -> /root/Looks/Office_CeilingLamp/UsdPreviewSurface/OfficeCeilingLamp_Metallic.outputs:rgb
+    /root/Looks/Office_CeilingLamp/UsdPreviewSurface/Office_CeilingLamp.inputs:normal [explicitItems] -> /root/Looks/Office_CeilingLamp/UsdPreviewSurface/OfficeCeilingLamp_Normal.outputs:rgb
+    /root/Looks/Office_CeilingLamp/UsdPreviewSurface.outputs:surface [explicitItems] -> /root/Looks/Office_CeilingLamp/UsdPreviewSurface/Office_CeilingLamp.outputs:surface
+    /root/Looks/Office_CeilingLamp/OfficeCeilingLamp_BaseColor/OfficeCeilingLamp_BaseColor.inputs:st [explicitItems] -> /root/Looks/Office_CeilingLamp/OfficeCeilingLamp_BaseColor/PrimvarReader_st.outputs:result
+    /root/Looks/Office_CeilingLamp/OfficeCeilingLamp_BaseColor/PrimvarReader_st.inputs:varname [explicitItems] -> /root/Looks/Office_CeilingLamp/OfficeCeilingLamp_BaseColor.inputs:frame:st
+    /root/Looks/Office_CeilingLamp/OfficeCeilingLamp_BaseColor.outputs:rgb [explicitItems] -> /root/Looks/Office_CeilingLamp/OfficeCeilingLamp_BaseColor/OfficeCeilingLamp_BaseColor.outputs:rgb
+    /root/Looks/Office_CeilingLamp/OfficeCeilingLamp_Emission/OfficeCeilingLamp_Emission.inputs:st [explicitItems] -> /root/Looks/Office_CeilingLamp/OfficeCeilingLamp_Emission/PrimvarReader_st.outputs:result
+    /root/Looks/Office_CeilingLamp/OfficeCeilingLamp_Emission/PrimvarReader_st.inputs:varname [explicitItems] -> /root/Looks/Office_CeilingLamp/OfficeCeilingLamp_Emission.inputs:frame:st
+    /root/Looks/Office_CeilingLamp/OfficeCeilingLamp_Emission.outputs:rgb [explicitItems] -> /root/Looks/Office_CeilingLamp/OfficeCeilingLamp_Emission/OfficeCeilingLamp_Emission.outputs:rgb
+    /root/Looks/Office_CeilingLamp/OfficeCeilingLamp_Opacity/OfficeCeilingLamp_Opacity.inputs:st [explicitItems] -> /root/Looks/Office_CeilingLamp/OfficeCeilingLamp_Opacity/PrimvarReader_st.outputs:result
+    /root/Looks/Office_CeilingLamp/OfficeCeilingLamp_Opacity/PrimvarReader_st.inputs:varname [explicitItems] -> /root/Looks/Office_CeilingLamp/OfficeCeilingLamp_Opacity.inputs:frame:st
+    /root/Looks/Office_CeilingLamp/OfficeCeilingLamp_Opacity.outputs:rgb [explicitItems] -> /root/Looks/Office_CeilingLamp/OfficeCeilingLamp_Opacity/OfficeCeilingLamp_Opacity.outputs:rgb
+    /root/Looks/Office_CeilingLamp/OfficeCeilingLamp_Roughness/OfficeCeilingLamp_Roughness.inputs:st [explicitItems] -> /root/Looks/Office_CeilingLamp/OfficeCeilingLamp_Roughness/PrimvarReader_st.outputs:result
+    /root/Looks/Office_CeilingLamp/OfficeCeilingLamp_Roughness/PrimvarReader_st.inputs:varname [explicitItems] -> /root/Looks/Office_CeilingLamp/OfficeCeilingLamp_Roughness.inputs:frame:st
+    /root/Looks/Office_CeilingLamp/OfficeCeilingLamp_Roughness.outputs:rgb [explicitItems] -> /root/Looks/Office_CeilingLamp/OfficeCeilingLamp_Roughness/OfficeCeilingLamp_Roughness.outputs:rgb
+    /root/Looks/Office_CeilingLamp/OfficeCeilingLamp_Metallic/OfficeCeilingLamp_Metallic.inputs:st [explicitItems] -> /root/Looks/Office_CeilingLamp/OfficeCeilingLamp_Metallic/PrimvarReader_st.outputs:result
+    /root/Looks/Office_CeilingLamp/OfficeCeilingLamp_Metallic/PrimvarReader_st.inputs:varname [explicitItems] -> /root/Looks/Office_CeilingLamp/OfficeCeilingLamp_Metallic.inputs:frame:st
+    /root/Looks/Office_CeilingLamp/OfficeCeilingLamp_Metallic.outputs:rgb [explicitItems] -> /root/Looks/Office_CeilingLamp/OfficeCeilingLamp_Metallic/OfficeCeilingLamp_Metallic.outputs:rgb
+    /root/Looks/Office_CeilingLamp/OfficeCeilingLamp_Normal/OfficeCeilingLamp_Normal.inputs:st [explicitItems] -> /root/Looks/Office_CeilingLamp/OfficeCeilingLamp_Normal/PrimvarReader_st.outputs:result
+    /root/Looks/Office_CeilingLamp/OfficeCeilingLamp_Normal/PrimvarReader_st.inputs:varname [explicitItems] -> /root/Looks/Office_CeilingLamp/OfficeCeilingLamp_Normal.inputs:frame:st
+
+=== TARGETS UNDER /World === 0
+
+valid bindings: 1  broken bindings: 0

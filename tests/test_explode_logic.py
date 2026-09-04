@@ -25,8 +25,10 @@ from explode_logic import (  # noqa: E402
     has_drifted,
     index_from_label,
     label_from_index,
+    ordered_stages,
     part_offset,
     resolve_home,
+    stage_progress,
     suggest_distance,
 )
 
@@ -104,6 +106,67 @@ def test_explosion_is_absolute_not_cumulative():
     first = exploded_position(HOME, direction_from_label("Z+"), 80.0, factor=1.0)
     second = exploded_position(HOME, direction_from_label("Z+"), 80.0, factor=1.0)
     assert first == second
+
+
+# ─── 分階段展開 ──────────────────────────────────────────
+
+def test_ordered_stages_dedupes_and_sorts():
+    assert ordered_stages([3, 1, 2, 1, 3]) == (1, 2, 3)
+
+
+def test_ordered_stages_of_empty():
+    assert ordered_stages([]) == ()
+
+
+def test_single_stage_follows_global_progress():
+    assert stage_progress(0.0, 1, [1]) == 0.0
+    assert stage_progress(0.4, 1, [1]) == 0.4
+    assert stage_progress(1.0, 1, [1]) == 1.0
+
+
+def test_stages_play_in_sequence():
+    """\u4e09\u500b\u968e\u6bb5\uff1a\u524d\u4e00\u968e\u6bb5\u5b8c\u6210\u5f8c\u4e0b\u4e00\u968e\u6bb5\u624d\u958b\u59cb\u3002"""
+    stages = [1, 2, 3]
+
+    # \u5168\u57df 1/3 \u6642\uff0c\u7b2c\u4e00\u968e\u6bb5\u525b\u597d\u5b8c\u6210\uff0c\u5176\u9918\u672a\u52d5
+    assert math.isclose(stage_progress(1 / 3, 1, stages), 1.0)
+    assert math.isclose(stage_progress(1 / 3, 2, stages), 0.0)
+    assert math.isclose(stage_progress(1 / 3, 3, stages), 0.0)
+
+    # \u5168\u57df 1/2 \u6642\uff0c\u7b2c\u4e8c\u968e\u6bb5\u8d70\u4e00\u534a
+    assert math.isclose(stage_progress(0.5, 1, stages), 1.0)
+    assert math.isclose(stage_progress(0.5, 2, stages), 0.5)
+    assert math.isclose(stage_progress(0.5, 3, stages), 0.0)
+
+
+def test_all_stages_complete_at_full_progress():
+    stages = [1, 2, 3]
+    for stage in stages:
+        assert stage_progress(1.0, stage, stages) == 1.0
+
+
+def test_all_stages_assembled_at_zero():
+    stages = [1, 2, 3]
+    for stage in stages:
+        assert stage_progress(0.0, stage, stages) == 0.0
+
+
+def test_stage_numbers_need_not_be_contiguous():
+    """\u4f7f\u7528\u8005\u53ef\u80fd\u7559\u4e0b\u7f3a\u865f\uff0c\u6392\u5e8f\u5f8c\u4f9d\u5e8f\u64ad\u653e\u5373\u53ef\u3002"""
+    stages = [1, 5, 9]
+    assert math.isclose(stage_progress(1 / 3, 1, stages), 1.0)
+    assert math.isclose(stage_progress(1 / 3, 5, stages), 0.0)
+    assert math.isclose(stage_progress(2 / 3, 5, stages), 1.0)
+
+
+def test_unknown_stage_is_ordered_in():
+    """\u67e5\u8a62\u5c1a\u672a\u767b\u9304\u7684\u968e\u6bb5\u4e0d\u5f97\u62cb\u932f\u3002"""
+    assert 0.0 <= stage_progress(0.5, 7, [1, 2]) <= 1.0
+
+
+def test_stage_progress_is_clamped():
+    assert stage_progress(-1.0, 1, [1, 2]) == 0.0
+    assert stage_progress(5.0, 2, [1, 2]) == 1.0
 
 
 # ─── 外部移動偵測 ────────────────────────────────────────

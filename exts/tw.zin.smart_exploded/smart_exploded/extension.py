@@ -26,8 +26,10 @@ from .explode_logic import (
     dominant_direction_label,
     exploded_position,
     index_from_label,
+    ordered_stages,
     part_offset,
     resolve_home,
+    stage_progress,
     suggest_distance,
 )
 
@@ -82,6 +84,7 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
 
         self._factor_model = ui.SimpleFloatModel(0.0)
         self._multiplier_model = ui.SimpleFloatModel(1.0)
+        self._target_stage_model = ui.SimpleIntModel(1)
         for model in (self._factor_model, self._multiplier_model):
             model.add_value_changed_fn(lambda m: self._apply())
             model.add_begin_edit_fn(lambda m: self._begin_change())
@@ -135,13 +138,17 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
 
             ui.Label(
                 "Select the assembly root and click Add Selected — it expands into "
-                "components. Select several prims to add exactly those.",
+                "components. Stages play in order: stage 1 finishes before stage 2 starts.",
                 name="Description", word_wrap=True, height=0,
             )
 
             with ui.HStack(height=24, spacing=zin_ui_utils.ZIN_ROW_SPACING):
                 ui.Button("Add Selected", style=zin_ui_utils.STYLE_POSITIVE,
                           clicked_fn=self._add_selected)
+                ui.Label("to stage", width=ui.Pixel(52), name="Description")
+                ui.IntDrag(self._target_stage_model, width=ui.Pixel(44), min=1, max=99,
+                           tooltip="Which stage the selection joins. Defaults to a new stage; "
+                                   "lower it to append to an existing one.")
                 ui.Button("Auto Assign", clicked_fn=self._on_auto_assign,
                           tooltip="Assign direction and distance from each component's "
                                   "offset relative to the shared center")
@@ -173,6 +180,7 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
 
             with ui.HStack(height=20, spacing=4):
                 ui.Label("Component", width=ui.Fraction(1), name="Description")
+                ui.Label("Stage", width=ui.Pixel(48), name="Description")
                 ui.Label("Dir", width=ui.Pixel(64), name="Description")
                 ui.Label("Distance", width=ui.Pixel(84), name="Description")
                 ui.Spacer(width=ui.Pixel(28))
@@ -199,15 +207,32 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
             if not self._components:
                 ui.Label("No components added yet.", name="Description", height=0)
             else:
-                for index, component in enumerate(self._components):
+                shown_stage = None
+                for index, component in self._rows_in_stage_order():
+                    if component["stage"] != shown_stage:
+                        shown_stage = component["stage"]
+                        ui.Label(f"Stage {shown_stage}", name="Description", height=18)
                     self._build_component_row(index, component)
 
         self._update_status()
+
+    def _rows_in_stage_order(self):
+        """依階段排序，保留原索引以便移除。"""
+        return sorted(
+            enumerate(self._components),
+            key=lambda item: (item[1]["stage"], item[0]),
+        )
 
     def _build_component_row(self, index, component):
         with ui.HStack(height=24, spacing=4):
             ui.Label(component["name"], width=ui.Fraction(1),
                      tooltip=component["path"], elided_text=True)
+
+            stage_model = ui.SimpleIntModel(component["stage"])
+            ui.IntDrag(stage_model, width=ui.Pixel(48), min=1, max=99)
+            stage_model.add_value_changed_fn(
+                lambda m, c=component: self._on_stage_changed(c, m)
+            )
 
             combo = ui.ComboBox(component["direction"], *DIRECTION_LABELS, width=ui.Pixel(64))
             combo.model.get_item_value_model().add_value_changed_fn(
@@ -222,14 +247,25 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
             ui.Button("X", width=ui.Pixel(24),
                       clicked_fn=lambda i=index: self._remove_component(i))
 
+    def _on_stage_changed(self, component, model):
+        component["stage"] = model.as_int
+        self._begin_change()
+        self._apply()
+        self._end_change()
+        self._rebuild_component_rows()
+
     def _update_status(self):
-        if self._status_label is not None:
-            self._status_label.text = f"{len(self._components)} component(s)."
+        if self._status_label is None:
+            return
+        count = len(self._components)
+        stages = len(ordered_stages(self._stages()))
+        self._status_label.text = f"{count} component(s) in {stages} stage(s)."
 
     # ------------------------------------------------------------------
     #  Component management
     # ------------------------------------------------------------------
-    def _make_component(self, path, home, direction_label="Z+", distance=DEFAULT_BASE_DISTANCE):
+    def _make_component(self, path, home, stage=1,
+                        direction_label="Z+", distance=DEFAULT_BASE_DISTANCE):
         distance_model = ui.SimpleFloatModel(float(distance))
         distance_model.add_value_changed_fn(lambda m: self._apply())
 
@@ -237,9 +273,18 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
             "path": path,
             "name": path.rsplit("/", 1)[-1],
             "home": Gf.Vec3d(home),
+            "stage": int(stage),
             "direction": index_from_label(direction_label),
             "distance_model": distance_model,
         }
+
+    def _stages(self):
+        return [component["stage"] for component in self._components]
+
+    def _next_stage(self):
+        """下一個新階段的編號。"""
+        stages = self._stages()
+        return max(stages) + 1 if stages else 1
 
     def _resolve_selection(self, stage, selection):
         """把選取結果轉成組件路徑清單。
@@ -269,6 +314,7 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
         paths, expanded_from = self._resolve_selection(stage, selection)
 
         was_empty = not self._components
+        target_stage = max(1, self._target_stage_model.as_int)
         known = {component["path"] for component in self._components}
         added = 0
         skipped = []
@@ -284,13 +330,17 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
 
             home = op.Get()
             self._components.append(
-                self._make_component(path, home if home is not None else Gf.Vec3d(0.0))
+                self._make_component(path, home if home is not None else Gf.Vec3d(0.0),
+                                     stage=target_stage)
             )
             added += 1
 
+        # 下一次預設加入新階段，使用者可手動改回既有階段
+        self._target_stage_model.set_value(self._next_stage())
         self._rebuild_component_rows()
 
         prefix = f"Expanded '{expanded_from}' into " if expanded_from else "Added "
+        message = f"{prefix}{added} component(s) as stage {target_stage}."
         message = f"{prefix}{added} component(s)."
 
         if skipped:
@@ -316,6 +366,7 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
     def _clear_components(self):
         self._tracked(self._reset_all)
         self._components = []
+        self._target_stage_model.set_value(1)
         self._rebuild_component_rows()
 
     def _set_status(self, message):
@@ -414,6 +465,7 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
 
         factor = self._factor_model.as_float
         multiplier = self._multiplier_model.as_float
+        stages = self._stages()
 
         for component in self._components:
             op = usd_utils.resolve_translate_op(stage, component["path"], create=True)
@@ -422,14 +474,15 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
 
             direction = direction_from_index(component["direction"])
             distance = component["distance_model"].as_float
+            progress = stage_progress(factor, component["stage"], stages)
 
             # 使用者可能以 gizmo 手動移動過組件，使記錄的原點失效；
             # 重新校準後手動調整的結果才不會被蓋掉。
-            offset = part_offset(direction, distance, factor, multiplier)
+            offset = part_offset(direction, distance, progress, multiplier)
             home = resolve_home(op.Get(), component["home"], offset)
             component["home"] = Gf.Vec3d(*home)
 
-            op.Set(Gf.Vec3d(*exploded_position(home, direction, distance, factor, multiplier)))
+            op.Set(Gf.Vec3d(*exploded_position(home, direction, distance, progress, multiplier)))
 
     # ------------------------------------------------------------------
     #  Undo
