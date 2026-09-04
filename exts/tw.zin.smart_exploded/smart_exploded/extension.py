@@ -134,8 +134,8 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
                        spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
 
             ui.Label(
-                "Select component-level prims, then Add Selected. "
-                "Each component moves with its whole subtree.",
+                "Select the assembly root and click Add Selected — it expands into "
+                "components. Select several prims to add exactly those.",
                 name="Description", word_wrap=True, height=0,
             )
 
@@ -241,6 +241,21 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
             "distance_model": distance_model,
         }
 
+    def _resolve_selection(self, stage, selection):
+        """把選取結果轉成組件路徑清單。
+
+        只選一個 prim 時視為「要拆解這個群組」，往下展開到組件層；
+        整包一起平移不構成爆炸圖，所以群組本身不會被加入。
+        """
+        if len(selection) != 1:
+            return list(selection), None
+
+        group_path = selection[0]
+        children = usd_utils.find_component_paths(stage, group_path)
+        if not children:
+            return list(selection), None
+        return children, group_path.rsplit("/", 1)[-1]
+
     def _add_selected(self):
         stage = omni.usd.get_context().get_stage()
         if not stage:
@@ -251,11 +266,14 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
             self._set_status("Select one or more prims in the stage first.")
             return
 
+        paths, expanded_from = self._resolve_selection(stage, selection)
+
+        was_empty = not self._components
         known = {component["path"] for component in self._components}
         added = 0
         skipped = []
 
-        for path in selection:
+        for path in paths:
             if path in known:
                 continue
 
@@ -272,13 +290,20 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
 
         self._rebuild_component_rows()
 
+        prefix = f"Expanded '{expanded_from}' into " if expanded_from else "Added "
+        message = f"{prefix}{added} component(s)."
+
         if skipped:
-            self._set_status(
-                f"Added {added} component(s). Skipped {len(skipped)} that cannot be moved "
+            message += (
+                f" Skipped {len(skipped)} that cannot be moved "
                 f"(instance proxy or not Xformable): " + ", ".join(skipped[:3])
             )
-        else:
-            self._set_status(f"Added {added} component(s).")
+
+        # 首次加入時直接給出可用的方向與距離，否則所有組件都朝同一方向疊在一起
+        if added and was_empty:
+            message += " " + self._tracked(self._auto_assign)
+
+        self._set_status(message)
 
     def _remove_component(self, index):
         if not 0 <= index < len(self._components):
@@ -308,7 +333,7 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
         self._end_change()
 
     def _on_auto_assign(self):
-        self._tracked(self._auto_assign)
+        self._set_status(self._tracked(self._auto_assign))
 
     def _on_reset(self):
         self._tracked(self._reset_all)
@@ -325,9 +350,10 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
         self._set_status("Current positions are now the assembled state.")
 
     def _auto_assign(self):
+        """依各組件相對於共同中心的偏移，決定方向與距離。回傳狀態訊息。"""
         stage = omni.usd.get_context().get_stage()
         if not stage or not self._components:
-            return
+            return "Add components first."
 
         bbox_cache = usd_utils.make_bbox_cache()
         centers = {}
@@ -337,8 +363,7 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
                 centers[component["path"]] = center
 
         if not centers:
-            self._set_status("Could not compute bounds; the payload may not be loaded.")
-            return
+            return "Could not compute bounds; the payload may not be loaded."
 
         shared_center = bounds_center(centers.values())
         max_distance = max(
@@ -359,7 +384,7 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
 
         self._rebuild_component_rows()
         self._apply()
-        self._set_status(f"Assigned direction and distance for {len(centers)} component(s).")
+        return f"Assigned direction and distance for {len(centers)} component(s)."
 
     def _reset_all(self):
         for component in self._components:
@@ -377,7 +402,14 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
     def _apply(self):
         """依各組件的方向與距離，套用全域爆炸進度。"""
         stage = omni.usd.get_context().get_stage()
-        if not stage or not self._components:
+        if not stage:
+            return
+
+        if not self._components:
+            self._set_status(
+                "Nothing to explode yet. Select the assembly in the stage, "
+                "then click Add Selected."
+            )
             return
 
         factor = self._factor_model.as_float
@@ -436,5 +468,6 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
     def _tracked(self, action):
         """執行會改動座標的操作，並登錄為單一 undo 步驟。"""
         self._begin_change()
-        action()
+        result = action()
         self._end_change()
+        return result

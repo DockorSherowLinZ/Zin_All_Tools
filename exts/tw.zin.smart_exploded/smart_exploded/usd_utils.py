@@ -62,6 +62,38 @@ def resolve_translate_op(stage, path, create=False):
         return None
 
 
+def is_movable(prim):
+    """可獨立寫入位移的 prim。"""
+    if not prim or not prim.IsValid():
+        return False
+    if not UsdGeom.Xformable(prim):
+        return False
+    return is_authorable(prim)
+
+
+def find_component_paths(stage, root_path, max_depth=10):
+    """從群組往下找出可各自拆解的組件層。
+
+    匯出的模型常在根節點下堆疊數層單一子節點的包裝（如 ASSET/asset_xxx），
+    一路往下走到第一個真正分岔的層級，那才是組件。
+    根節點本身不算組件——整包一起平移不構成爆炸圖。
+    找不到分岔則回傳空清單。
+    """
+    prim = stage.GetPrimAtPath(root_path)
+    if not prim or not prim.IsValid():
+        return []
+
+    for _ in range(max_depth):
+        children = [child for child in prim.GetChildren() if is_movable(child)]
+        if not children:
+            return []
+        if len(children) > 1:
+            return [str(child.GetPath()) for child in children]
+        prim = children[0]
+
+    return []
+
+
 def read_translation(stage, path):
     """讀取組件目前的 translate 值，無法讀取時回傳 None。"""
     op = resolve_translate_op(stage, path)
