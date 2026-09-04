@@ -77,7 +77,7 @@ icon:#("ZinAllTools", 8)
                 local d = getSavePath caption:"Select USD Output Folder"
                 if d != undefined do edt_usdPath.text = d
             ) else (
-                local f = getSaveFileName caption:"Save USD" types:"USD Files (*.usd;*.usda;*.usdc)|*.usd;*.usda;*.usdc|"
+                local f = getSaveFileName caption:"Save USD" types:"USD (*.usd)|*.usd|USDA (*.usda)|*.usda|USDC (*.usdc)|*.usdc|All Files (*.*)|*.*|"
                 if f != undefined do edt_usdPath.text = f
             )
         )
