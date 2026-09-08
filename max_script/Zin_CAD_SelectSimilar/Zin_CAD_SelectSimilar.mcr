@@ -9,7 +9,8 @@ icon:#("ZinAllTools", 5)
 -- ============================================================================
 
 -- Data directory path (persistent storage for Quick Names)
-global ZinCAD_DataDir = @"D:\Inventec\Zin_All_Tools\max_script\Zin_CAD_SelectSimilar\"
+-- Kept outside the repo so user presets survive redeploys and cause no git churn.
+global ZinCAD_DataDir = (systemTools.getEnvVariable "LOCALAPPDATA") + "\\ZinAllTools\\Zin_CAD_SelectSimilar\\"
 global ZinCAD_IniFile = ZinCAD_DataDir + "QuickNames.ini"
 global ZinCAD_JsonFile = ZinCAD_DataDir + "QuickNames.json"
 global ZinCAD_UsdLibrary = @"D:\Inventec\DigitalTwin\Library\Material_Collects.usd"

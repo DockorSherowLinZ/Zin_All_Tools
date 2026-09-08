@@ -116,7 +116,7 @@ Zin_DictMaterialAssignerCore = Zin_DictMaterialAssignerCoreStruct()
 struct Zin_DictOptions
 (
     matLibPath = "D:\\Inventec\\DigitalTwin\\Library\\3dsMax_Standard_Material.mat",
-    dictPath = "D:\\Inventec\\Zin_All_Tools\\max_script\\DictMaterialAssigner\\material_dictionary.txt",
+    dictPath = ((systemTools.getEnvVariable "LOCALAPPDATA") + "\\ZinAllTools\\DictMaterialAssigner\\material_dictionary.txt"),
     skipAssigned = false,
     dryRun = false
 )

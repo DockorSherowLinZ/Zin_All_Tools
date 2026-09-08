@@ -51,3 +51,10 @@ install_mcp_servers.ps1
 
 # Local AI material configuration
 max_script/AI_MaterialAssigner/config.ini
+
+# Per-user 3ds Max tool data - now lives in %LOCALAPPDATA%\ZinAllTools\
+max_script/Zin_CAD_SelectSimilar/QuickNames.ini
+max_script/Zin_CAD_SelectSimilar/QuickNames.json
+max_script/DictMaterialAssigner/material_dictionary.txt
+max_script/**/*_Log.txt
+max_script/**/_temp/

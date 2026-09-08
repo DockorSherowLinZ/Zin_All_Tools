@@ -640,18 +640,9 @@ icon:#("ZinAllTools", 4)
 
         on DictMatUI open do
         (
-            -- Always use the known project directory (avoids write-protected Program Files)
-            scriptDir = "D:\\Inventec\\Zin_All_Tools\\max_script\\DictMaterialAssigner\\"
-
-            -- Fallback: if the project dir doesn't exist, try getSourceFileName
-            if not doesDirectoryExist scriptDir do
-            (
-                local srcPath = getSourceFileName()
-                if srcPath != undefined and srcPath != "" then
-                    scriptDir = getFilenamePath srcPath
-                else
-                    scriptDir = sysInfo.tempdir
-            )
+            -- Per-user data dir; always writable, unlike Program Files or usermacros.
+            scriptDir = (systemTools.getEnvVariable "LOCALAPPDATA") + "\\ZinAllTools\\DictMaterialAssigner\\"
+            makeDir scriptDir all:true
 
             -- Log file: try script dir first, fall back to temp if not writable
             logFilePath = scriptDir + "DictMaterialAssigner_Log.txt"

@@ -566,16 +566,8 @@ icon:#("ZinAllTools", 2)
 
         on GeomOptUI open do
         (
-            scriptDir = "D:\\Inventec\\Zin_All_Tools\\max_script\\GeomOptimizer\\"
-
-            if not doesDirectoryExist scriptDir do
-            (
-                local srcPath = getSourceFileName()
-                if srcPath != undefined and srcPath != "" then
-                    scriptDir = getFilenamePath srcPath
-                else
-                    scriptDir = sysInfo.tempdir
-            )
+            scriptDir = (systemTools.getEnvVariable "LOCALAPPDATA") + "\\ZinAllTools\\GeomOptimizer\\"
+            makeDir scriptDir all:true
 
             logFilePath = scriptDir + "GeomOptimizer_Log.txt"
             local testFile = undefined

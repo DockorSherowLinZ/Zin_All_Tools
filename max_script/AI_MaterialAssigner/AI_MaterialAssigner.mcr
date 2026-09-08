@@ -580,12 +580,10 @@ icon:#("ZinAllTools", 3)
 
         on AI_MatUI open do
         (
-            -- Determine script directory from source path
-            local srcPath = getSourceFileName()
-            if srcPath != undefined and srcPath != "" then
-                scriptDir = getFilenamePath srcPath
-            else
-                scriptDir = "D:\\Inventec\\Zin_All_Tools\\max_script\\AI_MaterialAssigner\\"
+            -- User data lives outside the repo; the deployed .mcr sits in usermacros
+            -- where these files would never be found.
+            scriptDir = (systemTools.getEnvVariable "LOCALAPPDATA") + "\\ZinAllTools\\AI_MaterialAssigner\\"
+            makeDir scriptDir all:true
 
             configPath = scriptDir + "config.ini"
             tempDir = scriptDir + "_temp\\"
