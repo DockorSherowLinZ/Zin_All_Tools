@@ -1,7 +1,8 @@
 """UI 字串可顯示性驗證。
 
-Kit 的預設 UI 字型不含中日韓字元，這類字串在介面上會全部變成問號。
-Docstring 與註解不受影響，只有實際傳給 omni.ui 的字串需要限制。
+Kit 的預設 UI 字型只能渲染 ASCII；中日韓、破折號、彎引號這類字元
+在介面上全部會變成問號。Docstring 與註解不受影響，只有實際傳給
+ omni.ui 的字串需要限制。
 """
 
 import ast
@@ -12,7 +13,7 @@ import pytest
 
 EXTS_ROOT = "exts"
 
-CJK_PATTERN = re.compile(r"[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af\u3000-\u303f\uff00-\uffef]")
+NON_ASCII_PATTERN = re.compile(r"[^\x00-\x7f]")
 
 
 def get_extension_sources():
@@ -38,8 +39,8 @@ def _docstring_node_ids(tree):
 
 
 @pytest.mark.parametrize("source_path", get_extension_sources())
-def test_no_cjk_in_ui_strings(source_path):
-    """傳給 omni.ui 的字串不得含中日韓字元，否則介面會顯示問號。"""
+def test_no_non_ascii_in_ui_strings(source_path):
+    """傳給 omni.ui 的字串必須是純 ASCII，否則介面會顯示問號。"""
     with open(source_path, encoding="utf-8") as handle:
         source = handle.read()
 
@@ -66,11 +67,11 @@ def test_no_cjk_in_ui_strings(source_path):
                 isinstance(literal, ast.Constant)
                 and isinstance(literal.value, str)
                 and id(literal) not in docstrings
-                and CJK_PATTERN.search(literal.value)
+                and NON_ASCII_PATTERN.search(literal.value)
             ):
                 offenders.append(f"L{literal.lineno}: {literal.value[:40]}")
 
     assert not offenders, (
-        f"{source_path} 傳給 UI 的字串含中日韓字元，Kit 字型無法顯示："
+        f"{source_path} 傳給 UI 的字串含非 ASCII 字元，Kit 字型無法顯示："
         f"{offenders}"
     )

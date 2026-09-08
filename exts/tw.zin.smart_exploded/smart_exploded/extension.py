@@ -137,7 +137,7 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
                        spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
 
             ui.Label(
-                "Select the assembly root and click Add Selected — it expands into "
+                "Select the assembly root and click Add Selected - it expands into "
                 "components. Stages play in order: stage 1 finishes before stage 2 starts.",
                 name="Description", word_wrap=True, height=0,
             )

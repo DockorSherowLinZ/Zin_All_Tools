@@ -248,7 +248,7 @@ class SmartInfoPanelWidget:
                     with ui.HStack(height=28, spacing=4):
                         ui.Spacer()
                         self._vp_toggle_btn = ui.Button(
-                            "ℹ Info Panel: ON",
+                            "Info Panel: ON",
                             width=140, height=24,
                             style=TOGGLE_ENABLED_STYLE,
                             clicked_fn=self._on_vp_toggle_clicked,
@@ -333,7 +333,7 @@ class SmartInfoPanelWidget:
                             cb_dims.model.add_value_changed_fn(
                                 lambda m: self._set_show_section("dims", m.get_value_as_bool())
                             )
-                            ui.Label("📐 Dimensions (Smart Measure)", style=VALUE_LABEL_STYLE)
+                            ui.Label("Dimensions (Smart Measure)", style=VALUE_LABEL_STYLE)
 
                         # Core
                         with ui.HStack(height=22, spacing=6):
@@ -342,7 +342,7 @@ class SmartInfoPanelWidget:
                             cb_core.model.add_value_changed_fn(
                                 lambda m: self._set_show_section("core", m.get_value_as_bool())
                             )
-                            ui.Label("🏭 Core Info", style=VALUE_LABEL_STYLE)
+                            ui.Label("Core Info", style=VALUE_LABEL_STYLE)
 
                         # Spec
                         with ui.HStack(height=22, spacing=6):
@@ -351,7 +351,7 @@ class SmartInfoPanelWidget:
                             cb_spec.model.add_value_changed_fn(
                                 lambda m: self._set_show_section("spec", m.get_value_as_bool())
                             )
-                            ui.Label("⚡ Spec Info", style=VALUE_LABEL_STYLE)
+                            ui.Label("Spec Info", style=VALUE_LABEL_STYLE)
 
                 ui.Spacer(height=4)
 
@@ -407,10 +407,10 @@ class SmartInfoPanelWidget:
         if self._vp_toggle_btn:
             try:
                 if self._enabled:
-                    self._vp_toggle_btn.text = "ℹ Info Panel: ON"
+                    self._vp_toggle_btn.text = "Info Panel: ON"
                     self._vp_toggle_btn.style = TOGGLE_ENABLED_STYLE
                 else:
-                    self._vp_toggle_btn.text = "ℹ Info Panel: OFF"
+                    self._vp_toggle_btn.text = "Info Panel: OFF"
                     self._vp_toggle_btn.style = TOGGLE_DISABLED_STYLE
             except Exception as exc:
                 carb.log_verbose(f"[SmartInfoPanel] Toolbar toggle no longer valid: {exc}")
