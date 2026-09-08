@@ -566,7 +566,7 @@ icon:#("ZinAllTools", 2)
 
         on GeomOptUI open do
         (
-            scriptDir = "D:\\Zin_All_Tools\\max_script\\GeomOptimizer\\"
+            scriptDir = "D:\\Inventec\\Zin_All_Tools\\max_script\\GeomOptimizer\\"
 
             if not doesDirectoryExist scriptDir do
             (

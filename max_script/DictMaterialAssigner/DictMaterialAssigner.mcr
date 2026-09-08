@@ -641,7 +641,7 @@ icon:#("ZinAllTools", 4)
         on DictMatUI open do
         (
             -- Always use the known project directory (avoids write-protected Program Files)
-            scriptDir = "D:\\Zin_All_Tools\\max_script\\DictMaterialAssigner\\"
+            scriptDir = "D:\\Inventec\\Zin_All_Tools\\max_script\\DictMaterialAssigner\\"
 
             -- Fallback: if the project dir doesn't exist, try getSourceFileName
             if not doesDirectoryExist scriptDir do

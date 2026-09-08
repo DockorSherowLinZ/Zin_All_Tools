@@ -585,7 +585,7 @@ icon:#("ZinAllTools", 3)
             if srcPath != undefined and srcPath != "" then
                 scriptDir = getFilenamePath srcPath
             else
-                scriptDir = "D:\\Zin_All_Tools\\max_script\\AI_MaterialAssigner\\"
+                scriptDir = "D:\\Inventec\\Zin_All_Tools\\max_script\\AI_MaterialAssigner\\"
 
             configPath = scriptDir + "config.ini"
             tempDir = scriptDir + "_temp\\"

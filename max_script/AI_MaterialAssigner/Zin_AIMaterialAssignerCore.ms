@@ -348,7 +348,7 @@ struct Zin_AIOptions
 fn Zin_RunAIMaterialAssignerBatch nodeArray opts:(Zin_AIOptions()) =
 (
     local core = Zin_AIMaterialAssignerCore
-    core.scriptDir = "D:\\Zin_All_Tools\\max_script\\AI_MaterialAssigner\\"
+    core.scriptDir = "D:\\Inventec\\Zin_All_Tools\\max_script\\AI_MaterialAssigner\\"
     core.configPath = core.scriptDir + "config.ini"
     core.tempDir = core.scriptDir + "_temp\\"
     core.initLogFile()
