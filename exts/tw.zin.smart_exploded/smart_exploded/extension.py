@@ -85,6 +85,7 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
         self._factor_model = ui.SimpleFloatModel(0.0)
         self._multiplier_model = ui.SimpleFloatModel(1.0)
         self._target_stage_model = ui.SimpleIntModel(1)
+        self._expand_model = ui.SimpleBoolModel(True)
         for model in (self._factor_model, self._multiplier_model):
             model.add_value_changed_fn(lambda m: self._apply())
             model.add_begin_edit_fn(lambda m: self._begin_change())
@@ -137,8 +138,9 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
                        spacing=zin_ui_utils.ZIN_V_SPACING, padding=6):
 
             ui.Label(
-                "Select the assembly root and click Add Selected - it expands into "
-                "components. Stages play in order: stage 1 finishes before stage 2 starts.",
+                "Add Selected adds the selected prims. With Expand on, a single "
+                "selected group is broken into its components instead. Stages play "
+                "in order: stage 1 finishes before stage 2 starts.",
                 name="Description", word_wrap=True, height=0,
             )
 
@@ -149,6 +151,11 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
                 ui.IntDrag(self._target_stage_model, width=ui.Pixel(44), min=1, max=99,
                            tooltip="Which stage the selection joins. Defaults to a new stage; "
                                    "lower it to append to an existing one.")
+                expand_cb = ui.CheckBox(width=ui.Pixel(18))
+                expand_cb.model = self._expand_model
+                ui.Label("Expand", width=ui.Pixel(50), name="Description",
+                         tooltip="Off: add the selected group as one component. "
+                                 "Use this for assets already grouped by teardown step.")
                 ui.Button("Auto Assign", clicked_fn=self._on_auto_assign,
                           tooltip="Assign direction and distance from each component's "
                                   "offset relative to the shared center")
@@ -289,10 +296,10 @@ class ZinSmartExplodedExtension(ZinMenuMixin, omni.ext.IExt):
     def _resolve_selection(self, stage, selection):
         """把選取結果轉成組件路徑清單。
 
-        只選一個 prim 時視為「要拆解這個群組」，往下展開到組件層；
-        整包一起平移不構成爆炸圖，所以群組本身不會被加入。
+        只選一個 prim 且 Expand 開啟時視為「要拆解這個群組」，往下展開到組件層；
+        已依拆解步驟分組的資產則關掉 Expand，整組當一個組件移動。
         """
-        if len(selection) != 1:
+        if len(selection) != 1 or not self._expand_model.as_bool:
             return list(selection), None
 
         group_path = selection[0]

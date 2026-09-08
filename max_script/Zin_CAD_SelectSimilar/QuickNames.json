@@ -80,6 +80,9 @@
     "WhiteLighting": {
       "material_prim_path": "/World/Looks/Lighting/WhiteLighting",
       "description": "Auto-generated from 3ds Max CAD Select Similar"
+    },
+    "Plastic_Clear": {
+      "material_prim_path": "/World/Looks/Plastic/Plastic_Clear"
     }
   }
 }
