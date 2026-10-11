@@ -9,7 +9,7 @@ icon:#("ZinAllTools", 5)
 -- ============================================================================
 
 -- Data directory path (persistent storage for Quick Names)
-global ZinCAD_DataDir = @"D:\Inventec\Zin_All_Tools\max_script\Zin_CAD_SelectSimilar\"
+global ZinCAD_DataDir = (getDir #userScripts) + "\\Zin_CAD_SelectSimilar\\"
 global ZinCAD_IniFile = ZinCAD_DataDir + "QuickNames.ini"
 global ZinCAD_JsonFile = ZinCAD_DataDir + "QuickNames.json"
 global ZinCAD_UsdLibrary = @"D:\Inventec\DigitalTwin\Library\Material_Collects.usd"
