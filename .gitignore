@@ -58,3 +58,8 @@ max_script/Zin_CAD_SelectSimilar/QuickNames.json
 max_script/DictMaterialAssigner/material_dictionary.txt
 max_script/**/*_Log.txt
 max_script/**/_temp/
+
+# P9000G7 generated cable assets (~335 MB; models_mm.json alone exceeds
+# GitHub's 100 MB per-file limit). Distributed out-of-band until LFS is set up.
+max_script/P9000G7_CableModels_v0.1.1/
+max_script/P9000G7_IsaacUSD_v0.2.0/
