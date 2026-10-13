@@ -1,0 +1,17 @@
+{
+  "version": "1.3.2",
+  "category": "ZinAllTools",
+  "offline_passed": true,
+  "gui_tested": false,
+  "checks": [
+    "Python syntax",
+    "Startup has no scene creation, scan or calculation",
+    "All settings groups collapse",
+    "Optional endpoint property reads are safe without helpers",
+    "Max bundled PySide6: UI-only startup with absent/existing endpoint helpers and scene mutation tripwire",
+    "All 8 panels expand/collapse, only operations initially expanded"
+  ],
+  "mcr_sha256": "2ce85f72a73cbb7bb1b5786836a00eac92dd2526d7997c46d81b61af8d15058b",
+  "standalone_pyside_ui_tested": true,
+  "gui_note": "Standalone real Qt interface tested with mocked scene runtime; not an in-process 3ds Max routing test."
+}
